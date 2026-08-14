@@ -1,0 +1,83 @@
+/* 2Identify shared visual foundation. */
+
+* {
+  font-family: "Segoe UI", "Inter", sans-serif;
+}
+
+QMainWindow {
+  background-color: #f4f7fb;
+}
+
+QToolTip {
+  color: #f7f9fc;
+  background-color: #10243e;
+  border: 1px solid #294968;
+  padding: 6px 8px;
+}
+
+
+QLabel#productLabel {
+  color: #51a8ff;
+  font-size: 13px;
+  font-weight: 700;
+  padding-top: 5px;
+}
+
+QLabel#onlineBadge {
+  color: #72e5ae;
+  background-color: rgba(32, 166, 106, 0.16);
+  border: 1px solid rgba(71, 211, 146, 0.45);
+  border-radius: 13px;
+  font-size: 11px;
+  font-weight: 700;
+  min-height: 26px;
+}
+
+QLabel#eyebrowLabel {
+  color: #51a8ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+QLabel#heroTitle {
+  color: #ffffff;
+  font-size: 38px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+QLabel#heroSubtitle {
+  color: #a9b8cc;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+QFrame#diagnosticCard {
+  background-color: #0d2037;
+  border: 1px solid #1e3b5b;
+  border-radius: 12px;
+}
+
+QLabel#diagnosticLabel {
+  color: #6f88a6;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+QLabel#diagnosticValue {
+  color: #eef5ff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+QFrame#cardSeparator {
+  color: #1e3b5b;
+  max-width: 1px;
+}
+
+QLabel#footerLabel {
+  color: #70849e;
+  font-size: 11px;
+}

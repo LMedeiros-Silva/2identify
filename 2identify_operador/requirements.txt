@@ -1,0 +1,6 @@
+PySide6>=6.8.0,<7.0.0
+numpy>=1.26.0,<2.3.0
+# OpenCV 4.10 is the validated runtime for the pinned YuNet/SFace ONNX artifacts.
+opencv-python-headless>=4.10.0,<4.11.0
+pydantic-settings>=2.7.0,<3.0.0
+python-dotenv>=1.0.1,<2.0.0

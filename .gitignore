@@ -1,0 +1,7 @@
+# Metadados do repositório vazio que existia dentro do projeto operador.
+2identify_operador/.git.pre-monorepo/
+
+# Arquivos do sistema operacional.
+.DS_Store
+Thumbs.db
+

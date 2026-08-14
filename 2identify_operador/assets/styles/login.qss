@@ -1,0 +1,370 @@
+QMainWindow#loginWindow,
+QWidget#loginRoot {
+  background-color: #f4f7fb;
+}
+
+QFrame#loginBrandPanel {
+  background-color: #07182c;
+  border: none;
+}
+
+QLabel#brandMark {
+  color: #ffffff;
+  background-color: #1687f8;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+QLabel#loginBrandName {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#loginProductName {
+  color: #63b3ff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+QLabel#brandEyebrow {
+  color: #55adff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding-bottom: 12px;
+}
+
+QLabel#brandHeadline {
+  color: #ffffff;
+  font-size: 37px;
+  font-weight: 700;
+}
+
+QLabel#brandSupportingText {
+  color: #a8bbd0;
+  font-size: 15px;
+}
+
+QFrame#brandFeature {
+  background-color: rgba(20, 59, 96, 0.72);
+  border: 1px solid rgba(82, 155, 224, 0.24);
+  border-radius: 8px;
+}
+
+QLabel#featureNumber {
+  color: #49a7ff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+QLabel#featureTitle {
+  color: #eaf4ff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#brandFooter {
+  color: #69829f;
+  font-size: 10px;
+}
+
+QWidget#loginFormPanel {
+  background-color: #f8fafc;
+}
+
+QLabel#accessBadge {
+  color: #52708e;
+  background-color: #eaf1f8;
+  border: 1px solid #d6e1ec;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#formEyebrow {
+  color: #1677d2;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+QLabel#formTitle {
+  color: #10243e;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+QLabel#formDescription {
+  color: #63778d;
+  font-size: 13px;
+}
+
+QStackedWidget#authenticationStack,
+QWidget#faceLoginPanel,
+QWidget#credentialLoginPanel {
+  background-color: transparent;
+}
+
+QFrame#faceCameraPreview {
+  background-color: #061423;
+  border: 1px solid #24445f;
+  border-radius: 10px;
+}
+
+QFrame#faceCameraPreview[faceState="scanning"],
+QFrame#faceCameraPreview[faceState="starting"] {
+  border: 2px solid #218fea;
+}
+
+QFrame#faceCameraPreview[faceState="recognized"] {
+  border: 2px solid #34b87d;
+}
+
+QFrame#faceCameraPreview[faceState="error"] {
+  border: 2px solid #dc4c55;
+}
+
+QFrame#faceCameraPreview[faceState="unavailable"] {
+  border: 2px solid #d99a32;
+}
+
+QFrame#faceStatusRow {
+  background-color: transparent;
+}
+
+QLabel#faceStatusDot {
+  color: #288fe7;
+  font-size: 11px;
+}
+
+QLabel#faceStatusDot[faceState="recognized"] {
+  color: #28a96f;
+}
+
+QLabel#faceStatusDot[faceState="error"] {
+  color: #d7444e;
+}
+
+QLabel#faceStatusDot[faceState="unavailable"] {
+  color: #c78620;
+}
+
+QLabel#faceStatusText {
+  color: #5f7489;
+  font-size: 10px;
+}
+
+QFrame#recognizedOperatorCard {
+  background-color: #ebfaf3;
+  border: 1px solid #a9dec7;
+  border-radius: 8px;
+}
+
+QLabel#welcomeEyebrow {
+  color: #24815b;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#recognizedOperatorName {
+  color: #143b2b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+QLabel#recognizedOperatorDetail {
+  color: #4f7967;
+  font-size: 9px;
+}
+
+QLabel#fieldLabel {
+  color: #344b63;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLineEdit#usernameInput,
+QFrame#passwordInput {
+  color: #10243e;
+  background-color: #ffffff;
+  border: 1px solid #cbd8e5;
+  border-radius: 7px;
+  min-height: 48px;
+  font-size: 13px;
+}
+
+QLineEdit#usernameInput {
+  padding: 0 14px;
+}
+
+QLineEdit#usernameInput:hover,
+QFrame#passwordInput:hover {
+  border-color: #8faac4;
+}
+
+QLineEdit#usernameInput:focus,
+QFrame#passwordInput[focusState="focused"] {
+  border: 1px solid #1687f8;
+}
+
+QLineEdit#usernameInput[validationState="error"],
+QFrame#passwordInput[validationState="error"] {
+  border: 1px solid #dc4c55;
+  background-color: #fffafa;
+}
+
+QLineEdit#passwordLineEdit {
+  color: #10243e;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+QLineEdit#usernameInput:disabled,
+QFrame#passwordInput:disabled,
+QLineEdit#passwordLineEdit:disabled {
+  color: #8797a8;
+  background-color: #eef2f6;
+}
+
+QToolButton#passwordToggleButton {
+  color: #3175b5;
+  background-color: transparent;
+  border: none;
+  padding: 7px 5px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+QToolButton#passwordToggleButton:hover {
+  color: #0f65b8;
+  background-color: #edf6ff;
+  border-radius: 4px;
+}
+
+QLabel#usernameError,
+QLabel#passwordError {
+  color: #c93d46;
+  font-size: 10px;
+  padding-top: 3px;
+}
+
+QLabel#supportText {
+  color: #788a9d;
+  font-size: 10px;
+}
+
+QFrame#loginStatusBanner {
+  border-radius: 6px;
+}
+
+QFrame#loginStatusBanner[statusKind="information"] {
+  background-color: #edf6ff;
+  border: 1px solid #b9dbfa;
+}
+
+QFrame#loginStatusBanner[statusKind="error"] {
+  background-color: #fff0f1;
+  border: 1px solid #f1bcc0;
+}
+
+QFrame#loginStatusBanner[statusKind="information"] QLabel#loginStatusText {
+  color: #235f94;
+}
+
+QFrame#loginStatusBanner[statusKind="error"] QLabel#loginStatusText {
+  color: #a42f37;
+}
+
+QLabel#loginStatusText {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+QPushButton#loginButton {
+  color: #ffffff;
+  background-color: #116fc6;
+  border: none;
+  border-radius: 7px;
+  min-height: 49px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#faceScanButton {
+  color: #ffffff;
+  background-color: #116fc6;
+  border: none;
+  border-radius: 7px;
+  min-height: 46px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#faceScanButton:hover {
+  background-color: #0d62b1;
+}
+
+QPushButton#faceScanButton:disabled {
+  color: #d6e5f2;
+  background-color: #749abd;
+}
+
+QPushButton#secondaryAuthButton {
+  color: #286b9f;
+  background-color: transparent;
+  border: 1px solid #b9cbdb;
+  border-radius: 7px;
+  min-height: 42px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#secondaryAuthButton:hover {
+  color: #0f5d9b;
+  background-color: #edf5fb;
+  border-color: #8dadc7;
+}
+
+QPushButton#loginButton:hover {
+  background-color: #0d62b1;
+}
+
+QPushButton#loginButton:pressed {
+  background-color: #0a559a;
+}
+
+QPushButton#loginButton:disabled {
+  color: #d6e5f2;
+  background-color: #749abd;
+}
+
+QProgressBar#loginProgressBar {
+  background-color: transparent;
+  border: none;
+  max-height: 3px;
+  margin: 0 7px;
+}
+
+QProgressBar#loginProgressBar::chunk {
+  background-color: #43a5ff;
+  border-radius: 1px;
+}
+
+QLabel#loginFooter {
+  color: #98a6b4;
+  font-size: 9px;
+}
