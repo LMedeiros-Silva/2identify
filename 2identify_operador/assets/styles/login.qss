@@ -278,12 +278,21 @@ QFrame#loginStatusBanner[statusKind="error"] {
   border: 1px solid #f1bcc0;
 }
 
+QFrame#loginStatusBanner[statusKind="success"] {
+  background-color: #ecf8f1;
+  border: 1px solid #adddc0;
+}
+
 QFrame#loginStatusBanner[statusKind="information"] QLabel#loginStatusText {
   color: #235f94;
 }
 
 QFrame#loginStatusBanner[statusKind="error"] QLabel#loginStatusText {
   color: #a42f37;
+}
+
+QFrame#loginStatusBanner[statusKind="success"] QLabel#loginStatusText {
+  color: #217544;
 }
 
 QLabel#loginStatusText {

@@ -6,7 +6,7 @@ from typing import Protocol
 
 import cv2
 
-from app.vision.face_auth.types import Frame
+from app.vision.types import Frame
 
 
 class CameraSession(Protocol):

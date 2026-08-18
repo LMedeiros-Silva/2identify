@@ -68,16 +68,21 @@ class CameraPreview(QFrame):
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        content_rect = self.rect().adjusted(1, 1, -1, -1)
+        if not painter.isActive():
+            return
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            content_rect = self.rect().adjusted(1, 1, -1, -1)
 
-        frame = self._frame
-        if frame is not None and not frame.isNull():
-            self._paint_frame(painter, content_rect, frame)
-        else:
-            self._paint_placeholder(painter, content_rect)
+            frame = self._frame
+            if frame is not None and not frame.isNull():
+                self._paint_frame(painter, content_rect, frame)
+            else:
+                self._paint_placeholder(painter, content_rect)
 
-        self._paint_face_guide(painter, content_rect)
+            self._paint_face_guide(painter, content_rect)
+        finally:
+            painter.end()
 
     def _paint_frame(self, painter: QPainter, target: QRect, frame: QImage) -> None:
         pixmap = QPixmap.fromImage(frame)
@@ -162,41 +167,51 @@ class ProfileAvatar(QWidget):
         self._initials = "".join(part[0] for part in identity.name.split()[:2]).upper()
         self.update()
 
+    def clear_profile(self) -> None:
+        self._portrait = None
+        self._initials = ""
+        self.update()
+
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        target = self.rect().adjusted(2, 2, -2, -2)
-        clip_path = QPainterPath()
-        clip_path.addEllipse(QRectF(target))
+        if not painter.isActive():
+            return
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            target = self.rect().adjusted(2, 2, -2, -2)
+            clip_path = QPainterPath()
+            clip_path.addEllipse(QRectF(target))
 
-        painter.setClipPath(clip_path)
-        painter.fillRect(target, QColor("#1687f8"))
-        portrait = self._portrait
-        if portrait is not None and not portrait.isNull():
-            pixmap = QPixmap.fromImage(portrait).scaled(
-                target.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            source_x = max(0, (pixmap.width() - target.width()) // 2)
-            source_y = max(0, (pixmap.height() - target.height()) // 2)
-            source = QRect(source_x, source_y, target.width(), target.height())
-            painter.drawPixmap(target, pixmap, source)
-        else:
-            painter.setPen(QColor("#ffffff"))
-            font = QFont(painter.font())
-            font.setBold(True)
-            font.setPixelSize(16)
-            painter.setFont(font)
-            painter.drawText(target, Qt.AlignmentFlag.AlignCenter, self._initials)
+            painter.setClipPath(clip_path)
+            painter.fillRect(target, QColor("#1687f8"))
+            portrait = self._portrait
+            if portrait is not None and not portrait.isNull():
+                pixmap = QPixmap.fromImage(portrait).scaled(
+                    target.size(),
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                source_x = max(0, (pixmap.width() - target.width()) // 2)
+                source_y = max(0, (pixmap.height() - target.height()) // 2)
+                source = QRect(source_x, source_y, target.width(), target.height())
+                painter.drawPixmap(target, pixmap, source)
+            else:
+                painter.setPen(QColor("#ffffff"))
+                font = QFont(painter.font())
+                font.setBold(True)
+                font.setPixelSize(16)
+                painter.setFont(font)
+                painter.drawText(target, Qt.AlignmentFlag.AlignCenter, self._initials)
 
-        painter.setClipping(False)
-        border_pen = QPen(QColor("#ffffff"))
-        border_pen.setWidth(2)
-        painter.setPen(border_pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(target)
+            painter.setClipping(False)
+            border_pen = QPen(QColor("#ffffff"))
+            border_pen.setWidth(2)
+            painter.setPen(border_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(target)
+        finally:
+            painter.end()
 
 
 class FaceLoginPanel(QWidget):
@@ -259,6 +274,18 @@ class FaceLoginPanel(QWidget):
     def show_error(self, message: str, unavailable: bool = False) -> None:
         state = FaceLoginState.UNAVAILABLE if unavailable else FaceLoginState.ERROR
         self.set_state(state, message)
+
+    def reset(self) -> None:
+        """Remove frames and identity data before a new authentication session."""
+
+        self._camera_preview.clear_frame()
+        self._operator_photo.clear_profile()
+        self._operator_name.clear()
+        self._operator_detail.clear()
+        self.set_state(
+            FaceLoginState.READY,
+            "Pronto para iniciar o reconhecimento facial.",
+        )
 
     def _build_content(self) -> None:
         layout = QVBoxLayout(self)

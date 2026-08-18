@@ -1,2 +1,2 @@
-"""Camera and computer-vision adapters. Implemented in later stages."""
+"""Camera and computer-vision adapters shared by authentication and safety flows."""
 

@@ -1,0 +1,49 @@
+QMainWindow#mainWindow,
+QWidget#mainRoot,
+QWidget#mainWorkspace {
+  background-color: #f3f6fa;
+}
+
+QFrame#mainHeader {
+  background-color: #ffffff;
+  border: none;
+  border-bottom: 1px solid #dce5ee;
+}
+
+QLabel#mainSessionBadge {
+  color: #238056;
+  background-color: #e5f7ed;
+  border: 1px solid #9cd8b7;
+  border-radius: 12px;
+  padding: 5px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#mainOperatorName {
+  color: #18314c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+QLabel#mainOperatorDetail {
+  color: #788b9e;
+  font-size: 9px;
+}
+
+QLabel#mainPageTitle {
+  color: #18314c;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+QLabel#mainPageContext {
+  color: #8697a8;
+  font-size: 9px;
+}
+
+QStackedWidget#mainPageStack {
+  background-color: #f3f6fa;
+  border: none;
+}

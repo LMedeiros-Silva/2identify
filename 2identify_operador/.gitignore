@@ -20,6 +20,7 @@ venv/
 # Runtime data
 logs/
 var/
+/tmp/
 *.log
 *.sqlite3
 
@@ -27,6 +28,11 @@ var/
 models/*.pt
 models/*.onnx
 models/*.engine
+models/**/*.pt
+models/**/*.onnx
+models/**/*.engine
+# Local source extracted from the provided PyTorch checkpoint.
+/best/
 dist/
 build/
 *.spec

@@ -1,0 +1,332 @@
+QWidget#activeOperationPage {
+  background-color: #f3f6fa;
+}
+
+QLabel#activeEyebrow,
+QLabel#activeMonitoringEyebrow {
+  color: #238056;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+QLabel#activeTitle {
+  color: #10243e;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+QLabel#activeStatusBadge {
+  color: #ffffff;
+  background-color: #238056;
+  border: 1px solid #1c6d49;
+  border-radius: 13px;
+  padding: 7px 13px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QFrame#activeOperationCard,
+QFrame#activeSessionCard {
+  background-color: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 10px;
+}
+
+QLabel#activeSectionLabel {
+  color: #6c8195;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#activeOperationName {
+  color: #18314c;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+QLabel#activeDetailValue {
+  color: #28445f;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+QLabel#activeMetadata {
+  color: #74879a;
+  font-size: 9px;
+}
+
+QLabel#activeElapsed {
+  color: #1677d2;
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: 2px;
+}
+
+QLabel#activeSafetyValue {
+  color: #238056;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+QLabel#activeSessionCode {
+  color: #60758c;
+  font-family: monospace;
+  font-size: 8px;
+}
+
+QFrame#activeMonitoringPanel {
+  background-color: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 10px;
+}
+
+QLabel#activeMonitoringTitle {
+  color: #18314c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+QLabel#activeCameraStatus,
+QLabel#activeInferenceStatus,
+QLabel#activeOverlayStatus {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#activeCameraStatus[state="starting"],
+QLabel#activeInferenceStatus[state="loading"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border-color: #b4d8f2;
+}
+
+QLabel#activeCameraStatus[state="active"],
+QLabel#activeInferenceStatus[state="active"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border-color: #9cd8b7;
+}
+
+QLabel#activeCameraStatus[state="unavailable"],
+QLabel#activeCameraStatus[state="error"],
+QLabel#activeInferenceStatus[state="error"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QPushButton#activeCameraRetryButton {
+  min-height: 25px;
+  color: #176daf;
+  background-color: #eef7fe;
+  border: 1px solid #9ccdf0;
+  border-radius: 6px;
+  padding: 0 9px;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+QStackedWidget#activeCameraStack,
+QFrame#activeCameraPreview,
+QFrame#activeCameraPlaceholder {
+  background-color: #10243e;
+  border: 1px solid #223d5a;
+  border-radius: 8px;
+}
+
+QLabel#activeCameraPlaceholderTitle {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+QLabel#activeCameraPlaceholderDescription {
+  color: #a9bed2;
+  font-size: 9px;
+}
+
+QFrame#activePpePanel,
+QWidget#activePpeContainer {
+  background-color: #f8fafc;
+  border: 1px solid #d8e3ed;
+  border-radius: 8px;
+}
+
+QWidget#activePpeContainer {
+  border: none;
+  background-color: transparent;
+}
+
+QFrame#activePpeRow {
+  background-color: #ffffff;
+  border: 1px solid #dce5ed;
+  border-radius: 6px;
+}
+
+QLabel#activePpeName {
+  color: #28445f;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+QLabel#activePpeState {
+  color: #7a5b1b;
+  background-color: #fff7df;
+  border: 1px solid #efd48d;
+  border-radius: 7px;
+  padding: 3px 6px;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+QLabel#activePpeState[state="confirmed"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border-color: #9cd8b7;
+}
+
+QLabel#activePpeState[state="collecting"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border-color: #94c9ef;
+}
+
+QLabel#activePpeState[state="absent"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QLabel#activePpeState[state="unstable"] {
+  color: #8a651d;
+  background-color: #fff7df;
+  border-color: #efd48d;
+}
+
+QLabel#activePpeState[state="unmapped"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border-color: #d2dce6;
+}
+
+QLabel#activeMonitoringStatus {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#activeMonitoringStatus[state="pending"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border-color: #b4d8f2;
+}
+
+QLabel#activeMonitoringStatus[state="compliant"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border-color: #9cd8b7;
+}
+
+QLabel#activeMonitoringStatus[state="blocked"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QFrame#activeAlertStrip {
+  background-color: #f8fafc;
+  border: 1px solid #d8e3ed;
+  border-radius: 7px;
+}
+
+QFrame#activeAlertStrip[state="active"] {
+  background-color: #fff1f0;
+  border-color: #e9aaa6;
+}
+
+QFrame#activeAlertStrip[state="resolved"] {
+  background-color: #edf9f2;
+  border-color: #a8dbbd;
+}
+
+QLabel#activeAlertBadge {
+  color: #687b8f;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#activeAlertBadge[state="active"] {
+  color: #a23838;
+}
+
+QLabel#activeAlertBadge[state="resolved"] {
+  color: #238056;
+}
+
+QLabel#activeAlertMessage {
+  color: #536b82;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+QFrame#activeFooter {
+  background-color: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 9px;
+}
+
+QLabel#activeFooterTitle {
+  color: #28445f;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#activeFinishError {
+  color: #a23838;
+  font-size: 9px;
+}
+
+QPushButton#activeFinishButton {
+  min-height: 36px;
+  color: #a23838;
+  background-color: #fff3f2;
+  border: 1px solid #e6aaa6;
+  border-radius: 7px;
+  padding: 0 16px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QPushButton#activeFinishButton:hover {
+  color: #ffffff;
+  background-color: #b94444;
+  border-color: #a23838;
+}
+
+QPushButton#activeFinishButton:pressed {
+  background-color: #953535;
+  padding-top: 1px;
+}
+
+QPushButton#activeFinishButton:disabled {
+  color: #8998a6;
+  background-color: #e8edf1;
+  border-color: #d2dbe3;
+}

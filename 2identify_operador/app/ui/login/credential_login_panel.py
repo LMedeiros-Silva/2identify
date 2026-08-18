@@ -61,6 +61,27 @@ class CredentialLoginPanel(QWidget):
         self._password_input.clear()
         self._password_input.focus_editor()
 
+    def show_success(self, message: str) -> None:
+        self.set_authenticating(False)
+        self._show_status(message, "success")
+        self._password_input.clear()
+        self._username_input.setEnabled(False)
+        self._password_input.setEnabled(False)
+        self._login_button.setEnabled(False)
+        self._face_login_button.setEnabled(False)
+        self._login_button.setText("ACESSO AUTORIZADO")
+
+    def reset(self) -> None:
+        """Clear credentials and restore the form for another operator."""
+
+        self.set_authenticating(False)
+        self._username_input.clear()
+        self._password_input.clear()
+        self._set_username_error("")
+        self._set_password_error("")
+        self._hide_status()
+        self._login_button.setText("ENTRAR NO SISTEMA")
+
     def _build_content(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

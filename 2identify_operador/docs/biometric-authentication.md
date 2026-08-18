@@ -27,6 +27,8 @@ FaceAuthenticationWorker (QThread)
 OperatorIdentity
     ↓
 LoginWindow → foto cadastrada + "Bem-vindo, Nome"
+    ↓
+OperatorSession → MainWindow
 ```
 
 A UI não importa OpenCV e o worker nunca acessa widgets. A câmera e os modelos são criados
@@ -96,9 +98,7 @@ operadores, iluminação e câmeras representativos antes de qualquer implantaç
 
 ## Próxima evolução
 
-1. substituir o repositório local pelo cliente da API;
+1. substituir o repositório local de Face ID por autorização biométrica através da API;
 2. cadastrar operadores pelo Admin;
 3. substituir/validar prova de vida com a câmera escolhida;
-4. emitir uma sessão autorizada;
-5. navegar para a MainWindow da Etapa 3;
-6. testar múltiplos rostos, câmera ausente, baixa luz, capacete, óculos e spoofing.
+4. testar múltiplos rostos, câmera ausente, baixa luz, capacete, óculos e spoofing.

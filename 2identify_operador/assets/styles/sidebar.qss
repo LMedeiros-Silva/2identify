@@ -1,0 +1,81 @@
+QFrame#mainSidebar {
+  background-color: #07182c;
+  border: none;
+  border-right: 1px solid #183450;
+}
+
+QLabel#sidebarBrandMark {
+  color: #ffffff;
+  background-color: #1687f8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+QLabel#sidebarBrandName {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#sidebarProductName {
+  color: #63b3ff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+QLabel#sidebarSectionLabel {
+  color: #617d9b;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding-left: 12px;
+}
+
+QPushButton#sidebarNavigationButton,
+QPushButton#sidebarLogoutButton {
+  color: #a9bdd2;
+  background-color: transparent;
+  border: none;
+  border-radius: 7px;
+  min-height: 44px;
+  padding: 0 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+QPushButton#sidebarNavigationButton:hover,
+QPushButton#sidebarLogoutButton:hover {
+  color: #ffffff;
+  background-color: #102b47;
+}
+
+QPushButton#sidebarNavigationButton[selected="true"] {
+  color: #ffffff;
+  background-color: #126fc4;
+  border-left: 3px solid #68b8ff;
+  font-weight: 700;
+}
+
+QPushButton#sidebarNavigationButton:pressed,
+QPushButton#sidebarLogoutButton:pressed {
+  background-color: #0e233a;
+}
+
+QPushButton#sidebarLogoutButton:hover {
+  color: #ffb6bb;
+  background-color: #302033;
+}
+
+QFrame#sidebarSeparator {
+  color: #1c3855;
+  max-height: 1px;
+}
+
+QLabel#sidebarVersion {
+  color: #536d88;
+  font-size: 8px;
+}

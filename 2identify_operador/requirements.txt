@@ -4,3 +4,9 @@ numpy>=1.26.0,<2.3.0
 opencv-python-headless>=4.10.0,<4.11.0
 pydantic-settings>=2.7.0,<3.0.0
 python-dotenv>=1.0.1,<2.0.0
+httpx>=0.28.0,<1.0.0
+# Exact training runtime recorded in the provided YOLOv8 checkpoint.
+ultralytics-opencv-headless==8.4.115
+# Validated Windows CPU runtime; GPU deployments may use a separately qualified wheel set.
+torch==2.13.0
+torchvision==0.28.0

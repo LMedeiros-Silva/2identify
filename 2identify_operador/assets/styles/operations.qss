@@ -1,0 +1,598 @@
+QWidget#operationsPage {
+  background-color: #f3f6fa;
+}
+
+QLabel#operationsEyebrow {
+  color: #1677d2;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+QLabel#operationsTitle {
+  color: #10243e;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+QLabel#operationsDescription {
+  color: #60758c;
+  font-size: 12px;
+}
+
+QSplitter#operationsSplitter {
+  background-color: transparent;
+  border: none;
+}
+
+QSplitter#operationsSplitter::handle {
+  background-color: transparent;
+  width: 16px;
+}
+
+QFrame#operationsListPanel,
+QFrame#operationDetailsPanel {
+  background-color: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 10px;
+}
+
+QLabel#operationsPanelTitle {
+  color: #18314c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+QLabel#operationsListStatus,
+QLabel#operationDetailsStatus {
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationsListStatus[state="not_loaded"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#operationsListStatus[state="loading"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+}
+
+QLabel#operationsListStatus[state="ready"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border: 1px solid #9cd8b7;
+}
+
+QLabel#operationsListStatus[state="empty"] {
+  color: #8a651d;
+  background-color: #fff7df;
+  border: 1px solid #efd48d;
+}
+
+QLabel#operationsListStatus[state="error"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border: 1px solid #efb9b5;
+}
+
+QLabel#operationDetailsStatus[state="waiting"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#operationDetailsStatus[state="selected"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+}
+
+QFrame#operationsListState {
+  background-color: #f8fafc;
+  border: 1px dashed #cbd7e2;
+  border-radius: 8px;
+}
+
+QStackedWidget#operationsListBody,
+QWidget#operationsListStateView,
+QWidget#operationsListContainer,
+QScrollArea#operationsScrollArea,
+QScrollArea#operationsScrollArea > QWidget > QWidget {
+  background-color: transparent;
+  border: none;
+}
+
+QPushButton#operationListButton {
+  min-height: 58px;
+  color: #28445f;
+  background-color: #f8fafc;
+  border: 1px solid #d6e1eb;
+  border-radius: 8px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+QPushButton#operationListButton:hover {
+  color: #145f9f;
+  background-color: #eef7fe;
+  border-color: #9ccdf0;
+}
+
+QPushButton#operationListButton:pressed {
+  color: #0f538c;
+  background-color: #deeffc;
+  border-color: #6fb4e5;
+  padding-top: 1px;
+}
+
+QPushButton#operationListButton[selected="true"] {
+  color: #ffffff;
+  background-color: #1677d2;
+  border-color: #1677d2;
+}
+
+QLabel#operationsSourceNotice {
+  color: #7a6a46;
+  background-color: #fffaf0;
+  border: 1px solid #eadcb9;
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QScrollArea#operationsScrollArea QScrollBar:vertical {
+  width: 8px;
+  margin: 2px 0;
+  background-color: transparent;
+}
+
+QScrollArea#operationsScrollArea QScrollBar::handle:vertical {
+  min-height: 28px;
+  background-color: #c7d4df;
+  border-radius: 4px;
+}
+
+QScrollArea#operationsScrollArea QScrollBar::handle:vertical:hover {
+  background-color: #aebfce;
+}
+
+QScrollArea#operationsScrollArea QScrollBar::add-line:vertical,
+QScrollArea#operationsScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#operationsScrollArea QScrollBar::add-page:vertical,
+QScrollArea#operationsScrollArea QScrollBar::sub-page:vertical {
+  height: 0;
+  background-color: transparent;
+}
+
+QFrame#operationsListState[state="error"] {
+  background-color: #fff9f8;
+  border-color: #e9b9b4;
+}
+
+QLabel#operationsStateIcon {
+  color: #52708c;
+  background-color: #e8eef4;
+  border: 1px solid #cfdae4;
+  border-radius: 22px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+QFrame#operationsListState[state="loading"] QLabel#operationsStateIcon {
+  color: #1677d2;
+  background-color: #e8f3fc;
+  border-color: #b4d8f2;
+}
+
+QFrame#operationsListState[state="empty"] QLabel#operationsStateIcon {
+  color: #8a651d;
+  background-color: #fff7df;
+  border-color: #efd48d;
+}
+
+QFrame#operationsListState[state="error"] QLabel#operationsStateIcon {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QLabel#operationsStateTitle,
+QLabel#operationDetailsEmptyTitle {
+  color: #18314c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+QLabel#operationsStateDescription,
+QLabel#operationDetailsEmptyDescription {
+  color: #708397;
+  font-size: 10px;
+}
+
+QFrame#operationDetailsEmptyState {
+  background-color: transparent;
+  border: none;
+}
+
+QStackedWidget#operationDetailsBody,
+QWidget#operationDetailsContent,
+QWidget#operationPpeRequirementsContainer,
+QScrollArea#operationDetailsScrollArea,
+QScrollArea#operationDetailsScrollArea > QWidget > QWidget {
+  background-color: transparent;
+  border: none;
+}
+
+QLabel#operationDetailsMarker {
+  color: #1677d2;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+QLabel#operationDetailsCode {
+  color: #6c8195;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationDetailsActiveBadge[state="active"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border: 1px solid #9cd8b7;
+}
+
+QLabel#operationDetailsActiveBadge[state="inactive"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#operationDetailsActiveBadge {
+  border-radius: 10px;
+  padding: 4px 9px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationDetailsName {
+  color: #10243e;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+QFrame#operationDetailsSeparator {
+  color: #dce5ee;
+  background-color: #dce5ee;
+  border: none;
+  max-height: 1px;
+}
+
+QFrame#operationDescriptionCard {
+  background-color: #f8fafc;
+  border: 1px solid #dbe4ed;
+  border-radius: 9px;
+}
+
+QLabel#operationDetailsSectionLabel {
+  color: #52708c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationDetailsDescription {
+  color: #536b82;
+  font-size: 12px;
+}
+
+QFrame#operationPpeCard {
+  background-color: #f8fafc;
+  border: 1px solid #dbe4ed;
+  border-radius: 9px;
+}
+
+QFrame#operationManualCard {
+  background-color: #ffffff;
+  border: 1px solid #dbe4ed;
+  border-radius: 9px;
+}
+
+QFrame#operationRiskAreaCard {
+  background-color: #ffffff;
+  border: 1px solid #dbe4ed;
+  border-radius: 9px;
+}
+
+QFrame#operationSafetyStartCard {
+  background-color: #10243e;
+  border: 1px solid #223d5a;
+  border-radius: 9px;
+}
+
+QLabel#operationSafetyStartEyebrow {
+  color: #75bce9;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationSafetyStartTitle {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+QLabel#operationSafetyStartDescription {
+  color: #b9cad9;
+  font-size: 10px;
+}
+
+QPushButton#operationSafetyStartButton {
+  min-height: 40px;
+  color: #ffffff;
+  background-color: #1677d2;
+  border: 1px solid #2a8be2;
+  border-radius: 7px;
+  padding: 0 14px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QPushButton#operationSafetyStartButton:hover {
+  background-color: #2187e2;
+  border-color: #4ca1ea;
+}
+
+QPushButton#operationSafetyStartButton:pressed {
+  background-color: #0f5ca5;
+  border-color: #0f5ca5;
+  padding-top: 1px;
+}
+
+QPushButton#operationSafetyStartButton:disabled {
+  color: #8194a7;
+  background-color: #263c52;
+  border-color: #3a5066;
+}
+
+QLabel#operationPpeCount {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QFrame#operationPpeRequirementRow {
+  background-color: #ffffff;
+  border: 1px solid #d8e3ed;
+  border-radius: 7px;
+}
+
+QLabel#operationPpeRequirementMarker {
+  color: #1677d2;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+  border-radius: 6px;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+QLabel#operationPpeRequirementName {
+  color: #28445f;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+QLabel#operationPpeRequiredBadge {
+  color: #7a5b1b;
+  background-color: #fff7df;
+  border: 1px solid #efd48d;
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationPpeEmptyState {
+  color: #708397;
+  background-color: #ffffff;
+  border: 1px dashed #cbd7e2;
+  border-radius: 7px;
+  padding: 16px;
+  font-size: 10px;
+}
+
+QLabel#operationManualStatus {
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationManualStatus[state="configured"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border: 1px solid #9cd8b7;
+}
+
+QLabel#operationManualStatus[state="missing"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#operationManualStatus[state="error"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border: 1px solid #efb9b5;
+}
+
+QLabel#operationManualTitle {
+  color: #536b82;
+  font-size: 11px;
+}
+
+QPushButton#operationManualButton {
+  min-height: 38px;
+  color: #ffffff;
+  background-color: #1677d2;
+  border: 1px solid #1677d2;
+  border-radius: 7px;
+  padding: 0 14px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#operationManualButton:hover {
+  background-color: #126abd;
+  border-color: #126abd;
+}
+
+QPushButton#operationManualButton:pressed {
+  background-color: #0f5ca5;
+  border-color: #0f5ca5;
+  padding-top: 1px;
+}
+
+QPushButton#operationManualButton:disabled {
+  color: #8b9bab;
+  background-color: #edf2f6;
+  border-color: #d2dce6;
+}
+
+QLabel#operationManualError {
+  color: #a23838;
+  background-color: #fff9f8;
+  border: 1px solid #efc7c3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 9px;
+  font-size: 9px;
+}
+
+QLabel#operationRiskAreaStatus {
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#operationRiskAreaStatus[state="associated"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+}
+
+QLabel#operationRiskAreaStatus[state="missing"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#operationRiskAreaStatus[state="demonstration"] {
+  color: #8a5a00;
+  background-color: #fff5d6;
+  border: 1px solid #ead38a;
+}
+
+QLabel#operationRiskAreaName {
+  color: #536b82;
+  font-size: 11px;
+}
+
+QPushButton#operationRiskAreaButton {
+  min-height: 38px;
+  color: #176daf;
+  background-color: #eef7fe;
+  border: 1px solid #9ccdf0;
+  border-radius: 7px;
+  padding: 0 14px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#operationRiskAreaButton:hover {
+  color: #ffffff;
+  background-color: #1677d2;
+  border-color: #1677d2;
+}
+
+QPushButton#operationRiskAreaButton:pressed {
+  color: #ffffff;
+  background-color: #0f5ca5;
+  border-color: #0f5ca5;
+  padding-top: 1px;
+}
+
+QPushButton#operationRiskAreaButton:disabled {
+  color: #8b9bab;
+  background-color: #edf2f6;
+  border-color: #d2dce6;
+}
+
+QLabel#operationRiskAreaNotice {
+  color: #176daf;
+  background-color: #f1f8fd;
+  border: 1px solid #c7e2f5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 9px;
+  font-size: 9px;
+}
+
+QFrame#operationRiskAreaPreview {
+    background-color: #10243e;
+    border: 1px solid #2c4968;
+    border-radius: 10px;
+    margin-top: 12px;
+}
+
+QScrollArea#operationDetailsScrollArea QScrollBar:vertical {
+  width: 8px;
+  margin: 2px 0;
+  background-color: transparent;
+}
+
+QScrollArea#operationDetailsScrollArea QScrollBar::handle:vertical {
+  min-height: 28px;
+  background-color: #c7d4df;
+  border-radius: 4px;
+}
+
+QScrollArea#operationDetailsScrollArea QScrollBar::handle:vertical:hover {
+  background-color: #aebfce;
+}
+
+QScrollArea#operationDetailsScrollArea QScrollBar::add-line:vertical,
+QScrollArea#operationDetailsScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#operationDetailsScrollArea QScrollBar::add-page:vertical,
+QScrollArea#operationDetailsScrollArea QScrollBar::sub-page:vertical {
+  height: 0;
+  background-color: transparent;
+}

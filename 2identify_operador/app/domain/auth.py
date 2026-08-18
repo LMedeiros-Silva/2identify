@@ -51,3 +51,36 @@ class OperatorIdentity:
 
         object.__setattr__(self, "name", normalized_name)
         object.__setattr__(self, "profile_photo_reference", photo_reference)
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialAuthenticationResult:
+    """Authoritative operator account returned by the authentication API."""
+
+    operator_id: int
+    name: str
+    access_token: str = field(repr=False)
+    token_type: str = "bearer"
+    profile_photo_reference: str | None = None
+
+    def __post_init__(self) -> None:
+        normalized_name = self.name.strip()
+        normalized_token = self.access_token.strip()
+        normalized_token_type = self.token_type.strip().lower()
+        if self.operator_id <= 0:
+            raise ValueError("operator_id deve ser maior que zero")
+        if not normalized_name:
+            raise ValueError("name não pode ser vazio")
+        if not normalized_token:
+            raise ValueError("access_token não pode ser vazio")
+        if normalized_token_type != "bearer":
+            raise ValueError("token_type não suportado")
+
+        photo_reference = self.profile_photo_reference
+        if photo_reference is not None:
+            photo_reference = photo_reference.strip() or None
+
+        object.__setattr__(self, "name", normalized_name)
+        object.__setattr__(self, "access_token", normalized_token)
+        object.__setattr__(self, "token_type", normalized_token_type)
+        object.__setattr__(self, "profile_photo_reference", photo_reference)

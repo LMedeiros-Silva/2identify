@@ -12,6 +12,8 @@ from typing import cast
 from app.core.config import AppSettings, get_settings
 from app.core.constants import APPLICATION_NAME, ORGANIZATION_NAME
 from app.core.logging_config import configure_logging
+from app.core.session import OperatorSessionContext
+from app.services.work_session_service import WorkSessionService
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,8 @@ class RuntimeContext:
     """Dependencies created once and shared by the application shell."""
 
     settings: AppSettings
+    operator_session: OperatorSessionContext
+    work_sessions: WorkSessionService
 
 
 def create_runtime() -> RuntimeContext:
@@ -32,7 +36,15 @@ def create_runtime() -> RuntimeContext:
         "operator_bootstrap_complete",
         extra={"app_environment": settings.app_environment.value},
     )
-    return RuntimeContext(settings=settings)
+    return RuntimeContext(
+        settings=settings,
+        operator_session=OperatorSessionContext(),
+        work_sessions=WorkSessionService(
+            maximum_authorization_age_seconds=(
+                settings.ppe_release_assessment_max_age_seconds
+            )
+        ),
+    )
 
 
 def run_startup_check(runtime: RuntimeContext) -> int:
@@ -40,15 +52,19 @@ def run_startup_check(runtime: RuntimeContext) -> int:
 
     detector_available = runtime.settings.face_detector_model_path.is_file()
     recognizer_available = runtime.settings.face_recognition_model_path.is_file()
+    ppe_model_available = runtime.settings.ppe_model_path.is_file()
     logger.info(
         "operator_startup_check_ok",
         extra={
             "api_url": runtime.settings.api_base_url,
             "log_directory": str(runtime.settings.log_directory),
             "model_path": str(runtime.settings.ppe_model_path),
+            "ppe_model_available": ppe_model_available,
             "face_detector_available": detector_available,
             "face_recognizer_available": recognizer_available,
             "face_templates_available": runtime.settings.face_auth_template_store_path.is_file(),
+            "operations_mock_enabled": runtime.settings.operations_mock_enabled,
+            "manuals_directory_available": runtime.settings.manuals_directory.is_dir(),
         },
     )
     if runtime.settings.face_auth_enabled and not (
@@ -64,8 +80,14 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
 
     from PySide6.QtWidgets import QApplication
 
+    from app.api.client import OperatorApiClient
+    from app.controllers.application_controller import ApplicationController
+    from app.controllers.credential_login_controller import CredentialLoginController
     from app.controllers.face_login_controller import FaceLoginController
-    from app.domain.auth import LoginCredentials, OperatorIdentity
+    from app.providers import DesktopManualLauncher, MockOperationProvider
+    from app.services.auth_service import AuthService
+    from app.services.manual_service import ManualService
+    from app.services.operation_service import OperationService
     from app.ui.login import LoginWindow
     from app.ui.styles import load_application_stylesheet
 
@@ -85,36 +107,44 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
 
     window = LoginWindow(settings=runtime.settings)
     face_login_controller = FaceLoginController(runtime.settings, window)
+    api_client = OperatorApiClient(
+        base_url=runtime.settings.api_base_url,
+        connect_timeout_seconds=runtime.settings.api_connect_timeout_seconds,
+        read_timeout_seconds=runtime.settings.api_read_timeout_seconds,
+    )
+    credential_login_controller = CredentialLoginController(AuthService(api_client), window)
+    manual_service = ManualService(
+        manuals_directory=runtime.settings.manuals_directory,
+        launcher=DesktopManualLauncher(),
+    )
+    operation_service: OperationService | None = None
+    operations_source_notice: str | None = None
+    if runtime.settings.operations_mock_enabled:
+        operation_service = OperationService(MockOperationProvider())
+        operations_source_notice = "DADOS LOCAIS DE DESENVOLVIMENTO"
+        logger.warning("mock_operation_provider_enabled")
+    application_controller = ApplicationController(
+        session_context=runtime.operator_session,
+        login_window=window,
+        app_version=runtime.settings.app_version,
+        operation_service=operation_service,
+        operations_source_notice=operations_source_notice,
+        manual_service=manual_service,
+        settings=runtime.settings,
+        work_session_service=runtime.work_sessions,
+    )
 
-    def handle_face_login_success(result: object) -> None:
-        if not isinstance(result, OperatorIdentity):
-            logger.error("invalid_face_login_result_type")
-            return
-        logger.info(
-            "operator_session_navigation_pending",
-            extra={"operator_id": result.operator_id, "target": "main_window_stage_3"},
-        )
-
-    def handle_credential_login_request(request: object) -> None:
-        if not isinstance(request, LoginCredentials):
-            logger.error("invalid_login_request_type")
-            window.show_credential_authentication_error(
-                "Não foi possível processar a solicitação."
-            )
-            return
-
-        logger.info(
-            "operator_login_requested",
-            extra={"username": request.username, "integration_status": "pending"},
-        )
-        window.show_credential_authentication_notice(
-            "A autenticação pela API será conectada na etapa de integração. "
-            "A interface de acesso está pronta."
-        )
-
-    face_login_controller.operator_authenticated.connect(handle_face_login_success)
-    window.credential_login_requested.connect(handle_credential_login_request)
+    face_login_controller.operator_authenticated.connect(
+        application_controller.handle_face_authentication
+    )
+    credential_login_controller.operator_authenticated.connect(
+        application_controller.handle_credential_authentication
+    )
     application.aboutToQuit.connect(face_login_controller.shutdown)
+    application.aboutToQuit.connect(credential_login_controller.shutdown)
+    application.aboutToQuit.connect(application_controller.shutdown)
+    application.aboutToQuit.connect(api_client.close)
+    application.aboutToQuit.connect(runtime.operator_session.close)
     window.show()
 
     logger.info("operator_ui_started")

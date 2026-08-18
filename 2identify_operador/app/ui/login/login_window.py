@@ -79,6 +79,22 @@ class LoginWindow(QMainWindow):
     def show_credential_authentication_notice(self, message: str) -> None:
         self._credential_panel.show_notice(message)
 
+    def show_credential_authentication_success(self, message: str) -> None:
+        self._credential_panel.show_success(message)
+
+    def reset_for_authentication(self) -> None:
+        """Return both login methods to a clean state after logout."""
+
+        self.face_login_cancel_requested.emit()
+        self._face_panel.reset()
+        self._credential_panel.reset()
+        if self._settings.face_auth_enabled:
+            self._stack.setCurrentWidget(self._face_panel)
+            self._access_badge.setText("FACE ID · ACESSO SEGURO")
+        else:
+            self._stack.setCurrentWidget(self._credential_panel)
+            self._access_badge.setText("ACESSO ALTERNATIVO")
+
     @Slot()
     def show_face_login(self) -> None:
         if not self._settings.face_auth_enabled:

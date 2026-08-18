@@ -13,7 +13,8 @@ from PySide6.QtGui import QImage
 from app.vision.camera import CameraSession
 from app.vision.face_auth.errors import FaceAuthenticationError
 from app.vision.face_auth.pipeline import FaceAuthenticationPipeline
-from app.vision.face_auth.types import FacePipelineDecision, Frame
+from app.vision.face_auth.types import FacePipelineDecision
+from app.vision.qt_image import frame_to_qimage
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ class FaceAuthenticationWorker(QThread):
                 failed_reads = 0
                 now = monotonic()
                 if now >= next_preview_at:
-                    self.frame_ready.emit(_frame_to_qimage(frame))
+                    self.frame_ready.emit(frame_to_qimage(frame))
                     next_preview_at = now + self._preview_interval
 
                 if now >= next_inference_at:
@@ -132,20 +133,4 @@ class FaceAuthenticationWorker(QThread):
             return
         self._last_status = status
         self.pipeline_status_changed.emit(*status)
-
-
-def _frame_to_qimage(frame: Frame) -> QImage:
-    """Convert BGR OpenCV memory to an owned RGB QImage."""
-
-    rgb_frame = frame[:, :, ::-1].copy()
-    height, width, channels = rgb_frame.shape
-    bytes_per_line = width * channels
-    image = QImage(
-        rgb_frame.data,
-        width,
-        height,
-        bytes_per_line,
-        QImage.Format.Format_RGB888,
-    )
-    return image.copy()
 

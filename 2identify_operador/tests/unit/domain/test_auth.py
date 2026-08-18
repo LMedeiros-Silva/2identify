@@ -1,6 +1,6 @@
 import pytest
 
-from app.domain import LoginCredentials, OperatorIdentity
+from app.domain import CredentialAuthenticationResult, LoginCredentials, OperatorIdentity
 
 
 def test_login_credentials_normalize_username_and_hide_password_from_repr() -> None:
@@ -43,3 +43,17 @@ def test_operator_identity_rejects_invalid_data(
 ) -> None:
     with pytest.raises(ValueError):
         OperatorIdentity(operator_id=operator_id, name=name, confidence=confidence)
+
+
+def test_credential_authentication_result_normalizes_and_hides_token() -> None:
+    result = CredentialAuthenticationResult(
+        operator_id=8,
+        name="  Marina Costa  ",
+        access_token="  token-confidencial  ",
+        token_type="Bearer",
+    )
+
+    assert result.name == "Marina Costa"
+    assert result.access_token == "token-confidencial"
+    assert result.token_type == "bearer"
+    assert "token-confidencial" not in repr(result)

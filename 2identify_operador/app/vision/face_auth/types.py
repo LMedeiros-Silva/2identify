@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from app.domain.auth import OperatorIdentity
+from app.vision.types import Frame as Frame
 
-Frame = NDArray[Any]
 Embedding = NDArray[np.float32]
 
 

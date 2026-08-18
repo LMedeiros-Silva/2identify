@@ -1,0 +1,420 @@
+QWidget#safetyVerificationPage {
+  background-color: #f3f6fa;
+}
+
+QPushButton#safetyBackButton {
+  min-height: 30px;
+  color: #176daf;
+  background-color: transparent;
+  border: 1px solid #b4d8f2;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#safetyBackButton:hover {
+  color: #ffffff;
+  background-color: #1677d2;
+  border-color: #1677d2;
+}
+
+QPushButton#safetyBackButton:pressed {
+  background-color: #0f5ca5;
+  border-color: #0f5ca5;
+  padding-top: 1px;
+}
+
+QLabel#safetyEyebrow {
+  color: #1677d2;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+QLabel#safetyTitle {
+  color: #10243e;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+QLabel#safetyDescription {
+  color: #60758c;
+  font-size: 12px;
+}
+
+QSplitter#safetySplitter {
+  background-color: transparent;
+  border: none;
+}
+
+QSplitter#safetySplitter::handle {
+  background-color: transparent;
+  width: 16px;
+}
+
+QFrame#safetyCameraPanel,
+QFrame#safetyContextPanel {
+  background-color: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 10px;
+}
+
+QLabel#safetyPanelTitle {
+  color: #18314c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+QLabel#safetyDetectionOverlayStatus {
+  color: #4f7594;
+  background-color: #eef7fe;
+  border: 1px solid #bddcf2;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyCameraStatus {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyCameraStatus[state="starting"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border-color: #b4d8f2;
+}
+
+QLabel#safetyCameraStatus[state="active"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border-color: #9cd8b7;
+}
+
+QLabel#safetyCameraStatus[state="unavailable"] {
+  color: #8a651d;
+  background-color: #fff7df;
+  border-color: #efd48d;
+}
+
+QLabel#safetyCameraStatus[state="error"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QPushButton#safetyCameraRetryButton {
+  min-height: 26px;
+  color: #176daf;
+  background-color: #eef7fe;
+  border: 1px solid #9ccdf0;
+  border-radius: 6px;
+  padding: 0 9px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QPushButton#safetyCameraRetryButton:hover {
+  color: #ffffff;
+  background-color: #1677d2;
+  border-color: #1677d2;
+}
+
+QPushButton#safetyCameraRetryButton:pressed {
+  background-color: #0f5ca5;
+  border-color: #0f5ca5;
+  padding-top: 1px;
+}
+
+QStackedWidget#safetyCameraStack,
+QFrame#safetyCameraPreview {
+  background-color: #10243e;
+  border: 1px solid #223d5a;
+  border-radius: 9px;
+}
+
+QFrame#safetyCameraPlaceholder {
+  background-color: #10243e;
+  border: 1px solid #223d5a;
+  border-radius: 9px;
+}
+
+QLabel#safetyCameraMarker {
+  color: #9dcff2;
+  background-color: #173552;
+  border: 1px solid #315775;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyCameraPlaceholderTitle {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+QLabel#safetyCameraPlaceholderDescription {
+  color: #a9bed2;
+  font-size: 10px;
+}
+
+QScrollArea#safetyContextScrollArea,
+QScrollArea#safetyContextScrollArea > QWidget > QWidget,
+QWidget#safetyContextContent,
+QWidget#safetyPpeContainer {
+  background-color: transparent;
+  border: none;
+}
+
+QLabel#safetySectionLabel {
+  color: #6c8195;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyOperationName,
+QLabel#safetyOperatorName,
+QLabel#safetyRiskAreaName {
+  color: #18314c;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+QLabel#safetyMetadata {
+  color: #74879a;
+  font-size: 9px;
+}
+
+QLabel#safetyPpeCount {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyInferenceStatus {
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyInferenceStatus[state="not_initialized"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border: 1px solid #d2dce6;
+}
+
+QLabel#safetyInferenceStatus[state="loading"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+}
+
+QLabel#safetyInferenceStatus[state="active"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border: 1px solid #b4d8f2;
+}
+
+QLabel#safetyInferenceStatus[state="unavailable"],
+QLabel#safetyInferenceStatus[state="error"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border: 1px solid #efb9b5;
+}
+
+QFrame#safetyPpeRow {
+  background-color: #f8fafc;
+  border: 1px solid #d8e3ed;
+  border-radius: 7px;
+}
+
+QLabel#safetyPpeName {
+  color: #28445f;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+QLabel#safetyPpeState {
+  color: #7a5b1b;
+  background-color: #fff7df;
+  border: 1px solid #efd48d;
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QLabel#safetyPpeState[state="confirmed"] {
+  color: #238056;
+  background-color: #e5f7ed;
+  border-color: #9cd8b7;
+}
+
+QLabel#safetyPpeState[state="collecting"] {
+  color: #176daf;
+  background-color: #e8f3fc;
+  border-color: #94c9ef;
+}
+
+QLabel#safetyPpeState[state="absent"] {
+  color: #a23838;
+  background-color: #fcebea;
+  border-color: #efb9b5;
+}
+
+QLabel#safetyPpeState[state="unstable"] {
+  color: #8a651d;
+  background-color: #fff7df;
+  border-color: #efd48d;
+}
+
+QLabel#safetyPpeState[state="unmapped"] {
+  color: #687b8f;
+  background-color: #edf2f6;
+  border-color: #d2dce6;
+}
+
+QLabel#safetyPpeEmptyState {
+  color: #708397;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd7e2;
+  border-radius: 7px;
+  padding: 14px;
+  font-size: 9px;
+}
+
+QScrollArea#safetyContextScrollArea QScrollBar:vertical {
+  width: 8px;
+  margin: 2px 0;
+  background-color: transparent;
+}
+
+QScrollArea#safetyContextScrollArea QScrollBar::handle:vertical {
+  min-height: 28px;
+  background-color: #c7d4df;
+  border-radius: 4px;
+}
+
+QScrollArea#safetyContextScrollArea QScrollBar::handle:vertical:hover {
+  background-color: #aebfce;
+}
+
+QScrollArea#safetyContextScrollArea QScrollBar::add-line:vertical,
+QScrollArea#safetyContextScrollArea QScrollBar::sub-line:vertical,
+QScrollArea#safetyContextScrollArea QScrollBar::add-page:vertical,
+QScrollArea#safetyContextScrollArea QScrollBar::sub-page:vertical {
+  height: 0;
+  background-color: transparent;
+}
+
+QFrame#safetyReleaseBanner {
+  background-color: #fff8e5;
+  border: 1px solid #e9cf86;
+  border-radius: 9px;
+}
+
+QFrame#safetyReleaseBanner[state="compliant"] {
+  background-color: #eaf8f0;
+  border-color: #8fd0ad;
+}
+
+QLabel#safetyReleaseMarker {
+  color: #7a5b1b;
+  background-color: #ffefbd;
+  border: 1px solid #e9cf86;
+  border-radius: 19px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseMarker {
+  color: #1f754e;
+  background-color: #ccefdc;
+  border-color: #8fd0ad;
+}
+
+QLabel#safetyReleaseTitle {
+  color: #563f12;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseTitle {
+  color: #1f6647;
+}
+
+QLabel#safetyReleaseDescription {
+  color: #7b6840;
+  font-size: 9px;
+}
+
+QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseDescription {
+  color: #39755a;
+}
+
+QLabel#safetyReleaseStatus {
+  color: #7a5b1b;
+  background-color: #ffefbd;
+  border: 1px solid #e0c36f;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseStatus {
+  color: #1f754e;
+  background-color: #ccefdc;
+  border-color: #8fd0ad;
+}
+
+QPushButton#safetyStartOperationButton {
+  min-height: 34px;
+  color: #ffffff;
+  background-color: #238056;
+  border: 1px solid #1c6d49;
+  border-radius: 7px;
+  padding: 0 14px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QPushButton#safetyStartOperationButton:hover {
+  background-color: #1c6d49;
+}
+
+QPushButton#safetyStartOperationButton:pressed {
+  background-color: #15563a;
+  padding-top: 1px;
+}
+
+QPushButton#safetyStartOperationButton:disabled {
+  color: #8998a6;
+  background-color: #e2e8ed;
+  border-color: #cbd5dd;
+}
