@@ -31,6 +31,9 @@ models/*.engine
 models/**/*.pt
 models/**/*.onnx
 models/**/*.engine
+# Face ID artifacts intentionally versioned for workstation setup.
+!models/face_detection_yunet_2023mar.onnx
+!models/face_recognition_sface_2021dec.onnx
 # Local source extracted from the provided PyTorch checkpoint.
 /best/
 dist/
