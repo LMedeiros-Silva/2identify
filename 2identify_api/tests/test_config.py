@@ -27,6 +27,23 @@ def test_operator_is_the_only_profile_allowed_by_default() -> None:
     assert settings.auth_admin_token_audience == "2identify-admin"
 
 
+def test_operator_catalog_token_is_secret_and_requires_minimum_length() -> None:
+    raw_token = "catalog-token-with-at-least-thirty-two-bytes"
+    settings = Settings(
+        database_url="postgresql+psycopg2://user:password@localhost/identify_db",
+        operator_catalog_token=raw_token,
+        _env_file=None,
+    )
+
+    assert raw_token not in repr(settings)
+    with pytest.raises(ValidationError):
+        Settings(
+            database_url="postgresql+psycopg2://user:password@localhost/identify_db",
+            operator_catalog_token="short",
+            _env_file=None,
+        )
+
+
 @pytest.mark.parametrize(
     "database_url",
     [

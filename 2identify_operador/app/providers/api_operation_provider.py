@@ -15,9 +15,13 @@ class ApiOperationProvider:
         self,
         client: OperatorApiClient,
         session_context: OperatorSessionContext,
+        operator_catalog_token: str | None = None,
     ) -> None:
         self._client = client
         self._session_context = session_context
+        self._operator_catalog_token = (
+            operator_catalog_token.strip() if operator_catalog_token is not None else None
+        )
 
     def list_operations(self) -> tuple[Operation, ...]:
         session = self._session_context.current
@@ -25,8 +29,13 @@ class ApiOperationProvider:
             raise OperationsUnavailableError(
                 "Nenhum operador está autenticado para consultar as operações."
             )
-        if session.access_token is None:
-            raise OperationsUnavailableError(
-                "Entre com usuário e senha para carregar as operações cadastradas na API."
+        if session.access_token is not None:
+            return self._client.list_operations(session.access_token)
+        if self._operator_catalog_token:
+            return self._client.list_operations_with_catalog_token(
+                self._operator_catalog_token
             )
-        return self._client.list_operations(session.access_token)
+        raise OperationsUnavailableError(
+            "Configure o token de catálogo nesta estação para carregar operações "
+            "após o acesso por Face ID."
+        )

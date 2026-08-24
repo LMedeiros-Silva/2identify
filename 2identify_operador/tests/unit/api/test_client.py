@@ -233,6 +233,20 @@ def test_list_operations_maps_api_catalog_with_ppe_and_calibrated_risk_area() ->
     client.close()
 
 
+def test_list_operations_with_catalog_token_uses_read_only_endpoint() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url == (
+            "https://api.example.test/v1/operator/operations/catalog"
+        )
+        assert request.headers["Authorization"] == "Bearer catalog-token"
+        return httpx.Response(200, json=[])
+
+    client = _client(handler)
+
+    assert client.list_operations_with_catalog_token("catalog-token") == ()
+    client.close()
+
+
 @pytest.mark.parametrize("status_code", [401, 403, 500])
 def test_list_operations_maps_api_failures(status_code: int) -> None:
     client = _client(lambda _request: httpx.Response(status_code))

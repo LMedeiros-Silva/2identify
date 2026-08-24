@@ -134,8 +134,15 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
         operations_source_notice = "DADOS LOCAIS DE DESENVOLVIMENTO"
         logger.warning("mock_operation_provider_enabled")
     else:
+        catalog_token = runtime.settings.operator_catalog_token
         operation_service = OperationService(
-            ApiOperationProvider(api_client, runtime.operator_session)
+            ApiOperationProvider(
+                api_client,
+                runtime.operator_session,
+                operator_catalog_token=(
+                    catalog_token.get_secret_value() if catalog_token is not None else None
+                ),
+            )
         )
     application_controller = ApplicationController(
         session_context=runtime.operator_session,

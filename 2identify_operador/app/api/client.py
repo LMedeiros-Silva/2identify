@@ -228,9 +228,43 @@ class OperatorApiClient:
             raise OperationsUnavailableError(
                 "A consulta de operações exige uma sessão autenticada pela API."
             )
+        return self._request_operations(
+            path="operator/operations",
+            token=token,
+            authorization_error=(
+                "Sua sessão da API expirou. Saia e entre novamente com usuário e senha."
+            ),
+        )
+
+    def list_operations_with_catalog_token(
+        self,
+        catalog_token: str,
+    ) -> tuple[Operation, ...]:
+        """Read only the operation catalog as a trusted Operator workstation."""
+
+        token = catalog_token.strip()
+        if not token:
+            raise OperationsUnavailableError(
+                "O token de leitura do catálogo de operações não está configurado."
+            )
+        return self._request_operations(
+            path="operator/operations/catalog",
+            token=token,
+            authorization_error=(
+                "O token de leitura do catálogo foi rejeitado pela API."
+            ),
+        )
+
+    def _request_operations(
+        self,
+        *,
+        path: str,
+        token: str,
+        authorization_error: str,
+    ) -> tuple[Operation, ...]:
         try:
             response = self._client.get(
-                "operator/operations",
+                path,
                 headers={"Authorization": f"Bearer {token}"},
             )
         except httpx.RequestError as error:
@@ -243,9 +277,7 @@ class OperatorApiClient:
             ) from error
 
         if response.status_code in {httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN}:
-            raise OperationsUnavailableError(
-                "Sua sessão da API expirou. Saia e entre novamente com usuário e senha."
-            )
+            raise OperationsUnavailableError(authorization_error)
         try:
             response.raise_for_status()
             payload = _OPERATION_LIST_ADAPTER.validate_python(response.json())

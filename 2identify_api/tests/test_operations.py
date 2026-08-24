@@ -27,6 +27,8 @@ from app.core.database import get_db
 from app.main import create_app
 from app.services import AdministratorPrincipal, OperatorPrincipal
 
+_CATALOG_TOKEN = "catalog-token-with-at-least-thirty-two-bytes"
+
 
 class LifecycleDatabase:
     def check_connection(self) -> None:
@@ -146,6 +148,7 @@ def operations_api() -> Iterator[tuple[TestClient, sessionmaker[Session]]]:
         database_url="postgresql+psycopg2://test:test@localhost/test",
         app_env="testing",
         auth_token_secret="test-secret-with-at-least-thirty-two-bytes",
+        operator_catalog_token=_CATALOG_TOKEN,
         _env_file=None,
     )
     app = create_app(settings=settings, database=LifecycleDatabase())
@@ -204,6 +207,27 @@ def test_admin_creates_area_and_operation_operator_reads_same_polygon(operations
     operator_view = client.get("/operator/operations")
     assert operator_view.status_code == 200
     assert operator_view.json()[0]["risk_area"]["geometry"] == geometry
+
+    face_id_view = client.get(
+        "/operator/operations/catalog",
+        headers={"Authorization": f"Bearer {_CATALOG_TOKEN}"},
+    )
+    assert face_id_view.status_code == 200
+    assert face_id_view.json() == operator_view.json()
+
+
+def test_operator_catalog_rejects_missing_or_invalid_device_token(operations_api) -> None:
+    client, _sessions = operations_api
+
+    missing = client.get("/operator/operations/catalog")
+    invalid = client.get(
+        "/operator/operations/catalog",
+        headers={"Authorization": "Bearer invalid-catalog-token"},
+    )
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert missing.headers["cache-control"] == "no-store"
 
 
 def test_admin_registers_camera_through_api_and_catalog_lists_it(operations_api) -> None:

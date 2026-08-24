@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     auth_token_audience: str = "2identify-operator"
     auth_admin_token_audience: str = "2identify-admin"
     auth_allowed_profiles: Annotated[frozenset[str], NoDecode] = frozenset({"operador"})
+    operator_catalog_token: SecretStr | None = None
     realtime_heartbeat_interval_seconds: Annotated[
         float,
         Field(ge=0.05, le=300.0),
@@ -119,6 +120,18 @@ class Settings(BaseSettings):
             raise ValueError("SAFETY_DEVICE_TOKEN deve possuir pelo menos 32 bytes")
         if raw_value.casefold().startswith(("change_me", "generate_")):
             raise ValueError("SAFETY_DEVICE_TOKEN ainda contém um placeholder")
+        return SecretStr(raw_value)
+
+    @field_validator("operator_catalog_token", mode="before")
+    @classmethod
+    def validate_operator_catalog_token(cls, value: object) -> SecretStr | None:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        raw_value = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
+        if len(raw_value.encode("utf-8")) < 32:
+            raise ValueError("OPERATOR_CATALOG_TOKEN deve possuir pelo menos 32 bytes")
+        if raw_value.casefold().startswith(("change_me", "generate_")):
+            raise ValueError("OPERATOR_CATALOG_TOKEN ainda contém um placeholder")
         return SecretStr(raw_value)
 
     @field_validator("auth_allowed_profiles", mode="before")

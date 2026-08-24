@@ -56,6 +56,13 @@ Gere também o segredo local de assinatura sem exibi-lo no terminal:
 python -m scripts.ensure_auth_secret
 ```
 
+Para permitir que sessões locais de Face ID consultem as operações, gere e sincronize o token
+de leitura entre a API e o Operador, também sem exibi-lo:
+
+```powershell
+python -m scripts.ensure_operator_catalog_token
+```
+
 O comando preserva um segredo já válido e só cria/substitui valores ausentes ou placeholders.
 Em produção, distribua segredos diferentes por instalação através de um cofre ou mecanismo
 seguro de provisionamento.
@@ -168,6 +175,12 @@ O Operador possui somente leitura em `GET /operator/operations`; a resposta usa
 o mesmo polígono persistido para permitir a projeção sobre qualquer resolução de
 câmera. A troca do provider mock do desktop Operador por esse endpoint permanece
 como uma etapa separada.
+
+Instalações confiáveis do desktop também podem consultar somente esse catálogo em
+`GET /operator/operations/catalog`, usando o bearer configurado em
+`OPERATOR_CATALOG_TOKEN`. Esse acesso existe para sessões locais de Face ID e não
+emite JWT, não representa um usuário e não autoriza alertas ou recursos administrativos.
+Use um valor aleatório exclusivo, igual na API e no Operador, e nunca o envie ao Git.
 
 Antes de qualquer exposição fora do computador local, remova credenciais previsíveis de seed,
 gere um segredo JWT exclusivo, habilite HTTPS e limitação de tentativas no proxy. O comando de

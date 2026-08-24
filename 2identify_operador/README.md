@@ -190,7 +190,9 @@ pasta usada para iniciar o processo.
 
 Por padrão, `OPERATIONS_MOCK_ENABLED=false` carrega pela `2identify_api` as operações ativas
 cadastradas no Admin, incluindo EPIs obrigatórios e a geometria normalizada da área de risco.
-Esse catálogo exige login do Operador com usuário e senha, pois a consulta usa o token da API.
+O login por usuário e senha usa o JWT da sessão. O login por Face ID usa somente o token de
+leitura `OPERATOR_CATALOG_TOKEN`, que deve ter o mesmo valor na API e nesta instalação. Esse
+token não cria uma identidade, não envia alertas e não concede acesso ao Admin.
 Em desenvolvimento, `OPERATIONS_MOCK_ENABLED=true` ainda habilita uma lista local claramente
 identificada na interface; essa configuração é rejeitada em produção.
 

@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator, model_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app import __version__
@@ -37,6 +37,7 @@ class AppSettings(BaseSettings):
     api_connect_timeout_seconds: Annotated[float, Field(gt=0, le=60)] = 3.0
     api_read_timeout_seconds: Annotated[float, Field(gt=0, le=300)] = 10.0
     operations_mock_enabled: bool = False
+    operator_catalog_token: SecretStr | None = None
 
     ppe_model_path: Path = Path("models/ppe/best.pt")
     ppe_model_sha256: str = (
@@ -183,6 +184,18 @@ class AppSettings(BaseSettings):
         if not normalized:
             raise ValueError("FACE_AUTH_MODEL_ID não pode ser vazio")
         return normalized
+
+    @field_validator("operator_catalog_token", mode="before")
+    @classmethod
+    def validate_operator_catalog_token(cls, value: object) -> SecretStr | None:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        raw_value = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
+        if len(raw_value.encode("utf-8")) < 32:
+            raise ValueError("OPERATOR_CATALOG_TOKEN deve possuir pelo menos 32 bytes")
+        if raw_value.casefold().startswith(("change_me", "generate_")):
+            raise ValueError("OPERATOR_CATALOG_TOKEN ainda contém um placeholder")
+        return SecretStr(raw_value)
 
     @field_validator("ppe_inference_device", "pose_inference_device")
     @classmethod

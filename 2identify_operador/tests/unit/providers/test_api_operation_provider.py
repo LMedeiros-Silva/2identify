@@ -11,9 +11,17 @@ from app.services.operation_service import OperationsUnavailableError
 class RecordingClient:
     def __init__(self) -> None:
         self.token: str | None = None
+        self.catalog_token: str | None = None
 
     def list_operations(self, access_token: str) -> tuple[Operation, ...]:
         self.token = access_token
+        return (Operation(41, "Soldagem"),)
+
+    def list_operations_with_catalog_token(
+        self,
+        catalog_token: str,
+    ) -> tuple[Operation, ...]:
+        self.catalog_token = catalog_token
         return (Operation(41, "Soldagem"),)
 
 
@@ -31,12 +39,31 @@ def test_api_provider_uses_current_session_token() -> None:
     assert client.token == "token-api"
 
 
-def test_api_provider_requires_credential_api_session() -> None:
+def test_api_provider_uses_read_only_catalog_token_for_face_id_session() -> None:
+    client = RecordingClient()
+    context = OperatorSessionContext(
+        clock=lambda: datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    )
+    context.open(2, "Operador Teste", AuthenticationMethod.FACE_ID)
+    provider = ApiOperationProvider(  # type: ignore[arg-type]
+        client,
+        context,
+        operator_catalog_token="catalog-token-with-at-least-thirty-two-bytes",
+    )
+
+    operations = provider.list_operations()
+
+    assert operations == (Operation(41, "Soldagem"),)
+    assert client.catalog_token == "catalog-token-with-at-least-thirty-two-bytes"
+    assert client.token is None
+
+
+def test_api_provider_reports_missing_catalog_token_for_face_id_session() -> None:
     context = OperatorSessionContext(
         clock=lambda: datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
     )
     context.open(2, "Operador Teste", AuthenticationMethod.FACE_ID)
     provider = ApiOperationProvider(RecordingClient(), context)  # type: ignore[arg-type]
 
-    with pytest.raises(OperationsUnavailableError, match="usuário e senha"):
+    with pytest.raises(OperationsUnavailableError, match="token de catálogo"):
         provider.list_operations()

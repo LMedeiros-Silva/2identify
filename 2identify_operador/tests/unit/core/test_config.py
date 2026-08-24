@@ -164,6 +164,17 @@ def test_face_auth_threshold_is_validated() -> None:
         AppSettings(_env_file=None, face_auth_confidence_threshold=1.01)
 
 
+def test_operator_catalog_token_is_masked_and_validated() -> None:
+    token = "catalog-token-with-at-least-thirty-two-bytes"
+    settings = AppSettings(_env_file=None, operator_catalog_token=token)
+
+    assert token not in repr(settings)
+    assert settings.operator_catalog_token is not None
+    assert settings.operator_catalog_token.get_secret_value() == token
+    with pytest.raises(ValidationError):
+        AppSettings(_env_file=None, operator_catalog_token="short")
+
+
 def test_pose_and_ergonomics_settings_are_typed_and_cross_validated() -> None:
     settings = AppSettings(
         _env_file=None,
