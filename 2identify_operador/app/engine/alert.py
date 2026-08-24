@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from app.domain.alert import (
     SafetyAlert,
+    SafetyAlertSeverity,
     SafetyAlertStatus,
     SafetyViolation,
 )
@@ -24,14 +25,20 @@ class AlertEngineUpdate:
     raised_alerts: tuple[SafetyAlert, ...]
     resolved_alerts: tuple[SafetyAlert, ...]
     active_alerts: tuple[SafetyAlert, ...]
+    escalated_alerts: tuple[SafetyAlert, ...] = ()
 
     def __post_init__(self) -> None:
-        all_alerts = (*self.raised_alerts, *self.resolved_alerts, *self.active_alerts)
+        all_alerts = (
+            *self.raised_alerts,
+            *self.resolved_alerts,
+            *self.active_alerts,
+            *self.escalated_alerts,
+        )
         if any(not isinstance(item, SafetyAlert) for item in all_alerts):
             raise ValueError("a atualização deve conter somente SafetyAlert")
         if any(
             item.status is not SafetyAlertStatus.ACTIVE
-            for item in (*self.raised_alerts, *self.active_alerts)
+            for item in (*self.raised_alerts, *self.active_alerts, *self.escalated_alerts)
         ):
             raise ValueError("alertas levantados e ativos devem possuir status ACTIVE")
         if any(
@@ -61,6 +68,7 @@ class AlertEngine:
         minimum_persistence_seconds: float,
         resolution_consecutive_observations: int,
         cooldown_seconds: float,
+        critical_after_seconds: float = 5.0,
         alert_id_factory: AlertIdFactory = uuid4,
     ) -> None:
         if minimum_consecutive_observations < 1:
@@ -71,6 +79,8 @@ class AlertEngine:
             raise ValueError("resolution_consecutive_observations deve ser positivo")
         if cooldown_seconds < 0:
             raise ValueError("cooldown_seconds não pode ser negativo")
+        if critical_after_seconds <= 0:
+            raise ValueError("critical_after_seconds deve ser positivo")
         self._minimum_consecutive_observations = minimum_consecutive_observations
         self._minimum_persistence = timedelta(
             seconds=minimum_persistence_seconds
@@ -79,6 +89,7 @@ class AlertEngine:
             resolution_consecutive_observations
         )
         self._cooldown = timedelta(seconds=cooldown_seconds)
+        self._critical_after = timedelta(seconds=critical_after_seconds)
         self._alert_id_factory = alert_id_factory
         self._states: dict[str, _ConditionState] = {}
         self._work_session_id: UUID | None = None
@@ -119,6 +130,7 @@ class AlertEngine:
         current = self._normalize_violations(violations)
         raised: list[SafetyAlert] = []
         resolved: list[SafetyAlert] = []
+        escalated: list[SafetyAlert] = []
 
         for key, violation in current.items():
             state = self._states.get(key)
@@ -136,14 +148,27 @@ class AlertEngine:
                 alert = self._raise_alert(work_session, state, observed_at)
                 state.active_alert = alert
                 raised.append(alert)
+            elif state.active_alert is not None:
+                active_alert = state.active_alert
+                severity = self._temporal_severity(state, observed_at)
+                if (
+                    active_alert.violation.severity is SafetyAlertSeverity.WARNING
+                    and severity is SafetyAlertSeverity.CRITICAL
+                ):
+                    escalated_alert = replace(
+                        active_alert,
+                        violation=replace(active_alert.violation, severity=severity),
+                    )
+                    state.active_alert = escalated_alert
+                    escalated.append(escalated_alert)
 
         for key, state in self._states.items():
             if key in current:
                 continue
             state.consecutive_observations = 0
             state.first_observed_at = None
-            active_alert = state.active_alert
-            if active_alert is None:
+            alert_to_resolve = state.active_alert
+            if alert_to_resolve is None:
                 state.consecutive_clear_observations = 0
                 continue
             state.consecutive_clear_observations += 1
@@ -152,7 +177,7 @@ class AlertEngine:
                 < self._resolution_consecutive_observations
             ):
                 continue
-            resolved_alert = active_alert.resolve(observed_at)
+            resolved_alert = alert_to_resolve.resolve(observed_at)
             state.active_alert = None
             state.consecutive_clear_observations = 0
             state.next_raise_allowed_at = observed_at + self._cooldown
@@ -162,6 +187,7 @@ class AlertEngine:
             raised_alerts=tuple(raised),
             resolved_alerts=tuple(resolved),
             active_alerts=self._active_alerts(),
+            escalated_alerts=tuple(escalated),
         )
 
     @staticmethod
@@ -203,6 +229,10 @@ class AlertEngine:
         first_observed_at = state.first_observed_at
         if first_observed_at is None:
             raise RuntimeError("estado persistente sem first_observed_at")
+        violation = replace(
+            state.violation,
+            severity=self._temporal_severity(state, raised_at),
+        )
         return SafetyAlert(
             alert_id=self._alert_id_factory(),
             work_session_id=work_session.session_id,
@@ -210,12 +240,24 @@ class AlertEngine:
             operation_id=work_session.operation_id,
             camera_id=work_session.camera_id,
             risk_area_id=work_session.risk_area_id,
-            violation=state.violation,
+            violation=violation,
             first_observed_at=first_observed_at,
             raised_at=raised_at,
             resolved_at=None,
             status=SafetyAlertStatus.ACTIVE,
         )
+
+    def _temporal_severity(
+        self,
+        state: _ConditionState,
+        observed_at: datetime,
+    ) -> SafetyAlertSeverity:
+        first_observed_at = state.first_observed_at
+        if first_observed_at is None:
+            raise RuntimeError("estado persistente sem first_observed_at")
+        if observed_at - first_observed_at >= self._critical_after:
+            return SafetyAlertSeverity.CRITICAL
+        return SafetyAlertSeverity.WARNING
 
     def _active_alerts(self) -> tuple[SafetyAlert, ...]:
         return tuple(

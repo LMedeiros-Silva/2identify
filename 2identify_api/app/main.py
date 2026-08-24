@@ -22,6 +22,7 @@ from app.realtime import (
     RealtimeEventBroker,
     UnavailableAdminRealtimeAuthorizer,
 )
+from app.services import SafetyStateAggregator
 
 logger = logging.getLogger(__name__)
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -49,6 +50,7 @@ def create_app(
     settings: Settings | None = None,
     database: DatabaseGateway | None = None,
     realtime_event_broker: RealtimeEventBroker | None = None,
+    safety_state_broker: RealtimeEventBroker | None = None,
     admin_realtime_authorizer: AdminRealtimeAuthorizer | None = None,
 ) -> FastAPI:
     """Build one application instance with explicit infrastructure dependencies."""
@@ -69,6 +71,13 @@ def create_app(
         max_connections_per_owner=resolved_settings.realtime_max_connections_per_admin,
         sink_close_timeout_seconds=resolved_settings.realtime_sink_close_timeout_seconds,
     )
+    resolved_safety_state_broker = safety_state_broker or InMemoryRealtimeEventBroker(
+        queue_capacity=resolved_settings.realtime_client_queue_capacity,
+        max_connections=resolved_settings.safety_device_max_connections,
+        max_connections_per_owner=resolved_settings.safety_device_max_connections,
+        sink_close_timeout_seconds=resolved_settings.realtime_sink_close_timeout_seconds,
+    )
+    resolved_safety_state_aggregator = SafetyStateAggregator(resolved_safety_state_broker)
     if admin_realtime_authorizer is not None:
         resolved_admin_realtime_authorizer = admin_realtime_authorizer
     elif isinstance(resolved_database, DatabaseManager):
@@ -102,6 +111,10 @@ def create_app(
                 code=1012,
                 reason="API em encerramento",
             )
+            await resolved_safety_state_broker.close(
+                code=1012,
+                reason="API em encerramento",
+            )
             resolved_database.dispose()
             logger.info("api_stopped")
 
@@ -113,6 +126,8 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.database = resolved_database
     application.state.realtime_event_broker = resolved_realtime_event_broker
+    application.state.safety_state_broker = resolved_safety_state_broker
+    application.state.safety_state_aggregator = resolved_safety_state_aggregator
     application.state.admin_realtime_authorizer = resolved_admin_realtime_authorizer
     application.add_exception_handler(RequestValidationError, request_validation_error_handler)
     application.include_router(router)

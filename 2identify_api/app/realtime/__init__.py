@@ -12,6 +12,7 @@ from app.realtime.broker import (
     InMemoryRealtimeEventBroker,
     RealtimeEventBroker,
     RealtimeEventSink,
+    RealtimeMessage,
     WebSocketEventSink,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "InMemoryRealtimeEventBroker",
     "RealtimeEventBroker",
     "RealtimeEventSink",
+    "RealtimeMessage",
     "UnavailableAdminRealtimeAuthorizer",
     "WebSocketEventSink",
 ]

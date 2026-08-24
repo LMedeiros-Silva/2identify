@@ -147,6 +147,7 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
         settings=runtime.settings,
         work_session_service=runtime.work_sessions,
         alert_sender=api_client,
+        safety_state_sender=api_client,
     )
 
     face_login_controller.operator_authenticated.connect(

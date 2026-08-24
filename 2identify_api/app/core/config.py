@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     realtime_client_queue_capacity: Annotated[int, Field(ge=1, le=1_024)] = 64
     realtime_max_connections: Annotated[int, Field(ge=1, le=10_000)] = 128
     realtime_max_connections_per_admin: Annotated[int, Field(ge=1, le=100)] = 4
+    safety_device_max_connections: Annotated[int, Field(ge=1, le=100)] = 8
+    safety_device_token: SecretStr | None = None
     realtime_sink_close_timeout_seconds: Annotated[
         float,
         Field(ge=0.01, le=30.0),
@@ -106,6 +108,18 @@ class Settings(BaseSettings):
         if raw_value.casefold().startswith(("change_me", "generate_")):
             raise ValueError("AUTH_TOKEN_SECRET ainda contém um placeholder")
         return value
+
+    @field_validator("safety_device_token", mode="before")
+    @classmethod
+    def validate_safety_device_token(cls, value: object) -> SecretStr | None:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        raw_value = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
+        if len(raw_value.encode("utf-8")) < 32:
+            raise ValueError("SAFETY_DEVICE_TOKEN deve possuir pelo menos 32 bytes")
+        if raw_value.casefold().startswith(("change_me", "generate_")):
+            raise ValueError("SAFETY_DEVICE_TOKEN ainda contém um placeholder")
+        return SecretStr(raw_value)
 
     @field_validator("auth_allowed_profiles", mode="before")
     @classmethod

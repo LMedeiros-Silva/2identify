@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,7 @@ class SafetyAlertRepository:
         *,
         event_id: UUID,
         payload_hash: str,
+        legacy_payload_hash: str,
         work_session_id: UUID,
         operator_id: int,
         operation_id: int,
@@ -51,7 +52,12 @@ class SafetyAlertRepository:
     ) -> StoredAlert:
         existing = self._session.get(SafetyAlertIngestion, event_id)
         if existing is not None:
-            return self._existing(existing, payload_hash)
+            return self._existing(
+                existing,
+                payload_hash,
+                legacy_payload_hash,
+                severity,
+            )
 
         now = datetime.now(UTC)
         occurrence_id = self._session.execute(
@@ -102,15 +108,22 @@ class SafetyAlertRepository:
             raced = self._session.get(SafetyAlertIngestion, event_id)
             if raced is None:
                 raise
-            return self._existing(raced, payload_hash)
+            return self._existing(
+                raced,
+                payload_hash,
+                legacy_payload_hash,
+                severity,
+            )
         return StoredAlert(event_id, alert_id, occurrence_id, False)
 
     def _existing(
         self,
         ingestion: SafetyAlertIngestion,
         payload_hash: str,
+        legacy_payload_hash: str,
+        severity: str,
     ) -> StoredAlert:
-        if ingestion.payload_hash != payload_hash:
+        if ingestion.payload_hash not in {payload_hash, legacy_payload_hash}:
             raise AlertEventConflictError("event_id já utilizado por outro payload")
         occurrence_id = self._session.scalar(
             select(PERSISTED_SAFETY_ALERTS.c.ocorrencia_id).where(
@@ -119,9 +132,23 @@ class SafetyAlertRepository:
         )
         if occurrence_id is None:
             raise RuntimeError("registro idempotente aponta para alerta inexistente")
+        escalated = False
+        if severity == "critical":
+            result = self._session.execute(
+                update(PERSISTED_SAFETY_ALERTS)
+                .where(
+                    PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id,
+                    PERSISTED_SAFETY_ALERTS.c.nivel != "critico",
+                )
+                .values(nivel="critico")
+            )
+            escalated = result.rowcount == 1
+            if escalated:
+                ingestion.payload_hash = payload_hash
+                self._session.commit()
         return StoredAlert(
             event_id=ingestion.evento_id,
             alert_id=ingestion.alerta_id,
             occurrence_id=occurrence_id,
-            duplicate=True,
+            duplicate=not escalated,
         )

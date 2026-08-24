@@ -16,6 +16,7 @@ venv/
 .env
 .env.*
 !.env.example
+/firmware/esp32_safety_signal/device_config.h
 
 # Runtime data
 logs/

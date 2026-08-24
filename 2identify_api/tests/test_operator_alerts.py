@@ -161,6 +161,36 @@ def test_alert_is_persisted_once_and_published_after_commit() -> None:
         fixture.close()
 
 
+def test_same_alert_escalates_without_creating_another_occurrence() -> None:
+    fixture = _api()
+    application, sessions, broker, occurrences, alerts = next(fixture)
+    payload = _payload()
+    payload["severity"] = "warning"
+    headers = {"Authorization": f"Bearer {application.state.test_token}"}
+    try:
+        with TestClient(application) as client:
+            medium = client.post("/operator/alerts", json=payload, headers=headers)
+            payload["severity"] = "critical"
+            critical = client.post("/operator/alerts", json=payload, headers=headers)
+            repeated = client.post("/operator/alerts", json=payload, headers=headers)
+
+        assert medium.status_code == 201
+        assert critical.status_code == 201
+        assert critical.json()["alert_id"] == medium.json()["alert_id"]
+        assert critical.json()["occurrence_id"] == medium.json()["occurrence_id"]
+        assert repeated.status_code == 200
+        with sessions() as session:
+            assert session.scalar(select(func.count()).select_from(occurrences)) == 1
+            assert session.scalar(select(func.count()).select_from(alerts)) == 1
+            assert session.scalar(select(alerts.c.nivel)) == "critico"
+        assert [event.payload.level for event in broker.published] == [  # type: ignore[union-attr]
+            "warning",
+            "critical",
+        ]
+    finally:
+        fixture.close()
+
+
 def test_risk_area_alert_persists_context_and_publishes_admin_event() -> None:
     fixture = _api()
     application, sessions, broker, occurrences, _alerts = next(fixture)

@@ -10,8 +10,6 @@ from uuid import UUID, uuid4
 
 from fastapi import WebSocket
 
-from app.schemas.realtime import RealtimeEventEnvelope
-
 logger = logging.getLogger(__name__)
 
 
@@ -35,10 +33,17 @@ class BrokerCapacityError(RuntimeError):
 
 
 @runtime_checkable
+class RealtimeMessage(Protocol):
+    """JSON-serializable message accepted by the shared realtime transport."""
+
+    def as_json_message(self) -> dict[str, object]: ...
+
+
+@runtime_checkable
 class RealtimeEventSink(Protocol):
     """One serialized destination independent from FastAPI routing."""
 
-    async def send(self, event: RealtimeEventEnvelope) -> None: ...
+    async def send(self, event: RealtimeMessage) -> None: ...
 
     async def close(self, *, code: int, reason: str) -> None: ...
 
@@ -53,7 +58,7 @@ class DeliveryReport:
 @dataclass(frozen=True, slots=True)
 class _Subscriber:
     sink: RealtimeEventSink
-    queue: asyncio.Queue[RealtimeEventEnvelope]
+    queue: asyncio.Queue[RealtimeMessage]
     writer_task: asyncio.Task[None]
     owner_id: int | None
 
@@ -82,10 +87,10 @@ class RealtimeEventBroker(Protocol):
     async def send_to(
         self,
         subscription_id: UUID,
-        event: RealtimeEventEnvelope,
+        event: RealtimeMessage,
     ) -> bool: ...
 
-    async def publish(self, event: RealtimeEventEnvelope) -> DeliveryReport: ...
+    async def publish(self, event: RealtimeMessage) -> DeliveryReport: ...
 
     async def close(self, *, code: int, reason: str) -> None: ...
 
@@ -106,7 +111,7 @@ class WebSocketEventSink:
         self._send_lock = asyncio.Lock()
         self._closed = False
 
-    async def send(self, event: RealtimeEventEnvelope) -> None:
+    async def send(self, event: RealtimeMessage) -> None:
         async with self._send_lock:
             if self._closed:
                 raise RuntimeError("conexão WebSocket encerrada")
@@ -176,7 +181,7 @@ class InMemoryRealtimeEventBroker:
         if owner_id is not None and owner_id <= 0:
             raise ValueError("owner_id deve ser positivo")
         subscription_id = uuid4()
-        queue: asyncio.Queue[RealtimeEventEnvelope] = asyncio.Queue(maxsize=self._queue_capacity)
+        queue: asyncio.Queue[RealtimeMessage] = asyncio.Queue(maxsize=self._queue_capacity)
         async with self._lock:
             if self._closed:
                 raise BrokerClosedError("broker em encerramento")
@@ -223,7 +228,7 @@ class InMemoryRealtimeEventBroker:
     async def send_to(
         self,
         subscription_id: UUID,
-        event: RealtimeEventEnvelope,
+        event: RealtimeMessage,
     ) -> bool:
         slow_subscriber = None
         async with self._lock:
@@ -245,7 +250,7 @@ class InMemoryRealtimeEventBroker:
             return False
         return True
 
-    async def publish(self, event: RealtimeEventEnvelope) -> DeliveryReport:
+    async def publish(self, event: RealtimeMessage) -> DeliveryReport:
         async with self._lock:
             subscription_ids = tuple(self._subscribers)
 
@@ -279,7 +284,7 @@ class InMemoryRealtimeEventBroker:
         self,
         subscription_id: UUID,
         sink: RealtimeEventSink,
-        queue: asyncio.Queue[RealtimeEventEnvelope],
+        queue: asyncio.Queue[RealtimeMessage],
     ) -> None:
         try:
             while True:

@@ -27,6 +27,13 @@ from app.services.operation_service import (
     InvalidOperationDataError,
     OperationsUnavailableError,
 )
+from app.services.safety_state_service import (
+    HardwareSafetyState,
+    SafetyConditionState,
+    SafetyStateLevel,
+    SafetyStateReason,
+    SafetyStateSnapshot,
+)
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> OperatorApiClient:
@@ -350,4 +357,56 @@ def test_send_alert_maps_network_failure_as_retryable() -> None:
     with pytest.raises(AlertDeliveryUnavailableError, match="indisponível"):
         client.send_alert(_ergonomic_alert(), "token-operador")
 
+    client.close()
+
+
+def test_send_safety_state_uses_authenticated_complete_snapshot() -> None:
+    observed_at = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    snapshot = SafetyStateSnapshot(
+        work_session_id=UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+        operation_id=41,
+        camera_id=3,
+        observed_at=observed_at,
+        conditions=(
+            SafetyConditionState(
+                condition_id="risk_area:8",
+                reason=SafetyStateReason.PERSON_IN_RISK_AREA,
+                level=SafetyStateLevel.CRITICAL,
+                first_observed_at=observed_at,
+            ),
+        ),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url == "https://api.example.test/v1/operator/safety-state"
+        assert request.method == "PUT"
+        assert request.headers["Authorization"] == "Bearer token-operador"
+        payload = json.loads(request.content)
+        assert payload["work_session_id"] == str(snapshot.work_session_id)
+        assert payload["conditions"] == [
+            {
+                "condition_id": "risk_area:8",
+                "reason": "PERSON_IN_RISK_AREA",
+                "level": "critical",
+                "first_observed_at": observed_at.isoformat(),
+            }
+        ]
+        return httpx.Response(
+            200,
+            json={
+                "type": "safety_state",
+                "schema_version": 1,
+                "state": "RED",
+                "reason": "PERSON_IN_RISK_AREA",
+                "active_conditions": 1,
+                "updated_at": observed_at.isoformat(),
+            },
+        )
+
+    client = _client(handler)
+    receipt = client.send_safety_state(snapshot, "token-operador")
+
+    assert receipt.state is HardwareSafetyState.RED
+    assert receipt.reason is SafetyStateReason.PERSON_IN_RISK_AREA
+    assert receipt.active_conditions == 1
     client.close()

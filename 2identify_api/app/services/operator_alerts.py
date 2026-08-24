@@ -27,12 +27,19 @@ class OperatorAlertService:
         *,
         operator_id: int,
     ) -> OperatorAlertResult:
-        payload_hash = sha256(
+        legacy_payload_hash = sha256(
             payload.model_dump_json(exclude_none=False).encode("utf-8")
+        ).hexdigest()
+        payload_hash = sha256(
+            payload.model_dump_json(
+                exclude={"severity"},
+                exclude_none=False,
+            ).encode("utf-8")
         ).hexdigest()
         stored = self._repository.store(
             event_id=payload.event_id,
             payload_hash=payload_hash,
+            legacy_payload_hash=legacy_payload_hash,
             work_session_id=payload.work_session_id,
             operator_id=operator_id,
             operation_id=payload.operation_id,

@@ -35,6 +35,14 @@ from app.services.operation_service import (
     InvalidOperationDataError,
     OperationsUnavailableError,
 )
+from app.services.safety_state_service import (
+    HardwareSafetyState,
+    SafetyStateDeliveryReceipt,
+    SafetyStateDeliveryRejectedError,
+    SafetyStateDeliveryUnavailableError,
+    SafetyStateReason,
+    SafetyStateSnapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +70,17 @@ class _AlertReceiptPayload(BaseModel):
     alert_id: int = Field(gt=0)
     occurrence_id: int = Field(gt=0)
     duplicate: bool
+
+
+class _SafetyStateReceiptPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = Field(pattern="^safety_state$")
+    schema_version: int = Field(ge=1)
+    state: HardwareSafetyState
+    reason: SafetyStateReason | None
+    active_conditions: int = Field(ge=0)
+    updated_at: datetime
 
 
 class _OperationPpePayload(BaseModel):
@@ -306,6 +325,62 @@ class OperatorApiClient:
             alert_id=receipt.alert_id,
             occurrence_id=receipt.occurrence_id,
             duplicate=receipt.duplicate,
+        )
+
+    def send_safety_state(
+        self,
+        snapshot: SafetyStateSnapshot,
+        access_token: str,
+    ) -> SafetyStateDeliveryReceipt:
+        token = access_token.strip()
+        if not token:
+            raise SafetyStateDeliveryRejectedError(
+                "O estado de segurança exige uma sessão autenticada pela API."
+            )
+        payload = {
+            "work_session_id": str(snapshot.work_session_id),
+            "operation_id": snapshot.operation_id,
+            "camera_id": snapshot.camera_id,
+            "observed_at": snapshot.observed_at.isoformat(),
+            "conditions": [
+                {
+                    "condition_id": item.condition_id,
+                    "reason": item.reason.value,
+                    "level": item.level.value,
+                    "first_observed_at": item.first_observed_at.isoformat(),
+                }
+                for item in snapshot.conditions
+            ],
+        }
+        try:
+            response = self._client.put(
+                "operator/safety-state",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        except httpx.RequestError as error:
+            raise SafetyStateDeliveryUnavailableError(
+                "API indisponível para atualizar o sinalizador."
+            ) from error
+        if response.status_code in {
+            httpx.codes.UNAUTHORIZED,
+            httpx.codes.FORBIDDEN,
+            httpx.codes.UNPROCESSABLE_ENTITY,
+        }:
+            raise SafetyStateDeliveryRejectedError(
+                "A API rejeitou o estado de segurança ou a sessão do operador."
+            )
+        try:
+            response.raise_for_status()
+            receipt = _SafetyStateReceiptPayload.model_validate(response.json())
+        except (httpx.HTTPStatusError, ValidationError, ValueError) as error:
+            raise SafetyStateDeliveryUnavailableError(
+                "A API não confirmou o estado do sinalizador."
+            ) from error
+        return SafetyStateDeliveryReceipt(
+            state=receipt.state,
+            reason=receipt.reason,
+            active_conditions=receipt.active_conditions,
         )
 
     def close(self) -> None:

@@ -102,6 +102,11 @@ class AppSettings(BaseSettings):
         Field(ge=1, le=120),
     ] = 3
     alert_cooldown_seconds: Annotated[float, Field(ge=0, le=86_400)] = 30.0
+    alert_critical_after_seconds: Annotated[float, Field(gt=0, le=300)] = 5.0
+    safety_state_sync_interval_seconds: Annotated[
+        float,
+        Field(gt=0, le=60),
+    ] = 2.0
     alert_delivery_max_attempts: Annotated[int, Field(ge=1, le=10)] = 3
     alert_delivery_retry_delay_seconds: Annotated[
         float,
@@ -230,6 +235,11 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "ERGONOMICS_KNEE_CRITICAL_DEGREES deve ser menor que "
                 "ERGONOMICS_KNEE_WARNING_DEGREES"
+            )
+        if self.alert_minimum_persistence_seconds >= self.alert_critical_after_seconds:
+            raise ValueError(
+                "ALERT_MINIMUM_PERSISTENCE_SECONDS deve ser menor que "
+                "ALERT_CRITICAL_AFTER_SECONDS"
             )
         if self.app_environment is AppEnvironment.PRODUCTION:
             if not self.face_auth_liveness_required:

@@ -34,6 +34,7 @@ from app.services import (
     OperatorAuthorizationRejectedError,
     OperatorAuthorizationService,
     OperatorPrincipal,
+    SafetyStateAggregator,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,20 @@ def get_realtime_event_broker(connection: HTTPConnection) -> RealtimeEventBroker
     if not isinstance(broker, RealtimeEventBroker):
         raise RuntimeError("broker de eventos em tempo real não disponível")
     return broker
+
+
+def get_safety_state_broker(connection: HTTPConnection) -> RealtimeEventBroker:
+    broker = getattr(connection.app.state, "safety_state_broker", None)
+    if not isinstance(broker, RealtimeEventBroker):
+        raise RuntimeError("broker do sinalizador não disponível")
+    return broker
+
+
+def get_safety_state_aggregator(connection: HTTPConnection) -> SafetyStateAggregator:
+    aggregator = getattr(connection.app.state, "safety_state_aggregator", None)
+    if not isinstance(aggregator, SafetyStateAggregator):
+        raise RuntimeError("agregador de segurança não disponível")
+    return aggregator
 
 
 def get_admin_realtime_authorizer(

@@ -19,6 +19,7 @@ from app.services.operator_authorization import (
     OperatorAuthorizationService,
     OperatorPrincipal,
 )
+from app.services.safety_state import SafetyStateAggregator, SafetyStateUpdateResult
 
 __all__ = [
     "AdminAlertsService",
@@ -36,4 +37,6 @@ __all__ = [
     "OperatorAuthorizationRejectedError",
     "OperatorAuthorizationService",
     "OperatorPrincipal",
+    "SafetyStateAggregator",
+    "SafetyStateUpdateResult",
 ]

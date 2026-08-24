@@ -15,16 +15,23 @@ from app.core.session import (
     OperatorSessionAlreadyActiveError,
     OperatorSessionContext,
 )
-from app.domain import OperationStartAuthorization
+from app.domain import OperationStartAuthorization, SafetyAlert
 from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
 from app.engine import AlertEngineUpdate
 from app.services.alert_delivery_service import AlertDeliveryReceipt, AlertSender
 from app.services.manual_service import ManualService
 from app.services.operation_service import OperationService
+from app.services.safety_state_service import (
+    SafetyStateDeliveryError,
+    SafetyStateDeliveryReceipt,
+    SafetyStateSender,
+    SafetyStateSnapshot,
+)
 from app.services.work_session_service import WorkSessionError, WorkSessionService
 from app.ui.login import LoginWindow
 from app.ui.main import MainWindow
 from app.workers.alert_delivery_worker import AlertDeliveryWorker
+from app.workers.safety_state_delivery_worker import SafetyStateDeliveryWorker
 
 from .active_camera_controller import ActiveCameraController
 from .active_ergonomics_monitoring_controller import (
@@ -53,6 +60,7 @@ class ApplicationController(QObject):
         settings: AppSettings | None = None,
         work_session_service: WorkSessionService | None = None,
         alert_sender: AlertSender | None = None,
+        safety_state_sender: SafetyStateSender | None = None,
     ) -> None:
         super().__init__(login_window)
         self._session_context = session_context
@@ -63,6 +71,7 @@ class ApplicationController(QObject):
         self._manual_service = manual_service
         self._settings = settings
         self._alert_sender = alert_sender
+        self._safety_state_sender = safety_state_sender
         self._work_session_service = work_session_service or WorkSessionService(
             maximum_authorization_age_seconds=(
                 settings.ppe_release_assessment_max_age_seconds if settings is not None else 2.0
@@ -79,6 +88,9 @@ class ApplicationController(QObject):
         self._active_ppe_monitoring_controller: ActivePpeMonitoringController | None = None
         self._main_window: MainWindow | None = None
         self._alert_delivery_workers: dict[str, AlertDeliveryWorker] = {}
+        self._pending_alert_deliveries: dict[str, SafetyAlert] = {}
+        self._safety_state_delivery_worker: SafetyStateDeliveryWorker | None = None
+        self._pending_safety_state_snapshot: SafetyStateSnapshot | None = None
 
     @property
     def main_window(self) -> MainWindow | None:
@@ -185,6 +197,9 @@ class ApplicationController(QObject):
             self._active_ppe_monitoring_controller.local_alert_update_ready.connect(
                 self._handle_local_alert_update
             )
+            self._active_ppe_monitoring_controller.safety_state_snapshot_ready.connect(
+                self._handle_safety_state_snapshot
+            )
         if self._operation_service is not None:
             self._operations_controller = OperationsController(
                 service=self._operation_service,
@@ -237,6 +252,7 @@ class ApplicationController(QObject):
             self._active_ergonomics_monitoring_controller.shutdown()
         if self._active_ppe_monitoring_controller is not None:
             self._active_ppe_monitoring_controller.shutdown()
+        self._shutdown_safety_state_delivery_worker()
         if self._active_camera_controller is not None:
             self._active_camera_controller.shutdown()
         if self._ppe_inference_controller is not None:
@@ -273,6 +289,7 @@ class ApplicationController(QObject):
             self._active_ergonomics_monitoring_controller.shutdown()
         if self._active_ppe_monitoring_controller is not None:
             self._active_ppe_monitoring_controller.shutdown()
+        self._shutdown_safety_state_delivery_worker()
         if self._active_camera_controller is not None:
             self._active_camera_controller.shutdown()
         if self._ppe_inference_controller is not None:
@@ -283,7 +300,10 @@ class ApplicationController(QObject):
 
     @Slot(object)
     def _handle_local_alert_update(self, value: object) -> None:
-        if not isinstance(value, AlertEngineUpdate) or not value.raised_alerts:
+        if not isinstance(value, AlertEngineUpdate):
+            return
+        delivery_alerts = (*value.raised_alerts, *value.escalated_alerts)
+        if not delivery_alerts:
             return
         main_window = self._main_window
         session = self._session_context.current
@@ -292,28 +312,41 @@ class ApplicationController(QObject):
         if main_window is None:
             return
         if session is None or session.access_token is None or sender is None or settings is None:
-            for alert in value.raised_alerts:
+            for alert in delivery_alerts:
                 main_window.active_operation_page.show_alert_delivery_failure(
                     str(alert.alert_id),
                     "Alerta local: entre com e-mail e senha para enviar ao Admin.",
                 )
             return
-        for alert in value.raised_alerts:
+        for alert in delivery_alerts:
             event_id = str(alert.alert_id)
             if event_id in self._alert_delivery_workers:
+                if alert in value.escalated_alerts:
+                    self._pending_alert_deliveries[event_id] = alert
                 continue
-            worker = AlertDeliveryWorker(
-                sender,
-                alert,
-                session.access_token,
-                maximum_attempts=settings.alert_delivery_max_attempts,
-                retry_delay_seconds=settings.alert_delivery_retry_delay_seconds,
-            )
-            worker.delivered.connect(self._handle_alert_delivered)
-            worker.delivery_failed.connect(self._handle_alert_delivery_failed)
-            worker.finished.connect(partial(self._dispose_alert_delivery_worker, worker))
-            self._alert_delivery_workers[event_id] = worker
-            worker.start()
+            self._start_alert_delivery(alert, session.access_token)
+
+    def _start_alert_delivery(
+        self,
+        alert: SafetyAlert,
+        access_token: str,
+    ) -> None:
+        sender = self._alert_sender
+        settings = self._settings
+        if sender is None or settings is None:
+            return
+        worker = AlertDeliveryWorker(
+            sender,
+            alert,
+            access_token,
+            maximum_attempts=settings.alert_delivery_max_attempts,
+            retry_delay_seconds=settings.alert_delivery_retry_delay_seconds,
+        )
+        worker.delivered.connect(self._handle_alert_delivered)
+        worker.delivery_failed.connect(self._handle_alert_delivery_failed)
+        worker.finished.connect(partial(self._dispose_alert_delivery_worker, worker))
+        self._alert_delivery_workers[worker.event_id] = worker
+        worker.start()
 
     @Slot(object)
     def _handle_alert_delivered(self, value: object) -> None:
@@ -332,11 +365,122 @@ class ApplicationController(QObject):
                 message,
             )
 
+    @Slot(object)
+    def _handle_safety_state_snapshot(self, value: object) -> None:
+        if not isinstance(value, SafetyStateSnapshot):
+            return
+        session = self._session_context.current
+        settings = self._settings
+        sender = self._safety_state_sender
+        if (
+            session is None
+            or session.access_token is None
+            or settings is None
+            or sender is None
+        ):
+            logger.warning(
+                "safety_state_sync_skipped_without_api_session",
+                extra={"work_session_id": str(value.work_session_id)},
+            )
+            return
+        worker = self._safety_state_delivery_worker
+        if worker is not None and worker.isRunning():
+            self._pending_safety_state_snapshot = value
+            return
+        self._start_safety_state_delivery(value, session.access_token)
+
+    def _start_safety_state_delivery(
+        self,
+        snapshot: SafetyStateSnapshot,
+        access_token: str,
+    ) -> None:
+        settings = self._settings
+        sender = self._safety_state_sender
+        if settings is None or sender is None:
+            return
+        worker = SafetyStateDeliveryWorker(
+            sender,
+            snapshot,
+            access_token,
+            maximum_attempts=settings.alert_delivery_max_attempts,
+            retry_delay_seconds=settings.alert_delivery_retry_delay_seconds,
+        )
+        worker.delivered.connect(self._handle_safety_state_delivered)
+        worker.delivery_failed.connect(self._handle_safety_state_delivery_failed)
+        worker.finished.connect(
+            partial(self._dispose_safety_state_delivery_worker, worker)
+        )
+        self._safety_state_delivery_worker = worker
+        worker.start()
+
+    @Slot(object)
+    def _handle_safety_state_delivered(self, value: object) -> None:
+        if not isinstance(value, SafetyStateDeliveryReceipt):
+            return
+        logger.info(
+            "safety_state_synchronized",
+            extra={
+                "state": value.state.value,
+                "active_conditions": value.active_conditions,
+            },
+        )
+
+    @Slot(str)
+    def _handle_safety_state_delivery_failed(self, message: str) -> None:
+        logger.warning("safety_state_sync_failed", extra={"reason": message})
+
+    def _dispose_safety_state_delivery_worker(
+        self,
+        worker: SafetyStateDeliveryWorker,
+    ) -> None:
+        if self._safety_state_delivery_worker is worker:
+            self._safety_state_delivery_worker = None
+        worker.deleteLater()
+        pending = self._pending_safety_state_snapshot
+        self._pending_safety_state_snapshot = None
+        if pending is not None:
+            self._handle_safety_state_snapshot(pending)
+
+    def _shutdown_safety_state_delivery_worker(
+        self,
+        wait_timeout_ms: int = 5_000,
+    ) -> None:
+        worker = self._safety_state_delivery_worker
+        if worker is not None:
+            if worker.isRunning() and not worker.wait(wait_timeout_ms):
+                worker.requestInterruption()
+                logger.error("safety_state_delivery_worker_shutdown_timeout")
+            self._safety_state_delivery_worker = None
+            worker.deleteLater()
+        pending = self._pending_safety_state_snapshot
+        self._pending_safety_state_snapshot = None
+        session = self._session_context.current
+        sender = self._safety_state_sender
+        if (
+            pending is None
+            or session is None
+            or session.access_token is None
+            or sender is None
+        ):
+            return
+        try:
+            sender.send_safety_state(pending, session.access_token)
+        except SafetyStateDeliveryError as error:
+            logger.warning(
+                "safety_state_final_sync_failed",
+                extra={"reason": str(error)},
+            )
+
     def _dispose_alert_delivery_worker(self, worker: AlertDeliveryWorker) -> None:
         self._alert_delivery_workers.pop(worker.event_id, None)
         worker.deleteLater()
+        pending = self._pending_alert_deliveries.pop(worker.event_id, None)
+        session = self._session_context.current
+        if pending is not None and session is not None and session.access_token is not None:
+            self._start_alert_delivery(pending, session.access_token)
 
     def _shutdown_alert_delivery_workers(self, wait_timeout_ms: int = 5_000) -> None:
+        self._pending_alert_deliveries.clear()
         workers = tuple(self._alert_delivery_workers.values())
         for worker in workers:
             worker.requestInterruption()

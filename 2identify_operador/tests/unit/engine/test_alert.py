@@ -57,6 +57,7 @@ def _engine(
     persistence_seconds: float = 2,
     resolution_observations: int = 2,
     cooldown_seconds: float = 10,
+    critical_after_seconds: float = 5,
 ) -> AlertEngine:
     identifiers = iter(_ALERT_IDS)
     return AlertEngine(
@@ -64,6 +65,7 @@ def _engine(
         minimum_persistence_seconds=persistence_seconds,
         resolution_consecutive_observations=resolution_observations,
         cooldown_seconds=cooldown_seconds,
+        critical_after_seconds=critical_after_seconds,
         alert_id_factory=lambda: next(identifiers),
     )
 
@@ -174,3 +176,61 @@ def test_alert_engine_requires_reset_before_another_work_session() -> None:
         _STARTED_AT + timedelta(seconds=1),
     )
     assert update.active_alerts == ()
+
+
+@pytest.mark.parametrize(
+    "violation",
+    (
+        _violation(),
+        SafetyViolation(
+            SafetyViolationType.ERGONOMIC_RISK,
+            "ergonomics:trunk_inclination",
+            "Postura ergonômica inadequada",
+            SafetyAlertSeverity.CRITICAL,
+        ),
+        SafetyViolation(
+            SafetyViolationType.PERSON_IN_RISK_AREA,
+            "risk_area:7",
+            "Pessoa dentro da área de risco",
+            SafetyAlertSeverity.CRITICAL,
+        ),
+    ),
+    ids=("ppe", "ergonomics", "risk-area"),
+)
+def test_alert_engine_escalates_same_occurrence_after_five_seconds(
+    violation: SafetyViolation,
+) -> None:
+    engine = _engine(
+        minimum_observations=1,
+        persistence_seconds=0,
+        resolution_observations=1,
+        critical_after_seconds=5,
+    )
+    session = _work_session()
+    medium = engine.observe(session, (violation,), _STARTED_AT)
+    before_limit = engine.observe(
+        session,
+        (violation,),
+        _STARTED_AT + timedelta(seconds=4, milliseconds=999),
+    )
+    critical = engine.observe(
+        session,
+        (violation,),
+        _STARTED_AT + timedelta(seconds=5),
+    )
+    repeated = engine.observe(
+        session,
+        (violation,),
+        _STARTED_AT + timedelta(seconds=6),
+    )
+    safe = engine.observe(session, (), _STARTED_AT + timedelta(seconds=7))
+
+    assert medium.raised_alerts[0].violation.severity is SafetyAlertSeverity.WARNING
+    assert before_limit.escalated_alerts == ()
+    assert before_limit.active_alerts[0].violation.severity is SafetyAlertSeverity.WARNING
+    assert critical.raised_alerts == ()
+    assert len(critical.escalated_alerts) == 1
+    assert critical.escalated_alerts[0].alert_id == medium.raised_alerts[0].alert_id
+    assert critical.active_alerts[0].violation.severity is SafetyAlertSeverity.CRITICAL
+    assert repeated.escalated_alerts == ()
+    assert safe.active_alerts == ()
