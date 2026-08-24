@@ -36,7 +36,7 @@ class AppSettings(BaseSettings):
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
     api_connect_timeout_seconds: Annotated[float, Field(gt=0, le=60)] = 3.0
     api_read_timeout_seconds: Annotated[float, Field(gt=0, le=300)] = 10.0
-    operations_mock_enabled: bool = True
+    operations_mock_enabled: bool = False
 
     ppe_model_path: Path = Path("models/ppe/best.pt")
     ppe_model_sha256: str = (
@@ -61,6 +61,34 @@ class AppSettings(BaseSettings):
         int,
         Field(ge=1, le=120),
     ] = 2
+    pose_estimation_enabled: bool = True
+    pose_model_path: Path = Path("models/pose/yolo11n-pose.pt")
+    pose_model_sha256: str = (
+        "869E83FCDFFDC7371FA4E34CD8E51C838CC729571D1635E5141E3075E9319DC0"
+    )
+    pose_confidence_threshold: Annotated[float, Field(gt=0, le=1)] = 0.50
+    pose_keypoint_confidence_threshold: Annotated[float, Field(gt=0, le=1)] = 0.50
+    pose_inference_image_size: Annotated[int, Field(ge=320, le=1920)] = 640
+    pose_inference_fps: Annotated[float, Field(gt=0, le=30)] = 4.0
+    pose_inference_device: str = "cpu"
+    ergonomics_trunk_warning_degrees: Annotated[
+        float,
+        Field(gt=0, le=90),
+    ] = 20.0
+    ergonomics_trunk_critical_degrees: Annotated[
+        float,
+        Field(gt=0, le=90),
+    ] = 45.0
+    ergonomics_overhead_reach_enabled: bool = True
+    ergonomics_knee_flexion_enabled: bool = False
+    ergonomics_knee_warning_degrees: Annotated[
+        float,
+        Field(gt=0, lt=180),
+    ] = 120.0
+    ergonomics_knee_critical_degrees: Annotated[
+        float,
+        Field(gt=0, lt=180),
+    ] = 90.0
     alert_minimum_consecutive_observations: Annotated[
         int,
         Field(ge=1, le=120),
@@ -74,6 +102,11 @@ class AppSettings(BaseSettings):
         Field(ge=1, le=120),
     ] = 3
     alert_cooldown_seconds: Annotated[float, Field(ge=0, le=86_400)] = 30.0
+    alert_delivery_max_attempts: Annotated[int, Field(ge=1, le=10)] = 3
+    alert_delivery_retry_delay_seconds: Annotated[
+        float,
+        Field(ge=0, le=60),
+    ] = 1.0
     ultralytics_config_directory: Path = Path("var/ultralytics")
     manuals_directory: Path = Path("assets/manuals")
     camera_source: str = "0"
@@ -114,6 +147,7 @@ class AppSettings(BaseSettings):
 
     @field_validator(
         "ppe_model_path",
+        "pose_model_path",
         "ultralytics_config_directory",
         "manuals_directory",
         "face_detector_model_path",
@@ -145,12 +179,20 @@ class AppSettings(BaseSettings):
             raise ValueError("FACE_AUTH_MODEL_ID não pode ser vazio")
         return normalized
 
-    @field_validator("ppe_inference_device")
+    @field_validator("ppe_inference_device", "pose_inference_device")
     @classmethod
     def normalize_ppe_inference_device(cls, device: str) -> str:
         normalized = device.strip()
         if not normalized:
-            raise ValueError("PPE_INFERENCE_DEVICE não pode ser vazio")
+            raise ValueError("o dispositivo de inferência não pode ser vazio")
+        return normalized
+
+    @field_validator("pose_model_sha256")
+    @classmethod
+    def normalize_pose_model_sha256(cls, checksum: str) -> str:
+        normalized = checksum.strip().casefold()
+        if re.fullmatch(r"[0-9a-f]{64}", normalized) is None:
+            raise ValueError("POSE_MODEL_SHA256 deve possuir 64 caracteres hexadecimais")
         return normalized
 
     @field_validator("ppe_model_sha256")
@@ -172,6 +214,22 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "PPE_STABILITY_ABSENT_RATIO deve ser menor que "
                 "PPE_STABILITY_PRESENT_RATIO"
+            )
+        if (
+            self.ergonomics_trunk_warning_degrees
+            >= self.ergonomics_trunk_critical_degrees
+        ):
+            raise ValueError(
+                "ERGONOMICS_TRUNK_WARNING_DEGREES deve ser menor que "
+                "ERGONOMICS_TRUNK_CRITICAL_DEGREES"
+            )
+        if (
+            self.ergonomics_knee_critical_degrees
+            >= self.ergonomics_knee_warning_degrees
+        ):
+            raise ValueError(
+                "ERGONOMICS_KNEE_CRITICAL_DEGREES deve ser menor que "
+                "ERGONOMICS_KNEE_WARNING_DEGREES"
             )
         if self.app_environment is AppEnvironment.PRODUCTION:
             if not self.face_auth_liveness_required:

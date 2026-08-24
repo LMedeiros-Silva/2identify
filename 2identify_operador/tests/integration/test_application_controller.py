@@ -143,6 +143,10 @@ def test_authenticated_transition_loads_the_configured_operation_source(qtbot) -
     main_window = controller.main_window
     assert main_window is not None
     qtbot.addWidget(main_window)
+    qtbot.waitUntil(
+        lambda: main_window.operations_page.state is not OperationsPageState.LOADING,
+        timeout=2_000,
+    )
     assert main_window.operations_page.state is OperationsPageState.READY
     assert main_window.operations_page.operations == (operation,)
 

@@ -63,9 +63,7 @@ def inspect_database_schema(
                                 "referred_schema": _text_or_none(
                                     foreign_key.get("referred_schema")
                                 ),
-                                "referred_table": _text_or_none(
-                                    foreign_key.get("referred_table")
-                                ),
+                                "referred_table": _text_or_none(foreign_key.get("referred_table")),
                                 "referred_columns": _string_list(
                                     foreign_key.get("referred_columns")
                                 ),
@@ -93,9 +91,7 @@ def inspect_database_schema(
                         unique_constraints.append(
                             {
                                 "name": _text_or_none(unique_constraint.get("name")),
-                                "column_names": _string_list(
-                                    unique_constraint.get("column_names")
-                                ),
+                                "column_names": _string_list(unique_constraint.get("column_names")),
                             }
                         )
 

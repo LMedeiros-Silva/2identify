@@ -60,6 +60,59 @@ class CameraFrameOverlay:
 
 
 @dataclass(frozen=True, slots=True)
+class CameraPoseKeypoint:
+    """One pose joint in source-frame pixel coordinates."""
+
+    x: float
+    y: float
+    confidence: float
+
+    def __post_init__(self) -> None:
+        if not all(isfinite(value) for value in (self.x, self.y, self.confidence)):
+            raise ValueError("keypoint do overlay deve conter valores finitos")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence do keypoint deve estar entre zero e um")
+
+
+@dataclass(frozen=True, slots=True)
+class CameraPoseSkeleton:
+    """One COCO human skeleton ready for presentation."""
+
+    confidence: float
+    keypoints: tuple[CameraPoseKeypoint, ...]
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.confidence) or not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence do esqueleto deve estar entre zero e um")
+        keypoints = tuple(self.keypoints)
+        if len(keypoints) != 17:
+            raise ValueError("o esqueleto deve possuir 17 keypoints COCO")
+        if any(not isinstance(item, CameraPoseKeypoint) for item in keypoints):
+            raise ValueError("keypoints deve conter somente CameraPoseKeypoint")
+        object.__setattr__(self, "keypoints", keypoints)
+
+
+@dataclass(frozen=True, slots=True)
+class CameraPoseOverlay:
+    """Pose skeletons produced for one source-frame geometry."""
+
+    skeletons: tuple[CameraPoseSkeleton, ...]
+    source_width: int
+    source_height: int
+    minimum_keypoint_confidence: float
+
+    def __post_init__(self) -> None:
+        skeletons = tuple(self.skeletons)
+        if self.source_width <= 0 or self.source_height <= 0:
+            raise ValueError("dimensões de origem da pose devem ser positivas")
+        if not 0.0 < self.minimum_keypoint_confidence <= 1.0:
+            raise ValueError("limiar dos keypoints deve estar entre zero e um")
+        if any(not isinstance(item, CameraPoseSkeleton) for item in skeletons):
+            raise ValueError("skeletons deve conter somente CameraPoseSkeleton")
+        object.__setattr__(self, "skeletons", skeletons)
+
+
+@dataclass(frozen=True, slots=True)
 class CameraRiskZone:
     """One persistent polygon in normalized camera-frame coordinates."""
 
@@ -90,20 +143,39 @@ class CameraRiskZone:
 class CameraFrameView(QFrame):
     """Paint an owned frame and expiring generic boxes without OpenCV."""
 
-    def __init__(self, object_name: str) -> None:
+    def __init__(
+        self,
+        object_name: str,
+        *,
+        aspect_ratio_mode: Qt.AspectRatioMode = (Qt.AspectRatioMode.KeepAspectRatioByExpanding),
+    ) -> None:
         super().__init__()
+        if aspect_ratio_mode not in (
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        ):
+            raise ValueError("aspect_ratio_mode deve preservar a proporção da imagem")
         self._frame: QImage | None = None
+        self._aspect_ratio_mode = aspect_ratio_mode
         self._overlay: CameraFrameOverlay | None = None
+        self._pose_overlay: CameraPoseOverlay | None = None
         self._risk_zones: tuple[CameraRiskZone, ...] = ()
         self._overlay_expiry_timer = QTimer(self)
         self._overlay_expiry_timer.setSingleShot(True)
         self._overlay_expiry_timer.timeout.connect(self.clear_overlay)
+        self._pose_overlay_expiry_timer = QTimer(self)
+        self._pose_overlay_expiry_timer.setSingleShot(True)
+        self._pose_overlay_expiry_timer.timeout.connect(self.clear_pose_overlay)
         self.setObjectName(object_name)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     @property
     def has_frame(self) -> bool:
         return self._frame is not None and not self._frame.isNull()
+
+    @property
+    def aspect_ratio_mode(self) -> Qt.AspectRatioMode:
+        return self._aspect_ratio_mode
 
     @property
     def has_overlay(self) -> bool:
@@ -118,6 +190,11 @@ class CameraFrameView(QFrame):
     def overlay_labels(self) -> tuple[str, ...]:
         overlay = self._overlay
         return tuple(box.label for box in overlay.boxes) if overlay is not None else ()
+
+    @property
+    def pose_skeleton_count(self) -> int:
+        overlay = self._pose_overlay
+        return len(overlay.skeletons) if overlay is not None else 0
 
     @property
     def risk_zone_count(self) -> int:
@@ -136,6 +213,7 @@ class CameraFrameView(QFrame):
     def clear_frame(self) -> None:
         self._frame = None
         self.clear_overlay()
+        self.clear_pose_overlay()
         self.update()
 
     def set_overlay(
@@ -162,6 +240,30 @@ class CameraFrameView(QFrame):
         self._overlay = None
         self.update()
 
+    def set_pose_overlay(
+        self,
+        overlay: CameraPoseOverlay,
+        *,
+        maximum_age_ms: int,
+    ) -> None:
+        """Replace stale pose skeletons and schedule their visual expiry."""
+
+        if not isinstance(overlay, CameraPoseOverlay):
+            raise ValueError("overlay deve ser um CameraPoseOverlay")
+        if maximum_age_ms <= 0:
+            raise ValueError("maximum_age_ms deve ser maior que zero")
+        self._pose_overlay = overlay
+        if overlay.skeletons:
+            self._pose_overlay_expiry_timer.start(maximum_age_ms)
+        else:
+            self._pose_overlay_expiry_timer.stop()
+        self.update()
+
+    def clear_pose_overlay(self) -> None:
+        self._pose_overlay_expiry_timer.stop()
+        self._pose_overlay = None
+        self.update()
+
     def set_risk_zones(self, zones: tuple[CameraRiskZone, ...]) -> None:
         """Replace persistent normalized zones independently from detections."""
 
@@ -175,6 +277,35 @@ class CameraFrameView(QFrame):
         self._risk_zones = ()
         self.update()
 
+    def copy_presentation_to(self, target: CameraFrameView) -> None:
+        """Copy the current frame and every visual overlay to another view."""
+
+        if not isinstance(target, CameraFrameView) or target is self:
+            raise ValueError("target deve ser outro CameraFrameView")
+
+        frame = self._frame
+        if frame is None or frame.isNull():
+            target.clear_frame()
+        else:
+            target.set_frame(frame)
+        target.set_risk_zones(self._risk_zones)
+
+        if self._overlay is None:
+            target.clear_overlay()
+        else:
+            target.set_overlay(
+                self._overlay,
+                maximum_age_ms=max(1, self._overlay_expiry_timer.remainingTime()),
+            )
+
+        if self._pose_overlay is None:
+            target.clear_pose_overlay()
+        else:
+            target.set_pose_overlay(
+                self._pose_overlay,
+                maximum_age_ms=max(1, self._pose_overlay_expiry_timer.remainingTime()),
+            )
+
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
@@ -183,14 +314,22 @@ class CameraFrameView(QFrame):
         try:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             target = self.rect().adjusted(1, 1, -1, -1)
+            painter.fillRect(target, QColor("#10243e"))
             frame = self._frame
             if frame is None or frame.isNull():
-                painter.fillRect(target, QColor("#10243e"))
                 transform = target.width(), target.height(), 0, 0
             else:
-                transform = self._paint_frame(painter, target, frame)
+                transform = self._paint_frame(
+                    painter,
+                    target,
+                    frame,
+                    self._aspect_ratio_mode,
+                )
             if self._risk_zones:
                 self._paint_risk_zones(painter, target, self._risk_zones, transform)
+            pose_overlay = self._pose_overlay
+            if pose_overlay is not None and pose_overlay.skeletons:
+                self._paint_pose_overlay(painter, target, pose_overlay, transform)
             overlay = self._overlay
             if overlay is not None and overlay.boxes:
                 self._paint_overlay(painter, target, overlay, transform)
@@ -202,18 +341,29 @@ class CameraFrameView(QFrame):
         painter: QPainter,
         target: QRect,
         frame: QImage,
+        aspect_ratio_mode: Qt.AspectRatioMode,
     ) -> tuple[int, int, int, int]:
         pixmap = QPixmap.fromImage(frame)
         scaled = pixmap.scaled(
             target.size(),
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            aspect_ratio_mode,
             Qt.TransformationMode.SmoothTransformation,
         )
-        source_x = max(0, (scaled.width() - target.width()) // 2)
-        source_y = max(0, (scaled.height() - target.height()) // 2)
-        source = QRect(source_x, source_y, target.width(), target.height())
-        painter.drawPixmap(target, scaled, source)
-        return scaled.width(), scaled.height(), source_x, source_y
+        offset_x = (target.width() - scaled.width()) // 2
+        offset_y = (target.height() - scaled.height()) // 2
+        destination = QRect(
+            target.left() + offset_x,
+            target.top() + offset_y,
+            scaled.width(),
+            scaled.height(),
+        )
+        painter.save()
+        try:
+            painter.setClipRect(target)
+            painter.drawPixmap(destination, scaled)
+        finally:
+            painter.restore()
+        return scaled.width(), scaled.height(), offset_x, offset_y
 
     @staticmethod
     def _paint_risk_zones(
@@ -222,7 +372,7 @@ class CameraFrameView(QFrame):
         zones: tuple[CameraRiskZone, ...],
         transform: tuple[int, int, int, int],
     ) -> None:
-        scaled_width, scaled_height, source_x, source_y = transform
+        scaled_width, scaled_height, offset_x, offset_y = transform
         painter.save()
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -239,8 +389,8 @@ class CameraFrameView(QFrame):
                 polygon = QPolygonF(
                     [
                         QPointF(
-                            target.left() + x * scaled_width - source_x,
-                            target.top() + y * scaled_height - source_y,
+                            target.left() + offset_x + x * scaled_width,
+                            target.top() + offset_y + y * scaled_height,
                         )
                         for x, y in zone.vertices
                     ]
@@ -284,7 +434,7 @@ class CameraFrameView(QFrame):
         overlay: CameraFrameOverlay,
         transform: tuple[int, int, int, int],
     ) -> None:
-        scaled_width, scaled_height, source_x, source_y = transform
+        scaled_width, scaled_height, offset_x, offset_y = transform
         scale_x = scaled_width / overlay.source_width
         scale_y = scaled_height / overlay.source_height
         target_rect = QRectF(target)
@@ -306,8 +456,8 @@ class CameraFrameView(QFrame):
 
             for box in overlay.boxes:
                 mapped = QRectF(
-                    target.left() + box.x1 * scale_x - source_x,
-                    target.top() + box.y1 * scale_y - source_y,
+                    target.left() + offset_x + box.x1 * scale_x,
+                    target.top() + offset_y + box.y1 * scale_y,
                     max(1.0, (box.x2 - box.x1) * scale_x),
                     max(1.0, (box.y2 - box.y1) * scale_y),
                 ).intersected(target_rect)
@@ -343,5 +493,77 @@ class CameraFrameView(QFrame):
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                     text,
                 )
+        finally:
+            painter.restore()
+
+    @staticmethod
+    def _paint_pose_overlay(
+        painter: QPainter,
+        target: QRect,
+        overlay: CameraPoseOverlay,
+        transform: tuple[int, int, int, int],
+    ) -> None:
+        scaled_width, scaled_height, offset_x, offset_y = transform
+        scale_x = scaled_width / overlay.source_width
+        scale_y = scaled_height / overlay.source_height
+        threshold = overlay.minimum_keypoint_confidence
+        connections = (
+            (0, 1),
+            (0, 2),
+            (1, 3),
+            (2, 4),
+            (3, 5),
+            (4, 6),
+            (5, 6),
+            (5, 7),
+            (7, 9),
+            (6, 8),
+            (8, 10),
+            (5, 11),
+            (6, 12),
+            (11, 12),
+            (11, 13),
+            (13, 15),
+            (12, 14),
+            (14, 16),
+        )
+
+        def mapped(point: CameraPoseKeypoint) -> QPointF:
+            return QPointF(
+                target.left() + offset_x + point.x * scale_x,
+                target.top() + offset_y + point.y * scale_y,
+            )
+
+        painter.save()
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setClipRect(target)
+            shadow_pen = QPen(QColor(5, 20, 35, 210))
+            shadow_pen.setWidth(5)
+            bone_pen = QPen(QColor("#35e3ff"))
+            bone_pen.setWidth(3)
+            joint_pen = QPen(QColor("#ffffff"))
+            joint_pen.setWidth(2)
+
+            for skeleton in overlay.skeletons:
+                for first_index, second_index in connections:
+                    first = skeleton.keypoints[first_index]
+                    second = skeleton.keypoints[second_index]
+                    if first.confidence < threshold or second.confidence < threshold:
+                        continue
+                    first_point = mapped(first)
+                    second_point = mapped(second)
+                    painter.setPen(shadow_pen)
+                    painter.drawLine(first_point, second_point)
+                    painter.setPen(bone_pen)
+                    painter.drawLine(first_point, second_point)
+
+                painter.setPen(joint_pen)
+                painter.setBrush(QColor("#12b8ff"))
+                for keypoint in skeleton.keypoints:
+                    if keypoint.confidence < threshold:
+                        continue
+                    point = mapped(keypoint)
+                    painter.drawEllipse(point, 4.0, 4.0)
         finally:
             painter.restore()

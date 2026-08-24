@@ -21,6 +21,7 @@ venv/
 logs/
 var/
 /tmp/
+/.tmp_api_*/
 *.log
 *.sqlite3
 

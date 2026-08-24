@@ -53,6 +53,7 @@ def run_startup_check(runtime: RuntimeContext) -> int:
     detector_available = runtime.settings.face_detector_model_path.is_file()
     recognizer_available = runtime.settings.face_recognition_model_path.is_file()
     ppe_model_available = runtime.settings.ppe_model_path.is_file()
+    pose_model_available = runtime.settings.pose_model_path.is_file()
     logger.info(
         "operator_startup_check_ok",
         extra={
@@ -60,6 +61,8 @@ def run_startup_check(runtime: RuntimeContext) -> int:
             "log_directory": str(runtime.settings.log_directory),
             "model_path": str(runtime.settings.ppe_model_path),
             "ppe_model_available": ppe_model_available,
+            "pose_estimation_enabled": runtime.settings.pose_estimation_enabled,
+            "pose_model_available": pose_model_available,
             "face_detector_available": detector_available,
             "face_recognizer_available": recognizer_available,
             "face_templates_available": runtime.settings.face_auth_template_store_path.is_file(),
@@ -71,6 +74,9 @@ def run_startup_check(runtime: RuntimeContext) -> int:
         detector_available and recognizer_available
     ):
         logger.error("face_auth_model_artifacts_missing")
+        return 1
+    if runtime.settings.pose_estimation_enabled and not pose_model_available:
+        logger.error("pose_model_artifact_missing")
         return 1
     return 0
 
@@ -84,7 +90,11 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
     from app.controllers.application_controller import ApplicationController
     from app.controllers.credential_login_controller import CredentialLoginController
     from app.controllers.face_login_controller import FaceLoginController
-    from app.providers import DesktopManualLauncher, MockOperationProvider
+    from app.providers import (
+        ApiOperationProvider,
+        DesktopManualLauncher,
+        MockOperationProvider,
+    )
     from app.services.auth_service import AuthService
     from app.services.manual_service import ManualService
     from app.services.operation_service import OperationService
@@ -117,12 +127,16 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
         manuals_directory=runtime.settings.manuals_directory,
         launcher=DesktopManualLauncher(),
     )
-    operation_service: OperationService | None = None
+    operation_service: OperationService
     operations_source_notice: str | None = None
     if runtime.settings.operations_mock_enabled:
         operation_service = OperationService(MockOperationProvider())
         operations_source_notice = "DADOS LOCAIS DE DESENVOLVIMENTO"
         logger.warning("mock_operation_provider_enabled")
+    else:
+        operation_service = OperationService(
+            ApiOperationProvider(api_client, runtime.operator_session)
+        )
     application_controller = ApplicationController(
         session_context=runtime.operator_session,
         login_window=window,
@@ -132,6 +146,7 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
         manual_service=manual_service,
         settings=runtime.settings,
         work_session_service=runtime.work_sessions,
+        alert_sender=api_client,
     )
 
     face_login_controller.operator_authenticated.connect(

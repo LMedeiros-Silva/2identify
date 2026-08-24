@@ -174,8 +174,7 @@ class AdminWebSocketClient(QObject):
             return
         error_text = self._socket.errorString().casefold()
         if _UNAUTHORIZED_STATUS.search(error_text) or any(
-            marker in error_text
-            for marker in ("unauthorized", "forbidden", "não autorizado")
+            marker in error_text for marker in ("unauthorized", "forbidden", "não autorizado")
         ):
             self._notify_authorization_rejected()
             return

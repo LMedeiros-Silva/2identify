@@ -83,9 +83,7 @@ class RealtimeController(QObject):
         self._client.connected.connect(self._on_connected)
         self._client.disconnected.connect(self._on_disconnected)
         self._client.message_received.connect(self._on_message)
-        self._client.authorization_rejected.connect(
-            self._on_authorization_rejected
-        )
+        self._client.authorization_rejected.connect(self._on_authorization_rejected)
         self._client.transport_failed.connect(self._on_transport_failed)
         self._client.protocol_failed.connect(self._on_protocol_failed)
 
@@ -234,10 +232,12 @@ class RealtimeController(QObject):
             self._ready_received = True
             self._reconnect_attempt = 0
             self._watchdog_timer.start()
-            self._set_status(
-                "Conectado — aguardando integração de alertas.",
-                state="connected",
+            message = (
+                "Conectado — recebendo alertas em tempo real."
+                if event.status == "ready"
+                else "Conectado — aguardando integração de alertas."
             )
+            self._set_status(message, state="connected")
             return
         if isinstance(event, HeartbeatEvent):
             if self._ready_received:

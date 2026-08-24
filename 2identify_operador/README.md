@@ -1,8 +1,7 @@
 # 2Identify Operator
 
-Aplicação desktop do ecossistema 2Identify responsável pelo monitoramento industrial e,
-nas próximas etapas, pela orquestração de captura de vídeo, inferência, regras de segurança
-e envio de ocorrências para a API.
+Aplicação desktop do ecossistema 2Identify responsável pelo monitoramento industrial,
+captura de vídeo, inferência local, regras de segurança e envio autenticado de alertas à API.
 
 Este repositório é a raiz independente do **Operator**. Ele não acessa o PostgreSQL
 diretamente e não compartilha código-fonte com o projeto Admin.
@@ -63,7 +62,12 @@ O projeto contém a fundação inicial e o fluxo biométrico até a criação da
 - bounding boxes brutas e estado estabilizado de cada EPI atualizados na operação ativa;
 - tracking class-aware das detecções de EPI, com IDs estáveis e tolerância a perdas breves;
 - Alert Engine local com persistência mínima, deduplicação, resolução e cooldown;
-- alertas de EPI ausente vinculados à `WorkSession` e identificados como não sincronizados;
+- pose estimation COCO com YOLO11n-pose em worker dedicado e sem segunda captura da câmera;
+- triagem ergonômica configurável para inclinação do tronco, braços acima dos ombros e,
+  opcionalmente, flexão acentuada dos joelhos;
+- alertas de EPI e ergonomia unificados, vinculados à `WorkSession` e deduplicados;
+- envio autenticado e idempotente dos alertas à API com repetição limitada;
+- confirmação visual do registro remoto e publicação em tempo real para o Admin;
 - falhas de câmera ou inferência visíveis e tratadas como interrupção do monitoramento;
 - logout completo com descarte da sessão e restauração segura do login;
 - detecção YuNet e embeddings SFace por OpenCV;
@@ -72,12 +76,11 @@ O projeto contém a fundação inicial e o fluxo biométrico até a criação da
 - contratos desacoplados para futura autorização e cadastro pela API;
 - testes unitários da infraestrutura já implementada.
 
-Tracking de pessoas, avaliação de entrada na área de risco, persistência e sincronização dos
-alertas, servidor FastAPI e calibração administrativa ainda não foram implementados. O tracker
+Tracking de pessoas e avaliação de entrada na área de risco ainda não foram implementados. O tracker
 atual identifica objetos das classes de EPI do checkpoint; ele não afirma identificar uma pessoa.
 Sem um detector de pessoa, a geometria é exibida, mas não produz uma falsa decisão de invasão. A
-sessão e os alertas existem somente em memória e o monitoramento não envia dados para serviços
-externos.
+sessão existe somente em memória. Alertas levantados durante login por credenciais são enviados à
+API; o Face ID local de desenvolvimento não possui token remoto e mantém o alerta somente local.
 Em desenvolvimento, o Face ID pode reconhecer operadores cadastrados localmente. Em produção,
 essa autorização local é bloqueada e deverá ser substituída pela API.
 
@@ -95,6 +98,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env -ErrorAction Ignore
 python scripts/download_face_models.py
+python scripts/download_pose_model.py
 ```
 
 O ambiente virtual contém apenas dependências. Todo o código da aplicação permanece fora
@@ -184,9 +188,11 @@ As configurações locais ficam no arquivo `.env`, que é ignorado pelo Git. O a
 como `models/best.pt`, são resolvidos a partir da raiz do projeto, independentemente da
 pasta usada para iniciar o processo.
 
-Em desenvolvimento, `OPERATIONS_MOCK_ENABLED=true` habilita uma lista local claramente
-identificada na interface. Essa fonte existe somente para permitir a evolução da UI antes da
-API e a configuração é rejeitada quando `APP_ENVIRONMENT=production`.
+Por padrão, `OPERATIONS_MOCK_ENABLED=false` carrega pela `2identify_api` as operações ativas
+cadastradas no Admin, incluindo EPIs obrigatórios e a geometria normalizada da área de risco.
+Esse catálogo exige login do Operador com usuário e senha, pois a consulta usa o token da API.
+Em desenvolvimento, `OPERATIONS_MOCK_ENABLED=true` ainda habilita uma lista local claramente
+identificada na interface; essa configuração é rejeitada em produção.
 
 `MANUALS_DIRECTORY` define a raiz dos manuais locais. Referências das operações são relativas a
 essa pasta e não podem escapar dela. O mock associa à operação “Manutenção industrial” um PDF
@@ -226,6 +232,21 @@ track. Os padrões são IoU 0,30, até três lotes perdidos e dois acertos. Os I
 antes de criar um alerta local. `ALERT_RESOLUTION_CONSECUTIVE_OBSERVATIONS` exige recuperação
 estável e `ALERT_COOLDOWN_SECONDS` impede alertas repetidos após uma resolução. Os padrões são três
 observações, 0,75 segundo, três observações de recuperação e 30 segundos de cooldown.
+
+`POSE_MODEL_PATH` aponta para o checkpoint local YOLO11n-pose. Instale-o com
+`python scripts/download_pose_model.py`; o script baixa o artefato fixado e exige o SHA-256 de
+`POSE_MODEL_SHA256`. `POSE_INFERENCE_FPS` limita a cadência independente do preview e
+`POSE_KEYPOINT_CONFIDENCE_THRESHOLD` impede que articulações incertas alimentem as regras.
+Os limiares `ERGONOMICS_TRUNK_*` e `ERGONOMICS_KNEE_*` são parâmetros de triagem e devem ser
+validados por responsável de ergonomia no ambiente real. Esta análise 2D não é uma avaliação
+RULA/REBA certificada, não mede carga, repetitividade ou duração acumulada e não substitui análise
+de um profissional qualificado.
+
+Alertas levantados são enviados a `POST /operator/alerts` usando o bearer da sessão por
+credenciais. A API persiste ocorrência e alerta de forma idempotente e publica ao Admin somente
+depois do commit. `ALERT_DELIVERY_MAX_ATTEMPTS` e `ALERT_DELIVERY_RETRY_DELAY_SECONDS` controlam a
+repetição transitória. Ainda não existe outbox durável: se a aplicação encerrar durante uma falha
+prolongada de rede, o alerta local pendente não é reenviado no próximo processo.
 
 O checkpoint declara licença AGPL-3.0. Esta integração pode ser usada para desenvolvimento sob os
 termos aplicáveis, mas uma distribuição proprietária/comercial exige revisão de licenciamento e,

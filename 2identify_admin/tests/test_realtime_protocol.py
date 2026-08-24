@@ -67,7 +67,7 @@ def test_parses_all_strict_v1_event_types() -> None:
         json.dumps(
             envelope(
                 "connection.ready",
-                {"status": "awaiting_alert_ingestion"},
+                {"status": "ready"},
             )
         )
     )
@@ -89,7 +89,7 @@ def test_parses_all_strict_v1_event_types() -> None:
 @pytest.mark.parametrize(
     "document",
     [
-        envelope("connection.ready", {"status": "ready"}),
+        envelope("connection.ready", {"status": "unknown"}),
         envelope("connection.heartbeat", {"unexpected": True}),
         envelope("alert.created", alert_payload(alert_id=0)),
         envelope("alert.created", alert_payload(level="info")),

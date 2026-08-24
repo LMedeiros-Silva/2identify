@@ -12,6 +12,13 @@ from PySide6.QtWidgets import (
 )
 
 from app.domain import DashboardSummary, RealtimeAlert
+from app.ui.dashboard.chart_widgets import (
+    AlertCategoryBarChart,
+    AlertStatusDonutChart,
+    AlertTrendChart,
+    ChartBar,
+    ChartSegment,
+)
 
 
 class DashboardPage(QWidget):
@@ -72,12 +79,8 @@ class DashboardPage(QWidget):
         self.card_conformidade = self.criar_card(
             "EPIs entregues", "—", "Percentual de associações entregues"
         )
-        self.card_alertas = self.criar_card(
-            "Alertas", "—", "Alertas registrados"
-        )
-        self.card_criticos = self.criar_card(
-            "Críticos", "—", "Alertas críticos"
-        )
+        self.card_alertas = self.criar_card("Alertas", "—", "Alertas registrados")
+        self.card_criticos = self.criar_card("Críticos", "—", "Alertas críticos")
 
         for column, card in enumerate(
             (
@@ -90,52 +93,57 @@ class DashboardPage(QWidget):
             cards_layout.addWidget(card, 0, column)
         layout_principal.addLayout(cards_layout)
 
-        conteudo = QHBoxLayout()
-        conteudo.setSpacing(20)
-
-        painel_conformidade = QFrame()
-        painel_conformidade.setObjectName("dashboard_painel")
-        layout_conformidade = QVBoxLayout(painel_conformidade)
-
-        titulo_conformidade = QLabel("Entrega de EPIs")
-        titulo_conformidade.setObjectName("painel_titulo")
-        layout_conformidade.addWidget(titulo_conformidade)
-
+        resumo = QFrame()
+        resumo.setObjectName("dashboard_resumo")
+        resumo_layout = QHBoxLayout(resumo)
+        resumo_layout.setContentsMargins(14, 9, 14, 9)
+        resumo_layout.setSpacing(12)
+        self.indicador_conformidade = QLabel("—")
+        self.indicador_conformidade.setObjectName("indicador_conformidade")
+        resumo_layout.addWidget(self.indicador_conformidade)
         self.texto_conformidade = QLabel(
             "Os dados de entrega serão carregados pela API."
         )
         self.texto_conformidade.setObjectName("painel_texto")
         self.texto_conformidade.setWordWrap(True)
-        layout_conformidade.addWidget(self.texto_conformidade)
-        layout_conformidade.addStretch()
-
-        self.indicador_conformidade = QLabel("—")
-        self.indicador_conformidade.setObjectName("indicador_conformidade")
-        self.indicador_conformidade.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout_conformidade.addWidget(self.indicador_conformidade)
-
-        legenda = QLabel("Percentual de associações de EPI entregues")
-        legenda.setObjectName("painel_texto")
-        legenda.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout_conformidade.addWidget(legenda)
-        conteudo.addWidget(painel_conformidade, 2)
-
-        painel_alertas = QFrame()
-        painel_alertas.setObjectName("dashboard_painel")
-        layout_alertas = QVBoxLayout(painel_alertas)
-
-        titulo_alertas = QLabel("Resumo de alertas")
-        titulo_alertas.setObjectName("painel_titulo")
-        layout_alertas.addWidget(titulo_alertas)
-
+        resumo_layout.addWidget(self.texto_conformidade, 1)
         self.texto_alertas = QLabel("Aguardando dados da API.")
-        self.texto_alertas.setObjectName("sem_alertas")
-        self.texto_alertas.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.texto_alertas.setObjectName("painel_texto")
+        self.texto_alertas.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.texto_alertas.setWordWrap(True)
-        layout_alertas.addWidget(self.texto_alertas)
-        conteudo.addWidget(painel_alertas, 1)
+        resumo_layout.addWidget(self.texto_alertas, 1)
+        layout_principal.addWidget(resumo)
 
-        layout_principal.addLayout(conteudo)
+        graficos = QHBoxLayout()
+        graficos.setSpacing(16)
+        self.alert_trend_chart = AlertTrendChart()
+        graficos.addWidget(
+            self._criar_painel_grafico(
+                "Evolução dos alertas",
+                "Ocorrências registradas nos últimos 7 dias",
+                self.alert_trend_chart,
+            ),
+            2,
+        )
+        self.alert_category_chart = AlertCategoryBarChart()
+        graficos.addWidget(
+            self._criar_painel_grafico(
+                "Alertas por categoria",
+                "Origem das ocorrências registradas",
+                self.alert_category_chart,
+            ),
+            1,
+        )
+        self.alert_status_chart = AlertStatusDonutChart()
+        graficos.addWidget(
+            self._criar_painel_grafico(
+                "Situação dos alertas",
+                "Andamento do tratamento administrativo",
+                self.alert_status_chart,
+            ),
+            1,
+        )
+        layout_principal.addLayout(graficos, 1)
         layout_principal.addStretch()
 
     def criar_card(self, titulo: str, valor: str, descricao: str) -> QFrame:
@@ -159,6 +167,28 @@ class DashboardPage(QWidget):
 
         card.valor_label = valor_label  # type: ignore[attr-defined]
         return card
+
+    @staticmethod
+    def _criar_painel_grafico(
+        titulo: str,
+        descricao: str,
+        grafico: QWidget,
+    ) -> QFrame:
+        painel = QFrame()
+        painel.setObjectName("dashboard_grafico_painel")
+        layout = QVBoxLayout(painel)
+        layout.setContentsMargins(16, 15, 16, 12)
+        layout.setSpacing(3)
+        titulo_label = QLabel(titulo)
+        titulo_label.setObjectName("grafico_titulo")
+        layout.addWidget(titulo_label)
+        descricao_label = QLabel(descricao)
+        descricao_label.setObjectName("grafico_descricao")
+        descricao_label.setWordWrap(True)
+        layout.addWidget(descricao_label)
+        layout.addSpacing(5)
+        layout.addWidget(grafico, 1)
+        return painel
 
     def show_loading(self) -> None:
         if not self._has_data:
@@ -192,11 +222,34 @@ class DashboardPage(QWidget):
                 f"{summary.alerts} alerta(s) registrado(s), "
                 f"sendo {summary.critical_alerts} crítico(s)."
             )
+        self.alert_trend_chart.set_points(
+            tuple(
+                (item.day.strftime("%d/%m"), item.alerts)
+                for item in summary.alert_trend
+            )
+        )
+        categories = summary.alert_categories
+        self.alert_category_chart.set_bars(
+            (
+                ChartBar("EPI", categories.ppe, "#2563EB"),
+                ChartBar("Ergonomia", categories.ergonomics, "#7C3AED"),
+                ChartBar("Área de risco", categories.risk_area, "#F97316"),
+                ChartBar("Monitoramento", categories.monitoring, "#0891B2"),
+                ChartBar("Outros", categories.other, "#98A2B3"),
+            )
+        )
+        status = summary.alert_status
+        self.alert_status_chart.set_segments(
+            (
+                ChartSegment("Novos", status.new, "#F04438"),
+                ChartSegment("Confirmados", status.confirmed, "#FDB022"),
+                ChartSegment("Encerrados", status.closed, "#12B76A"),
+                ChartSegment("Outros", status.other, "#98A2B3"),
+            )
+        )
 
         generated_at = summary.generated_at.astimezone()
-        self.status_label.setText(
-            f"Atualizado pela API em {generated_at:%d/%m/%Y às %H:%M:%S}."
-        )
+        self.status_label.setText(f"Atualizado pela API em {generated_at:%d/%m/%Y às %H:%M:%S}.")
         self.status_label.setProperty("state", "ready")
         self.retry_button.setEnabled(True)
         self.retry_button.setText("Atualizar")
@@ -206,9 +259,7 @@ class DashboardPage(QWidget):
     def show_error(self, message: str) -> None:
         if not self._has_data:
             self._set_placeholder_values()
-            self.texto_conformidade.setText(
-                "Os indicadores ainda não foram recebidos da API."
-            )
+            self.texto_conformidade.setText("Os indicadores ainda não foram recebidos da API.")
             self.texto_alertas.setText("Dados de alertas indisponíveis.")
         self.status_label.setText(message)
         self.status_label.setProperty("state", "error")
@@ -224,8 +275,14 @@ class DashboardPage(QWidget):
 
     def show_realtime_alert(self, alert: RealtimeAlert) -> None:
         severity = "crítico" if alert.level == "critical" else "de atenção"
+        category = {
+            "ppe": " de EPI",
+            "ergonomics": " ergonômico",
+            "risk_area": " de área de risco",
+            "monitoring": " de monitoramento",
+        }.get(alert.category, "")
         self.realtime_alert_banner.setText(
-            f"Novo alerta {severity} #{alert.alert_id}: {alert.summary}"
+            f"Novo alerta{category} {severity} #{alert.alert_id}: {alert.summary}"
         )
         self.realtime_alert_banner.setProperty("severity", alert.level)
         self.realtime_alert_banner.show()
@@ -240,6 +297,9 @@ class DashboardPage(QWidget):
         ):
             card.valor_label.setText("—")  # type: ignore[attr-defined]
         self.indicador_conformidade.setText("—")
+        self.alert_trend_chart.set_points(())
+        self.alert_category_chart.set_bars(())
+        self.alert_status_chart.set_segments(())
 
     @staticmethod
     def _format_percentage(value: float) -> str:

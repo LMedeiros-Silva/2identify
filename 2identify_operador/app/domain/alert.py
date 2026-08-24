@@ -14,6 +14,7 @@ class SafetyViolationType(StrEnum):
     PPE_ABSENT = "ppe_absent"
     PERSON_IN_RISK_AREA = "person_in_risk_area"
     MONITORING_INTERRUPTED = "monitoring_interrupted"
+    ERGONOMIC_RISK = "ergonomic_risk"
 
 
 class SafetyAlertSeverity(StrEnum):

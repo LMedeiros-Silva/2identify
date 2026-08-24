@@ -1,5 +1,6 @@
 """Application use cases."""
 
+from app.services.admin_alerts import AdminAlertsService
 from app.services.admin_authorization import (
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,
@@ -11,8 +12,16 @@ from app.services.authentication import (
     AuthenticationRejectedError,
     AuthenticationService,
 )
+from app.services.operations import OperationsService
+from app.services.operator_alerts import OperatorAlertResult, OperatorAlertService
+from app.services.operator_authorization import (
+    OperatorAuthorizationRejectedError,
+    OperatorAuthorizationService,
+    OperatorPrincipal,
+)
 
 __all__ = [
+    "AdminAlertsService",
     "AdministratorPrincipal",
     "AdminAuthorizationRejectedError",
     "AdminAuthorizationService",
@@ -21,4 +30,10 @@ __all__ = [
     "AuthenticatedAccount",
     "AuthenticationRejectedError",
     "AuthenticationService",
+    "OperatorAlertResult",
+    "OperatorAlertService",
+    "OperationsService",
+    "OperatorAuthorizationRejectedError",
+    "OperatorAuthorizationService",
+    "OperatorPrincipal",
 ]

@@ -21,16 +21,23 @@ from app.core.session import OperatorSession
 from app.domain import Operation, WorkSession
 from app.engine import (
     AlertEngineUpdate,
+    ErgonomicAssessment,
     PpeRequirementSafetyState,
     PpeSafetyAssessment,
     PpeSafetyStatus,
+    RiskAreaAssessment,
 )
 from app.ui.components import (
     CameraFrameOverlay,
     CameraFrameView,
     CameraOverlayBox,
+    CameraPoseKeypoint,
+    CameraPoseOverlay,
+    CameraPoseSkeleton,
     CameraRiskZone,
+    ExpandedCameraDialog,
 )
+from app.vision.pose import PoseDetectionBatch
 from app.vision.ppe import PpeTrackingBatch
 
 Clock = Callable[[], datetime]
@@ -55,9 +62,12 @@ class ActiveOperationPage(QWidget):
         self._operation: Operation | None = None
         self._monitoring_active = False
         self._detection_overlay_maximum_age_ms = 2_000
+        self._pose_overlay_maximum_age_ms = 1_000
+        self._pose_keypoint_confidence_threshold = 0.50
         self._ppe_rows: list[QFrame] = []
         self._ppe_state_labels: dict[int, QLabel] = {}
         self._active_alert_count = 0
+        self._expanded_camera_dialog: ExpandedCameraDialog | None = None
         self._elapsed_timer = QTimer(self)
         self._elapsed_timer.setInterval(1_000)
         self._elapsed_timer.timeout.connect(self._update_elapsed)
@@ -89,6 +99,19 @@ class ActiveOperationPage(QWidget):
             raise ValueError("maximum_age_ms deve ser maior que zero")
         self._detection_overlay_maximum_age_ms = maximum_age_ms
 
+    def configure_pose_overlay(
+        self,
+        *,
+        minimum_keypoint_confidence: float,
+        maximum_age_ms: int,
+    ) -> None:
+        if not 0.0 < minimum_keypoint_confidence <= 1.0:
+            raise ValueError("minimum_keypoint_confidence deve estar entre zero e um")
+        if maximum_age_ms <= 0:
+            raise ValueError("maximum_age_ms deve ser maior que zero")
+        self._pose_keypoint_confidence_threshold = minimum_keypoint_confidence
+        self._pose_overlay_maximum_age_ms = maximum_age_ms
+
     def set_work_session(
         self,
         work_session: WorkSession,
@@ -108,13 +131,9 @@ class ActiveOperationPage(QWidget):
         self._operation_name.setText(operation.name)
         self._operation_code.setText(f"OPERAÇÃO #{operation.operation_id}")
         self._operator_name.setText(self._operator_session.operator_name)
-        self._operator_code.setText(
-            f"Operador #{self._operator_session.operator_id}"
-        )
+        self._operator_code.setText(f"Operador #{self._operator_session.operator_id}")
         self._risk_area.setText(
-            operation.risk_area.name
-            if operation.risk_area is not None
-            else "Área não configurada"
+            operation.risk_area.name if operation.risk_area is not None else "Área não configurada"
         )
         self._started_at.setText(
             work_session.started_at.astimezone().strftime("%d/%m/%Y · %H:%M:%S")
@@ -157,6 +176,7 @@ class ActiveOperationPage(QWidget):
         """Discard the local presentation snapshot after completion/logout."""
 
         self.deactivate_monitoring()
+        self._close_expanded_camera()
         self._elapsed_timer.stop()
         self._work_session = None
         self._operation = None
@@ -179,8 +199,10 @@ class ActiveOperationPage(QWidget):
     def update_monitoring_frame(self, frame: QImage) -> None:
         if not self._monitoring_active or frame.isNull():
             return
-        self._camera_preview.set_frame(frame)
+        for camera_view in self._camera_views():
+            camera_view.set_frame(frame)
         self._camera_stack.setCurrentWidget(self._camera_preview)
+        self._camera_expand_button.setEnabled(True)
         self.show_monitoring_camera_ready()
 
     @Slot(str, bool)
@@ -193,8 +215,10 @@ class ActiveOperationPage(QWidget):
             "unavailable" if unavailable else "error",
         )
         self._camera_placeholder_description.setText(message)
+        self._close_expanded_camera()
         self._camera_preview.clear_frame()
         self._camera_stack.setCurrentWidget(self._camera_placeholder)
+        self._camera_expand_button.setEnabled(False)
         self._camera_retry_button.show()
         self._monitoring_status.setText("MONITORAMENTO DE EPIs INTERROMPIDO")
         self._monitoring_status.setProperty("state", "blocked")
@@ -236,10 +260,171 @@ class ActiveOperationPage(QWidget):
         self._inference_status.setProperty("state", "error")
         self._monitoring_status.setText(message)
         self._monitoring_status.setProperty("state", "blocked")
-        self._camera_preview.clear_overlay()
+        for camera_view in self._camera_views():
+            camera_view.clear_overlay()
         self._set_all_ppe_state("SEM MONITORAMENTO", "unmapped")
         self._refresh_style(self._inference_status)
         self._refresh_style(self._monitoring_status)
+
+    @Slot()
+    def show_ergonomics_loading(self) -> None:
+        if not self._monitoring_active:
+            return
+        self._ergonomics_status.setText("CARREGANDO MODELO DE POSE")
+        self._ergonomics_status.setProperty("state", "loading")
+        self._ergonomics_detail.setText("Aguardando a primeira avaliação ergonômica.")
+        self._refresh_style(self._ergonomics_status)
+        if self._has_calibrated_risk_area():
+            self._risk_area_status.setText("AGUARDANDO POSE")
+            self._risk_area_status.setProperty("state", "loading")
+            self._risk_area_detail.setText(
+                "A área será verificada assim que o modelo detectar uma pessoa."
+            )
+            self._refresh_style(self._risk_area_status)
+        else:
+            self.show_risk_area_monitoring_unavailable()
+
+    @Slot()
+    def show_ergonomics_ready(self) -> None:
+        if not self._monitoring_active:
+            return
+        self._ergonomics_status.setText("POSE ATIVA")
+        self._ergonomics_status.setProperty("state", "active")
+        self._ergonomics_detail.setText("Procurando postura humana no quadro.")
+        self._refresh_style(self._ergonomics_status)
+        if self._has_calibrated_risk_area():
+            self._risk_area_status.setText("MONITORANDO")
+            self._risk_area_status.setProperty("state", "loading")
+            self._risk_area_detail.setText(
+                "Procurando pessoas dentro do polígono configurado."
+            )
+            self._refresh_style(self._risk_area_status)
+        else:
+            self.show_risk_area_monitoring_unavailable()
+
+    @Slot()
+    def show_ergonomics_disabled(self) -> None:
+        if not self._monitoring_active:
+            return
+        self._ergonomics_status.setText("DESATIVADA")
+        self._ergonomics_status.setProperty("state", "idle")
+        self._ergonomics_detail.setText("A avaliação ergonômica está desativada nesta instalação.")
+        for camera_view in self._camera_views():
+            camera_view.clear_pose_overlay()
+        self._refresh_style(self._ergonomics_status)
+        self.show_risk_area_monitoring_unavailable(
+            "A detecção da área de risco depende do modelo de pose."
+        )
+
+    @Slot(str, bool)
+    def show_ergonomics_failure(self, message: str, unavailable: bool) -> None:
+        del unavailable
+        if not self._monitoring_active:
+            return
+        self._ergonomics_status.setText("POSE INDISPONÍVEL")
+        self._ergonomics_status.setProperty("state", "error")
+        self._ergonomics_detail.setText(message)
+        for camera_view in self._camera_views():
+            camera_view.clear_pose_overlay()
+        self._refresh_style(self._ergonomics_status)
+        self.show_risk_area_monitoring_unavailable(
+            "A área não pode ser verificada enquanto o modelo de pose está indisponível."
+        )
+
+    @Slot(object)
+    def update_monitoring_pose_overlay(self, value: object) -> None:
+        if not self._monitoring_active or not isinstance(value, PoseDetectionBatch):
+            return
+        overlay = CameraPoseOverlay(
+            skeletons=tuple(
+                CameraPoseSkeleton(
+                    confidence=pose.confidence,
+                    keypoints=tuple(
+                        CameraPoseKeypoint(
+                            x=keypoint.x,
+                            y=keypoint.y,
+                            confidence=keypoint.confidence,
+                        )
+                        for keypoint in pose.keypoints
+                    ),
+                )
+                for pose in value.poses
+            ),
+            source_width=value.frame_width,
+            source_height=value.frame_height,
+            minimum_keypoint_confidence=(self._pose_keypoint_confidence_threshold),
+        )
+        for camera_view in self._camera_views():
+            camera_view.set_pose_overlay(
+                overlay,
+                maximum_age_ms=self._pose_overlay_maximum_age_ms,
+            )
+
+    @Slot(object)
+    def update_ergonomic_assessment(self, value: object) -> None:
+        if not self._monitoring_active or not isinstance(value, ErgonomicAssessment):
+            return
+        if value.violations:
+            critical_count = sum(
+                violation.severity.value == "critical" for violation in value.violations
+            )
+            self._ergonomics_status.setText(
+                "RISCO CRÍTICO" if critical_count else "ATENÇÃO À POSTURA"
+            )
+            self._ergonomics_status.setProperty("state", "error")
+            self._ergonomics_detail.setText(
+                " · ".join(violation.summary for violation in value.violations)
+            )
+        elif value.evaluated_people:
+            self._ergonomics_status.setText("POSTURA SEM ALERTA")
+            self._ergonomics_status.setProperty("state", "active")
+            self._ergonomics_detail.setText(
+                f"{value.evaluated_people} pessoa(s) avaliada(s) no quadro."
+            )
+        else:
+            self._ergonomics_status.setText("POSE ATIVA")
+            self._ergonomics_status.setProperty("state", "loading")
+            self._ergonomics_detail.setText("Nenhuma postura avaliável no quadro.")
+        self._refresh_style(self._ergonomics_status)
+
+    @Slot(object)
+    def update_risk_area_assessment(self, value: object) -> None:
+        if not self._monitoring_active or not isinstance(value, RiskAreaAssessment):
+            return
+        if value.people_inside:
+            self._risk_area_status.setText("ENTRADA DETECTADA")
+            self._risk_area_status.setProperty("state", "error")
+            self._risk_area_detail.setText(
+                f"{value.people_inside} pessoa(s) dentro da área de risco."
+            )
+        elif value.evaluated_people:
+            self._risk_area_status.setText("ÁREA LIVRE")
+            self._risk_area_status.setProperty("state", "active")
+            self._risk_area_detail.setText(
+                f"{value.evaluated_people} pessoa(s) detectada(s) fora da área."
+            )
+        elif value.detected_people:
+            self._risk_area_status.setText("POSE INSUFICIENTE")
+            self._risk_area_status.setProperty("state", "loading")
+            self._risk_area_detail.setText(
+                "Pessoa detectada, mas sem pontos corporais confiáveis para avaliar."
+            )
+        else:
+            self._risk_area_status.setText("MONITORANDO")
+            self._risk_area_status.setProperty("state", "loading")
+            self._risk_area_detail.setText("Nenhuma pessoa detectada no quadro.")
+        self._refresh_style(self._risk_area_status)
+
+    def show_risk_area_monitoring_unavailable(
+        self,
+        message: str = "Nenhuma área de risco calibrada para esta operação.",
+    ) -> None:
+        if not self._monitoring_active:
+            return
+        self._risk_area_status.setText("INDISPONÍVEL")
+        self._risk_area_status.setProperty("state", "idle")
+        self._risk_area_detail.setText(message)
+        self._refresh_style(self._risk_area_status)
 
     @Slot(object)
     def update_monitoring_tracking_overlay(self, value: object) -> None:
@@ -261,10 +446,11 @@ class ActiveOperationPage(QWidget):
             source_width=value.frame_width,
             source_height=value.frame_height,
         )
-        self._camera_preview.set_overlay(
-            overlay,
-            maximum_age_ms=self._detection_overlay_maximum_age_ms,
-        )
+        for camera_view in self._camera_views():
+            camera_view.set_overlay(
+                overlay,
+                maximum_age_ms=self._detection_overlay_maximum_age_ms,
+            )
         count = len(visible_tracks)
         confirmed = len(value.confirmed_visible_tracks)
         suffix = "TRACK" if count == 1 else "TRACKS"
@@ -327,9 +513,7 @@ class ActiveOperationPage(QWidget):
             suffix = "ALERTA LOCAL ATIVO" if count == 1 else "ALERTAS LOCAIS ATIVOS"
             self._alert_badge.setText(f"{count} {suffix}")
             self._alert_badge.setProperty("state", "active")
-            self._alert_message.setText(
-                f"{latest.violation.summary} · NÃO SINCRONIZADO"
-            )
+            self._alert_message.setText(f"{latest.violation.summary} · NÃO SINCRONIZADO")
             state = "active"
         elif value.resolved_alerts:
             latest = value.resolved_alerts[-1]
@@ -345,6 +529,23 @@ class ActiveOperationPage(QWidget):
         self._alert_strip.setProperty("state", state)
         self._refresh_style(self._alert_strip)
         self._refresh_style(self._alert_badge)
+
+    @Slot(str, int)
+    def show_alert_delivery_succeeded(self, event_id: str, alert_id: int) -> None:
+        if not self._monitoring_active or not event_id or alert_id <= 0:
+            return
+        self._alert_message.setText(
+            f"Alerta #{alert_id} registrado e enviado ao Admin em tempo real."
+        )
+
+    @Slot(str, str)
+    def show_alert_delivery_failure(self, event_id: str, message: str) -> None:
+        if not self._monitoring_active or not event_id:
+            return
+        normalized = message.strip()
+        self._alert_message.setText(
+            normalized or "Alerta mantido localmente; envio ao Admin não confirmado."
+        )
 
     @Slot(str)
     def show_finish_failure(self, message: str) -> None:
@@ -386,9 +587,7 @@ class ActiveOperationPage(QWidget):
         footer_layout.setSpacing(16)
         footer_text = QVBoxLayout()
         footer_text.setSpacing(2)
-        footer_text.addWidget(
-            self._label("SESSÃO LOCAL EM ANDAMENTO", "activeFooterTitle")
-        )
+        footer_text.addWidget(self._label("SESSÃO LOCAL EM ANDAMENTO", "activeFooterTitle"))
         self._finish_error = self._label("", "activeFinishError")
         self._finish_error.setWordWrap(True)
         footer_text.addWidget(self._finish_error)
@@ -473,9 +672,7 @@ class ActiveOperationPage(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(10)
-        header.addWidget(
-            self._label("MONITORAMENTO CONTÍNUO DE EPIs", "activeMonitoringTitle")
-        )
+        header.addWidget(self._label("MONITORAMENTO CONTÍNUO DE EPIs", "activeMonitoringTitle"))
         header.addStretch(1)
         self._overlay_status = self._label("0 TRACKS", "activeOverlayStatus")
         header.addWidget(self._overlay_status)
@@ -488,6 +685,12 @@ class ActiveOperationPage(QWidget):
         self._camera_status = self._label("NÃO INICIALIZADA", "activeCameraStatus")
         self._camera_status.setProperty("state", "idle")
         header.addWidget(self._camera_status)
+        self._camera_expand_button = QPushButton("EXPANDIR CÂMERA")
+        self._camera_expand_button.setObjectName("activeCameraExpandButton")
+        self._camera_expand_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._camera_expand_button.setEnabled(False)
+        self._camera_expand_button.clicked.connect(self._toggle_expanded_camera)
+        header.addWidget(self._camera_expand_button)
         self._camera_retry_button = QPushButton("TENTAR CÂMERA NOVAMENTE")
         self._camera_retry_button.setObjectName("activeCameraRetryButton")
         self._camera_retry_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -501,7 +704,7 @@ class ActiveOperationPage(QWidget):
         body.setSpacing(14)
         self._camera_stack = QStackedWidget()
         self._camera_stack.setObjectName("activeCameraStack")
-        self._camera_stack.setMinimumHeight(190)
+        self._camera_stack.setMinimumHeight(420)
         self._camera_placeholder = QFrame()
         self._camera_placeholder.setObjectName("activeCameraPlaceholder")
         placeholder_layout = QVBoxLayout(self._camera_placeholder)
@@ -517,16 +720,17 @@ class ActiveOperationPage(QWidget):
             "Aguardando captura para o monitoramento contínuo.",
             "activeCameraPlaceholderDescription",
         )
-        self._camera_placeholder_description.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        self._camera_placeholder_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._camera_placeholder_description.setWordWrap(True)
         placeholder_layout.addWidget(self._camera_placeholder_description)
         placeholder_layout.addStretch(1)
-        self._camera_preview = CameraFrameView("activeCameraPreview")
+        self._camera_preview = CameraFrameView(
+            "activeCameraPreview",
+            aspect_ratio_mode=Qt.AspectRatioMode.KeepAspectRatio,
+        )
         self._camera_stack.addWidget(self._camera_placeholder)
         self._camera_stack.addWidget(self._camera_preview)
-        body.addWidget(self._camera_stack, 3)
+        body.addWidget(self._camera_stack, 5)
 
         ppe_panel = QFrame()
         ppe_panel.setObjectName("activePpePanel")
@@ -541,6 +745,49 @@ class ActiveOperationPage(QWidget):
         self._ppe_layout.setContentsMargins(0, 0, 0, 0)
         self._ppe_layout.setSpacing(6)
         ppe_layout.addWidget(self._ppe_container)
+        ppe_layout.addSpacing(12)
+        ergonomics_header = QHBoxLayout()
+        ergonomics_header.setSpacing(8)
+        ergonomics_header.addWidget(self._label("ERGONOMIA", "activeSectionLabel"))
+        ergonomics_header.addStretch(1)
+        self._ergonomics_status = self._label(
+            "NÃO INICIALIZADA",
+            "activeInferenceStatus",
+        )
+        self._ergonomics_status.setObjectName("activeErgonomicsStatus")
+        self._ergonomics_status.setProperty("state", "idle")
+        ergonomics_header.addWidget(self._ergonomics_status)
+        ppe_layout.addLayout(ergonomics_header)
+        ppe_layout.addSpacing(6)
+        self._ergonomics_detail = self._label(
+            "Aguardando o monitoramento.",
+            "activeMetadata",
+        )
+        self._ergonomics_detail.setObjectName("activeErgonomicsDetail")
+        self._ergonomics_detail.setWordWrap(True)
+        ppe_layout.addWidget(self._ergonomics_detail)
+        ppe_layout.addSpacing(13)
+        risk_area_header = QHBoxLayout()
+        risk_area_header.setSpacing(8)
+        risk_area_header.addWidget(
+            self._label("ÁREA DE RISCO", "activeSectionLabel")
+        )
+        risk_area_header.addStretch(1)
+        self._risk_area_status = self._label(
+            "NÃO INICIALIZADA",
+            "activeRiskAreaStatus",
+        )
+        self._risk_area_status.setProperty("state", "idle")
+        risk_area_header.addWidget(self._risk_area_status)
+        ppe_layout.addLayout(risk_area_header)
+        ppe_layout.addSpacing(6)
+        self._risk_area_detail = self._label(
+            "Aguardando o monitoramento.",
+            "activeMetadata",
+        )
+        self._risk_area_detail.setObjectName("activeRiskAreaDetail")
+        self._risk_area_detail.setWordWrap(True)
+        ppe_layout.addWidget(self._risk_area_detail)
         ppe_layout.addStretch(1)
         body.addWidget(ppe_panel, 2)
         layout.addLayout(body, 1)
@@ -596,24 +843,25 @@ class ActiveOperationPage(QWidget):
 
     def _configure_risk_zone(self, operation: Operation) -> None:
         risk_area = operation.risk_area
-        if (
-            risk_area is None
-            or risk_area.geometry is None
-            or not risk_area.geometry_calibrated
-        ):
-            self._camera_preview.clear_risk_zones()
+        if risk_area is None or risk_area.geometry is None or not risk_area.geometry_calibrated:
+            for camera_view in self._camera_views():
+                camera_view.clear_risk_zones()
             return
-        self._camera_preview.set_risk_zones(
-            (
-                CameraRiskZone(
-                    label=risk_area.name,
-                    vertices=tuple(
-                        (point.x, point.y)
-                        for point in risk_area.geometry.vertices
-                    ),
-                ),
-            )
+        zones = (
+            CameraRiskZone(
+                label=risk_area.name,
+                vertices=tuple((point.x, point.y) for point in risk_area.geometry.vertices),
+            ),
         )
+        for camera_view in self._camera_views():
+            camera_view.set_risk_zones(zones)
+
+    def _has_calibrated_risk_area(self) -> bool:
+        operation = self._operation
+        if operation is None or operation.risk_area is None:
+            return False
+        risk_area = operation.risk_area
+        return risk_area.geometry is not None and risk_area.geometry_calibrated
 
     def _clear_ppe_rows(self) -> None:
         while self._ppe_layout.count():
@@ -628,6 +876,7 @@ class ActiveOperationPage(QWidget):
         self._ppe_state_labels.clear()
 
     def _reset_monitoring_presentation(self) -> None:
+        self._close_expanded_camera()
         self._camera_preview.clear_frame()
         self._camera_stack.setCurrentWidget(self._camera_placeholder)
         self._camera_status.setText("NÃO INICIALIZADA")
@@ -641,20 +890,28 @@ class ActiveOperationPage(QWidget):
             "Aguardando captura para o monitoramento contínuo."
         )
         self._camera_retry_button.hide()
+        self._camera_expand_button.setText("EXPANDIR CÂMERA")
+        self._camera_expand_button.setEnabled(False)
+        self._ergonomics_status.setText("NÃO INICIALIZADA")
+        self._ergonomics_status.setProperty("state", "idle")
+        self._ergonomics_detail.setText("Aguardando o monitoramento.")
+        self._risk_area_status.setText("NÃO INICIALIZADA")
+        self._risk_area_status.setProperty("state", "idle")
+        self._risk_area_detail.setText("Aguardando o monitoramento.")
         self._reset_alert_presentation()
         self._set_all_ppe_state("AGUARDANDO", "waiting")
         self._refresh_style(self._camera_status)
         self._refresh_style(self._inference_status)
         self._refresh_style(self._monitoring_status)
+        self._refresh_style(self._ergonomics_status)
+        self._refresh_style(self._risk_area_status)
 
     def _reset_alert_presentation(self) -> None:
         self._active_alert_count = 0
         self._alert_strip.setProperty("state", "idle")
         self._alert_badge.setText("0 ALERTAS LOCAIS ATIVOS")
         self._alert_badge.setProperty("state", "idle")
-        self._alert_message.setText(
-            "Nenhuma ocorrência local · SEM ENVIO À API"
-        )
+        self._alert_message.setText("Nenhuma ocorrência local · SEM ENVIO À API")
         self._refresh_style(self._alert_strip)
         self._refresh_style(self._alert_badge)
 
@@ -669,6 +926,50 @@ class ActiveOperationPage(QWidget):
         label.setText(text)
         label.setProperty("state", state)
         self._refresh_style(label)
+
+    @Slot()
+    def _toggle_expanded_camera(self) -> None:
+        dialog = self._expanded_camera_dialog
+        if dialog is not None:
+            dialog.close()
+            return
+        if not self._monitoring_active or not self._camera_preview.has_frame:
+            return
+
+        dialog = ExpandedCameraDialog(
+            parent=self,
+            window_title="2Identify · Câmera expandida",
+            header_text="MONITORAMENTO OPERACIONAL · CÂMERA EXPANDIDA",
+            preview_object_name="expandedCameraPreview",
+            aspect_ratio_mode=Qt.AspectRatioMode.KeepAspectRatio,
+        )
+        self._camera_preview.copy_presentation_to(dialog.camera_view)
+        dialog.closed.connect(self._handle_expanded_camera_closed)
+        self._expanded_camera_dialog = dialog
+        self._camera_expand_button.setText("RESTAURAR CÂMERA")
+        dialog.showFullScreen()
+
+    @Slot()
+    def _handle_expanded_camera_closed(self) -> None:
+        dialog = self._expanded_camera_dialog
+        self._expanded_camera_dialog = None
+        self._camera_expand_button.setText("EXPANDIR CÂMERA")
+        self._camera_expand_button.setEnabled(
+            self._monitoring_active and self._camera_preview.has_frame
+        )
+        if dialog is not None:
+            dialog.deleteLater()
+
+    def _close_expanded_camera(self) -> None:
+        dialog = self._expanded_camera_dialog
+        if dialog is not None:
+            dialog.close()
+
+    def _camera_views(self) -> tuple[CameraFrameView, ...]:
+        dialog = self._expanded_camera_dialog
+        if dialog is None:
+            return (self._camera_preview,)
+        return self._camera_preview, dialog.camera_view
 
     @Slot()
     def _request_camera_retry(self) -> None:

@@ -15,19 +15,32 @@ from app.core.config import Settings
 from app.core.database import get_db
 from app.core.security import AccessTokenService
 from app.realtime import AdminRealtimeAuthorizer, RealtimeEventBroker
-from app.repositories import DashboardRepository, UserRepository
+from app.repositories import (
+    AdminAlertRepository,
+    DashboardRepository,
+    OperationRepository,
+    SafetyAlertRepository,
+    UserRepository,
+)
 from app.services import (
+    AdminAlertsService,
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,
     AdminDashboardService,
     AdministratorPrincipal,
     AuthenticationService,
+    OperationsService,
+    OperatorAlertService,
+    OperatorAuthorizationRejectedError,
+    OperatorAuthorizationService,
+    OperatorPrincipal,
 )
 
 logger = logging.getLogger(__name__)
 _ADMIN_PROFILE = frozenset({"administrador"})
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 _ADMIN_BEARER = HTTPBearer(auto_error=False, scheme_name="AdminBearer")
+_OPERATOR_BEARER = HTTPBearer(auto_error=False, scheme_name="OperatorBearer")
 
 
 def get_runtime_settings(connection: HTTPConnection) -> Settings:
@@ -133,3 +146,66 @@ def get_admin_dashboard_service(
     session: Annotated[Session, Depends(get_db)],
 ) -> AdminDashboardService:
     return AdminDashboardService(DashboardRepository(session))
+
+
+def get_admin_alerts_service(
+    session: Annotated[Session, Depends(get_db)],
+) -> AdminAlertsService:
+    return AdminAlertsService(AdminAlertRepository(session))
+
+
+def get_operations_service(
+    session: Annotated[Session, Depends(get_db)],
+) -> OperationsService:
+    return OperationsService(OperationRepository(session))
+
+
+def get_operator_alert_service(
+    session: Annotated[Session, Depends(get_db)],
+) -> OperatorAlertService:
+    return OperatorAlertService(SafetyAlertRepository(session))
+
+
+def get_operator_authorization_service(
+    session: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_runtime_settings)],
+) -> OperatorAuthorizationService:
+    return OperatorAuthorizationService(
+        repository=UserRepository(session),
+        tokens=AccessTokenService(settings),
+        allowed_profiles=settings.auth_allowed_profiles,
+    )
+
+
+def get_current_operator(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(_OPERATOR_BEARER),
+    ],
+    service: Annotated[
+        OperatorAuthorizationService,
+        Depends(get_operator_authorization_service),
+    ],
+) -> OperatorPrincipal:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autenticação do operador necessária.",
+            headers={"WWW-Authenticate": "Bearer", **_NO_STORE_HEADERS},
+        )
+    try:
+        return service.authorize(credentials.credentials)
+    except OperatorAuthorizationRejectedError as error:
+        logger.warning("operator_bearer_authorization_rejected")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de acesso inválido.",
+            headers={"WWW-Authenticate": "Bearer", **_NO_STORE_HEADERS},
+        ) from error
+    except SQLAlchemyError as error:
+        logger.error("operator_bearer_database_unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço do operador indisponível.",
+            headers=_NO_STORE_HEADERS,
+        ) from error

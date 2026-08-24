@@ -81,6 +81,28 @@ def test_dashboard_summary_contract_and_authorization_header() -> None:
                 "ppe_delivery_percentage": 75.0,
                 "alerts": 4,
                 "critical_alerts": 1,
+                "alert_status": {
+                    "new": 2,
+                    "confirmed": 1,
+                    "closed": 1,
+                    "other": 0,
+                },
+                "alert_categories": {
+                    "ppe": 1,
+                    "ergonomics": 1,
+                    "risk_area": 2,
+                    "monitoring": 0,
+                    "other": 0,
+                },
+                "alert_trend": [
+                    {"day": "2026-08-14", "alerts": 0},
+                    {"day": "2026-08-15", "alerts": 1},
+                    {"day": "2026-08-16", "alerts": 0},
+                    {"day": "2026-08-17", "alerts": 2},
+                    {"day": "2026-08-18", "alerts": 0},
+                    {"day": "2026-08-19", "alerts": 0},
+                    {"day": "2026-08-20", "alerts": 1},
+                ],
                 "generated_at": "2026-08-20T12:30:00Z",
             },
         )
@@ -92,6 +114,8 @@ def test_dashboard_summary_contract_and_authorization_header() -> None:
 
     assert summary.active_employees == 3
     assert summary.delivered_ppe == 9
+    assert summary.alert_categories.risk_area == 2
+    assert tuple(item.alerts for item in summary.alert_trend) == (0, 1, 0, 2, 0, 0, 1)
     assert summary.generated_at.tzinfo is not None
 
 
@@ -138,6 +162,28 @@ def test_inconsistent_dashboard_payload_is_rejected() -> None:
                 "ppe_delivery_percentage": 100,
                 "alerts": 0,
                 "critical_alerts": 0,
+                "alert_status": {
+                    "new": 0,
+                    "confirmed": 0,
+                    "closed": 0,
+                    "other": 0,
+                },
+                "alert_categories": {
+                    "ppe": 0,
+                    "ergonomics": 0,
+                    "risk_area": 0,
+                    "monitoring": 0,
+                    "other": 0,
+                },
+                "alert_trend": [
+                    {"day": "2026-08-14", "alerts": 0},
+                    {"day": "2026-08-15", "alerts": 0},
+                    {"day": "2026-08-16", "alerts": 0},
+                    {"day": "2026-08-17", "alerts": 0},
+                    {"day": "2026-08-18", "alerts": 0},
+                    {"day": "2026-08-19", "alerts": 0},
+                    {"day": "2026-08-20", "alerts": 0},
+                ],
                 "generated_at": "2026-08-20T12:30:00Z",
             },
         )

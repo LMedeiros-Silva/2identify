@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QStackedWidget
 
 from app.core.session import AuthenticationMethod, OperatorSession
 from app.domain import (
@@ -22,6 +22,12 @@ from app.domain import (
 from app.engine import AlertEngine, PpeSafetyEngine, PpeStabilityEngine
 from app.ui.active import ActiveOperationPage
 from app.ui.components import CameraFrameView
+from app.vision.pose import (
+    COCO_KEYPOINT_COUNT,
+    PersonPose,
+    PoseDetectionBatch,
+    PoseKeypoint,
+)
 from app.vision.ppe import (
     DetectionBox,
     PpeDetection,
@@ -90,15 +96,11 @@ def test_active_operation_page_presents_real_local_session(qtbot) -> None:
 
     assert page.is_active
     assert page.work_session.session_id == _SESSION_ID
-    assert page.findChild(QLabel, "activeOperationName").text() == (
-        "Inspeção de segurança"
-    )
+    assert page.findChild(QLabel, "activeOperationName").text() == ("Inspeção de segurança")
     assert page.findChild(QLabel, "activeDetailValue").text() == "João Silva"
     assert page.findChild(QLabel, "activeElapsed").text() == "01:01:01"
     assert page.findChild(QLabel, "activeSafetyValue").text() == "1 EPI confirmado"
-    assert page.findChild(QLabel, "activeSessionCode").text() == str(
-        _SESSION_ID
-    ).upper()
+    assert page.findChild(QLabel, "activeSessionCode").text() == str(_SESSION_ID).upper()
     preview = page.findChild(CameraFrameView, "activeCameraPreview")
     assert preview.risk_zone_count == 1
     assert preview.risk_zone_labels == ("Linha A",)
@@ -172,17 +174,17 @@ def test_active_operation_page_presents_continuous_ppe_monitoring(qtbot) -> None
     page.update_monitoring_tracking_overlay(
         tracker.update(
             PpeDetectionBatch(
-            detections=(
-                PpeDetection(
-                    0,
-                    "capacete",
-                    0.93,
-                    DetectionBox(10, 15, 80, 105),
+                detections=(
+                    PpeDetection(
+                        0,
+                        "capacete",
+                        0.93,
+                        DetectionBox(10, 15, 80, 105),
+                    ),
                 ),
-            ),
-            frame_width=160,
-            frame_height=120,
-            inference_milliseconds=12.5,
+                frame_width=160,
+                frame_height=120,
+                inference_milliseconds=12.5,
             )
         )
     )
@@ -201,8 +203,11 @@ def test_active_operation_page_presents_continuous_ppe_monitoring(qtbot) -> None
     )
 
     preview = page.findChild(CameraFrameView, "activeCameraPreview")
+    camera_stack = page.findChild(QStackedWidget, "activeCameraStack")
     assert page.is_monitoring_active
     assert preview.has_frame
+    assert preview.aspect_ratio_mode == Qt.AspectRatioMode.KeepAspectRatio
+    assert camera_stack.minimumHeight() == 420
     assert preview.overlay_box_count == 1
     assert preview.overlay_labels == ("#1 capacete",)
     assert page.findChild(QLabel, "activeCameraStatus").text() == "ATIVA"
@@ -216,9 +221,73 @@ def test_active_operation_page_presents_continuous_ppe_monitoring(qtbot) -> None
 
     assert not page.is_monitoring_active
     assert not preview.has_frame
-    assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
-        "MONITORAMENTO NÃO INICIADO"
+    assert page.findChild(QLabel, "activeMonitoringStatus").text() == ("MONITORAMENTO NÃO INICIADO")
+
+
+def test_active_operation_page_maps_pose_batch_to_camera_overlay(qtbot) -> None:
+    page = ActiveOperationPage(_operator(), clock=lambda: _STARTED_AT)
+    qtbot.addWidget(page)
+    page.set_work_session(_work_session(), _operation())
+    page.activate_monitoring()
+    keypoints = tuple(
+        PoseKeypoint(20.0 + index * 4.0, 15.0 + index * 3.0, 0.95)
+        for index in range(COCO_KEYPOINT_COUNT)
     )
+
+    page.update_monitoring_pose_overlay(
+        PoseDetectionBatch(
+            poses=(PersonPose(0.93, keypoints),),
+            frame_width=160,
+            frame_height=120,
+            inference_milliseconds=12.0,
+        )
+    )
+
+    preview = page.findChild(CameraFrameView, "activeCameraPreview")
+    assert preview.pose_skeleton_count == 1
+
+    page.deactivate_monitoring()
+    assert preview.pose_skeleton_count == 0
+
+
+def test_active_operation_page_expands_live_camera_with_overlays(qtbot) -> None:
+    page = ActiveOperationPage(_operator(), clock=lambda: _STARTED_AT)
+    qtbot.addWidget(page)
+    page.show()
+    page.set_work_session(_work_session(), _operation())
+    page.activate_monitoring()
+    expand_button = page.findChild(QPushButton, "activeCameraExpandButton")
+    assert not expand_button.isEnabled()
+
+    page.update_monitoring_frame(QImage(160, 120, QImage.Format.Format_RGB888))
+    assert expand_button.isEnabled()
+    qtbot.mouseClick(expand_button, Qt.MouseButton.LeftButton)
+
+    dialog = page.findChild(QDialog, "expandedCameraDialog")
+    expanded = dialog.findChild(CameraFrameView, "expandedCameraPreview")
+    assert dialog.isVisible()
+    assert dialog.isFullScreen()
+    assert expanded.has_frame
+    assert expanded.aspect_ratio_mode == Qt.AspectRatioMode.KeepAspectRatio
+    assert expanded.risk_zone_labels == ("Linha A",)
+
+    keypoints = tuple(
+        PoseKeypoint(20.0 + index * 4.0, 15.0 + index * 3.0, 0.95)
+        for index in range(COCO_KEYPOINT_COUNT)
+    )
+    page.update_monitoring_pose_overlay(
+        PoseDetectionBatch(
+            poses=(PersonPose(0.93, keypoints),),
+            frame_width=160,
+            frame_height=120,
+            inference_milliseconds=12.0,
+        )
+    )
+    assert expanded.pose_skeleton_count == 1
+
+    close_button = dialog.findChild(QPushButton, "expandedCameraCloseButton")
+    qtbot.mouseClick(close_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: expand_button.text() == "EXPANDIR CÂMERA")
 
 
 def test_active_operation_page_exposes_camera_failure_and_retry(qtbot) -> None:
@@ -267,22 +336,26 @@ def test_active_operation_page_presents_local_alert_lifecycle(qtbot) -> None:
     page.update_local_alerts(raised)
 
     assert page.active_alert_count == 1
-    assert page.findChild(QLabel, "activeAlertBadge").text() == (
-        "1 ALERTA LOCAL ATIVO"
+    assert page.findChild(QLabel, "activeAlertBadge").text() == ("1 ALERTA LOCAL ATIVO")
+    assert (
+        "NÃO SINCRONIZADO"
+        in page.findChild(
+            QLabel,
+            "activeAlertMessage",
+        ).text()
     )
-    assert "NÃO SINCRONIZADO" in page.findChild(
-        QLabel,
-        "activeAlertMessage",
-    ).text()
 
     resolved = engine.observe(session, (), _STARTED_AT + timedelta(seconds=1))
     page.update_local_alerts(resolved)
 
     assert page.active_alert_count == 0
-    assert "Condição normalizada" in page.findChild(
-        QLabel,
-        "activeAlertMessage",
-    ).text()
+    assert (
+        "Condição normalizada"
+        in page.findChild(
+            QLabel,
+            "activeAlertMessage",
+        ).text()
+    )
     page.deactivate_monitoring()
     assert page.findChild(QLabel, "activeAlertMessage").text() == (
         "Nenhuma ocorrência local · SEM ENVIO À API"

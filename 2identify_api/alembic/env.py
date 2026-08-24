@@ -46,7 +46,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Configure an online migration context; Stage 33 never invokes upgrades."""
+    """Configure an online context for manually reviewed migrations only."""
 
     _block_unsafe_autogenerate()
     connectable = engine_from_config(

@@ -90,6 +90,8 @@ class RiskAreaReference:
     name: str
     geometry: RiskAreaGeometry | None = None
     geometry_calibrated: bool = False
+    camera_id: int | None = None
+    camera_name: str | None = None
 
     def __post_init__(self) -> None:
         normalized_name = self.name.strip()
@@ -106,7 +108,15 @@ class RiskAreaReference:
             raise ValueError("geometry_calibrated deve ser booleano")
         if self.geometry_calibrated and self.geometry is None:
             raise ValueError("uma área calibrada exige geometria configurada")
+        if self.camera_id is not None and self.camera_id <= 0:
+            raise ValueError("camera_id deve ser positivo quando informado")
+        camera_name = self.camera_name
+        if camera_name is not None:
+            camera_name = camera_name.strip()
+            if not camera_name:
+                raise ValueError("camera_name não pode ser vazio quando informado")
         object.__setattr__(self, "name", normalized_name)
+        object.__setattr__(self, "camera_name", camera_name)
 
 
 @dataclass(frozen=True, slots=True)

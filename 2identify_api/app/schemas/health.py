@@ -17,4 +17,3 @@ class HealthResponse(BaseModel):
 
     status: Literal["ok", "degraded"]
     database: Literal["connected", "disconnected"]
-

@@ -1,5 +1,12 @@
 """Application use cases and orchestration services."""
 
+from app.services.alert_delivery_service import (
+    AlertDeliveryError,
+    AlertDeliveryReceipt,
+    AlertDeliveryRejectedError,
+    AlertDeliveryUnavailableError,
+    AlertSender,
+)
 from app.services.auth_service import (
     AuthenticationError,
     AuthenticationUnavailableError,
@@ -31,6 +38,11 @@ from app.services.work_session_service import (
 )
 
 __all__ = [
+    "AlertDeliveryError",
+    "AlertDeliveryReceipt",
+    "AlertDeliveryRejectedError",
+    "AlertDeliveryUnavailableError",
+    "AlertSender",
     "AuthenticationError",
     "AuthenticationUnavailableError",
     "AuthService",
@@ -53,4 +65,3 @@ __all__ = [
     "WorkSessionNotFoundError",
     "WorkSessionService",
 ]
-

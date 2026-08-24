@@ -9,12 +9,16 @@ def test_settings_resolve_relative_paths_from_project_root() -> None:
     settings = AppSettings(
         _env_file=None,
         ppe_model_path="models/custom.pt",
+        pose_model_path="models/custom-pose.pt",
         ultralytics_config_directory="runtime/ultralytics",
         manuals_directory="assets/manuals-test",
         log_directory="runtime/logs",
     )
 
     assert settings.ppe_model_path == (PROJECT_ROOT / "models/custom.pt").resolve()
+    assert settings.pose_model_path == (
+        PROJECT_ROOT / "models/custom-pose.pt"
+    ).resolve()
     assert settings.ultralytics_config_directory == (
         PROJECT_ROOT / "runtime/ultralytics"
     ).resolve()
@@ -158,6 +162,35 @@ def test_ppe_inference_runtime_settings_are_typed() -> None:
 def test_face_auth_threshold_is_validated() -> None:
     with pytest.raises(ValidationError):
         AppSettings(_env_file=None, face_auth_confidence_threshold=1.01)
+
+
+def test_pose_and_ergonomics_settings_are_typed_and_cross_validated() -> None:
+    settings = AppSettings(
+        _env_file=None,
+        pose_inference_device=" cpu ",
+        pose_inference_fps=5,
+        ergonomics_trunk_warning_degrees=25,
+        ergonomics_trunk_critical_degrees=50,
+        alert_delivery_max_attempts=4,
+    )
+
+    assert settings.pose_estimation_enabled
+    assert settings.pose_inference_device == "cpu"
+    assert settings.pose_inference_fps == 5
+    assert settings.alert_delivery_max_attempts == 4
+
+    with pytest.raises(ValidationError, match="TRUNK_WARNING"):
+        AppSettings(
+            _env_file=None,
+            ergonomics_trunk_warning_degrees=50,
+            ergonomics_trunk_critical_degrees=45,
+        )
+    with pytest.raises(ValidationError, match="KNEE_CRITICAL"):
+        AppSettings(
+            _env_file=None,
+            ergonomics_knee_warning_degrees=90,
+            ergonomics_knee_critical_degrees=100,
+        )
 
 
 def test_production_rejects_local_face_authorization() -> None:

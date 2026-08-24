@@ -41,3 +41,17 @@ Ultralytics states that proprietary or commercial deployment requires an appropr
 license unless the complete project is distributed under the AGPL-3.0 terms. Licensing must be
 resolved before commercial distribution. The checkpoint is intentionally ignored by Git.
 
+## Ultralytics YOLO11n-pose
+
+The ergonomic screening pipeline uses the public `yolo11n-pose.pt` COCO pose checkpoint from
+the official Ultralytics assets release. The installation script verifies SHA-256:
+
+`869E83FCDFFDC7371FA4E34CD8E51C838CC729571D1635E5141E3075E9319DC0`
+
+- Model documentation: https://docs.ultralytics.com/models/yolo11/
+- Pose documentation: https://docs.ultralytics.com/tasks/pose/
+- Artifact: https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n-pose.pt
+
+The checkpoint is ignored by Git and is installed with `python scripts/download_pose_model.py`.
+The same Ultralytics licensing review applies before distribution or commercial deployment.
+

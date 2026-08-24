@@ -1,6 +1,11 @@
 """Public HTTP response contracts."""
 
 from app.schemas.admin import AdminDashboardSummary
+from app.schemas.admin_alerts import (
+    AdminAlertActionRequest,
+    AdminAlertDetail,
+    AdminAlertList,
+)
 from app.schemas.authentication import (
     AdminCredentialLoginResponse,
     AdministratorPayload,
@@ -9,6 +14,19 @@ from app.schemas.authentication import (
     OperatorPayload,
 )
 from app.schemas.health import HealthResponse, RootResponse
+from app.schemas.operations import (
+    CameraCatalogItem,
+    CameraWrite,
+    EpiReference,
+    OperationCatalog,
+    OperationDetail,
+    OperationWrite,
+    PolygonGeometry,
+    RiskAreaDetail,
+    RiskAreaWrite,
+    SectorCatalogItem,
+)
+from app.schemas.operator_alerts import OperatorAlertCreate, OperatorAlertReceipt
 from app.schemas.realtime import (
     AlertCreatedPayload,
     RealtimeEventEnvelope,
@@ -17,6 +35,9 @@ from app.schemas.realtime import (
 )
 
 __all__ = [
+    "AdminAlertActionRequest",
+    "AdminAlertDetail",
+    "AdminAlertList",
     "AdminCredentialLoginResponse",
     "AdminDashboardSummary",
     "AlertCreatedPayload",
@@ -24,8 +45,20 @@ __all__ = [
     "CredentialLoginRequest",
     "CredentialLoginResponse",
     "HealthResponse",
+    "CameraCatalogItem",
+    "CameraWrite",
+    "EpiReference",
+    "OperationCatalog",
+    "OperationDetail",
+    "OperationWrite",
     "OperatorPayload",
+    "OperatorAlertCreate",
+    "OperatorAlertReceipt",
     "RealtimeEventEnvelope",
+    "PolygonGeometry",
+    "RiskAreaDetail",
+    "RiskAreaWrite",
+    "SectorCatalogItem",
     "RootResponse",
     "StreamHeartbeatPayload",
     "StreamReadyPayload",

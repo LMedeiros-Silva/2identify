@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from uuid import UUID
 
 from PySide6.QtCore import QObject, Slot
@@ -16,16 +17,23 @@ from app.core.session import (
 )
 from app.domain import OperationStartAuthorization
 from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
+from app.engine import AlertEngineUpdate
+from app.services.alert_delivery_service import AlertDeliveryReceipt, AlertSender
 from app.services.manual_service import ManualService
 from app.services.operation_service import OperationService
 from app.services.work_session_service import WorkSessionError, WorkSessionService
 from app.ui.login import LoginWindow
 from app.ui.main import MainWindow
+from app.workers.alert_delivery_worker import AlertDeliveryWorker
 
 from .active_camera_controller import ActiveCameraController
+from .active_ergonomics_monitoring_controller import (
+    ActiveErgonomicsMonitoringController,
+)
 from .active_ppe_monitoring_controller import ActivePpeMonitoringController
 from .operations_controller import OperationsController
 from .ppe_inference_controller import PpeInferenceController
+from .risk_area_snapshot_controller import RiskAreaSnapshotController
 from .safety_camera_controller import SafetyCameraController
 
 logger = logging.getLogger(__name__)
@@ -44,6 +52,7 @@ class ApplicationController(QObject):
         manual_service: ManualService | None = None,
         settings: AppSettings | None = None,
         work_session_service: WorkSessionService | None = None,
+        alert_sender: AlertSender | None = None,
     ) -> None:
         super().__init__(login_window)
         self._session_context = session_context
@@ -53,21 +62,23 @@ class ApplicationController(QObject):
         self._operations_source_notice = operations_source_notice
         self._manual_service = manual_service
         self._settings = settings
+        self._alert_sender = alert_sender
         self._work_session_service = work_session_service or WorkSessionService(
             maximum_authorization_age_seconds=(
-                settings.ppe_release_assessment_max_age_seconds
-                if settings is not None
-                else 2.0
+                settings.ppe_release_assessment_max_age_seconds if settings is not None else 2.0
             )
         )
         self._operations_controller: OperationsController | None = None
+        self._risk_area_snapshot_controller: RiskAreaSnapshotController | None = None
         self._safety_camera_controller: SafetyCameraController | None = None
         self._ppe_inference_controller: PpeInferenceController | None = None
         self._active_camera_controller: ActiveCameraController | None = None
-        self._active_ppe_monitoring_controller: (
-            ActivePpeMonitoringController | None
+        self._active_ergonomics_monitoring_controller: (
+            ActiveErgonomicsMonitoringController | None
         ) = None
+        self._active_ppe_monitoring_controller: ActivePpeMonitoringController | None = None
         self._main_window: MainWindow | None = None
+        self._alert_delivery_workers: dict[str, AlertDeliveryWorker] = {}
 
     @property
     def main_window(self) -> MainWindow | None:
@@ -160,6 +171,20 @@ class ApplicationController(QObject):
                 page=main_window.active_operation_page,
                 camera_controller=self._active_camera_controller,
             )
+            self._active_ergonomics_monitoring_controller = ActiveErgonomicsMonitoringController(
+                settings=self._settings,
+                page=main_window.active_operation_page,
+                camera_controller=self._active_camera_controller,
+            )
+            self._active_ergonomics_monitoring_controller.assessment_ready.connect(
+                self._active_ppe_monitoring_controller.handle_ergonomic_assessment
+            )
+            self._active_ergonomics_monitoring_controller.risk_area_assessment_ready.connect(
+                self._active_ppe_monitoring_controller.handle_risk_area_assessment
+            )
+            self._active_ppe_monitoring_controller.local_alert_update_ready.connect(
+                self._handle_local_alert_update
+            )
         if self._operation_service is not None:
             self._operations_controller = OperationsController(
                 service=self._operation_service,
@@ -170,6 +195,14 @@ class ApplicationController(QObject):
             self._operations_controller.safety_verification_requested.connect(
                 main_window.show_safety_verification
             )
+            if self._settings is not None:
+                self._risk_area_snapshot_controller = RiskAreaSnapshotController(
+                    settings=self._settings,
+                    page=main_window.operations_page,
+                )
+                self._operations_controller.risk_area_requested.connect(
+                    self._risk_area_snapshot_controller.capture
+                )
             self._operations_controller.load_operations()
         main_window.active_operation_page.finish_requested.connect(
             self.handle_work_session_finish_requested
@@ -195,6 +228,13 @@ class ApplicationController(QObject):
             return
 
         session = self._session_context.require_current()
+        self._shutdown_alert_delivery_workers()
+        if self._risk_area_snapshot_controller is not None:
+            self._risk_area_snapshot_controller.shutdown()
+        if self._operations_controller is not None:
+            self._operations_controller.shutdown()
+        if self._active_ergonomics_monitoring_controller is not None:
+            self._active_ergonomics_monitoring_controller.shutdown()
         if self._active_ppe_monitoring_controller is not None:
             self._active_ppe_monitoring_controller.shutdown()
         if self._active_camera_controller is not None:
@@ -212,9 +252,11 @@ class ApplicationController(QObject):
         main_window.close()
         self._main_window = None
         self._operations_controller = None
+        self._risk_area_snapshot_controller = None
         self._safety_camera_controller = None
         self._ppe_inference_controller = None
         self._active_camera_controller = None
+        self._active_ergonomics_monitoring_controller = None
         self._active_ppe_monitoring_controller = None
         logger.info("operator_logout_complete", extra={"operator_id": session.operator_id})
 
@@ -222,6 +264,13 @@ class ApplicationController(QObject):
     def shutdown(self) -> None:
         """Stop authenticated camera resources during process teardown."""
 
+        self._shutdown_alert_delivery_workers()
+        if self._risk_area_snapshot_controller is not None:
+            self._risk_area_snapshot_controller.shutdown()
+        if self._operations_controller is not None:
+            self._operations_controller.shutdown()
+        if self._active_ergonomics_monitoring_controller is not None:
+            self._active_ergonomics_monitoring_controller.shutdown()
         if self._active_ppe_monitoring_controller is not None:
             self._active_ppe_monitoring_controller.shutdown()
         if self._active_camera_controller is not None:
@@ -231,6 +280,74 @@ class ApplicationController(QObject):
         if self._safety_camera_controller is not None:
             self._safety_camera_controller.shutdown()
         self._work_session_service.interrupt_active()
+
+    @Slot(object)
+    def _handle_local_alert_update(self, value: object) -> None:
+        if not isinstance(value, AlertEngineUpdate) or not value.raised_alerts:
+            return
+        main_window = self._main_window
+        session = self._session_context.current
+        settings = self._settings
+        sender = self._alert_sender
+        if main_window is None:
+            return
+        if session is None or session.access_token is None or sender is None or settings is None:
+            for alert in value.raised_alerts:
+                main_window.active_operation_page.show_alert_delivery_failure(
+                    str(alert.alert_id),
+                    "Alerta local: entre com e-mail e senha para enviar ao Admin.",
+                )
+            return
+        for alert in value.raised_alerts:
+            event_id = str(alert.alert_id)
+            if event_id in self._alert_delivery_workers:
+                continue
+            worker = AlertDeliveryWorker(
+                sender,
+                alert,
+                session.access_token,
+                maximum_attempts=settings.alert_delivery_max_attempts,
+                retry_delay_seconds=settings.alert_delivery_retry_delay_seconds,
+            )
+            worker.delivered.connect(self._handle_alert_delivered)
+            worker.delivery_failed.connect(self._handle_alert_delivery_failed)
+            worker.finished.connect(partial(self._dispose_alert_delivery_worker, worker))
+            self._alert_delivery_workers[event_id] = worker
+            worker.start()
+
+    @Slot(object)
+    def _handle_alert_delivered(self, value: object) -> None:
+        if not isinstance(value, AlertDeliveryReceipt) or self._main_window is None:
+            return
+        self._main_window.active_operation_page.show_alert_delivery_succeeded(
+            str(value.event_id),
+            value.alert_id,
+        )
+
+    @Slot(str, str)
+    def _handle_alert_delivery_failed(self, event_id: str, message: str) -> None:
+        if self._main_window is not None:
+            self._main_window.active_operation_page.show_alert_delivery_failure(
+                event_id,
+                message,
+            )
+
+    def _dispose_alert_delivery_worker(self, worker: AlertDeliveryWorker) -> None:
+        self._alert_delivery_workers.pop(worker.event_id, None)
+        worker.deleteLater()
+
+    def _shutdown_alert_delivery_workers(self, wait_timeout_ms: int = 5_000) -> None:
+        workers = tuple(self._alert_delivery_workers.values())
+        for worker in workers:
+            worker.requestInterruption()
+        for worker in workers:
+            if worker.isRunning() and not worker.wait(wait_timeout_ms):
+                logger.error(
+                    "alert_delivery_worker_shutdown_timeout",
+                    extra={"event_id": worker.event_id},
+                )
+                continue
+            self._dispose_alert_delivery_worker(worker)
 
     @Slot(object)
     def handle_operation_start_authorized(self, value: object) -> None:

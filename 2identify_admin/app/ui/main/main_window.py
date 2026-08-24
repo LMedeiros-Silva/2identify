@@ -15,6 +15,7 @@ from app.ui.dashboard.dashboard_page import (
     DashboardPage,
 )
 from app.ui.main.sidebar import Sidebar
+from app.ui.operations import OperationsPage
 
 
 class MainWindow(QMainWindow):
@@ -29,6 +30,7 @@ class MainWindow(QMainWindow):
     """
 
     logout_requested = Signal()
+    realtime_alert_received = Signal(int)
 
     def __init__(self, administrator: Administrator) -> None:
 
@@ -36,18 +38,14 @@ class MainWindow(QMainWindow):
 
         self.administrator = administrator
 
-        self.setWindowTitle(
-            "2Identify - Sistema de Segurança Industrial"
-        )
+        self.setWindowTitle("2Identify - Sistema de Segurança Industrial")
 
         self.setMinimumSize(
             1200,
             750,
         )
 
-        self.setStyleSheet(
-            self.estilos()
-        )
+        self.setStyleSheet(self.estilos())
 
         self.criar_interface()
 
@@ -55,17 +53,11 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
 
-        central.setObjectName(
-            "central"
-        )
+        central.setObjectName("central")
 
-        self.setCentralWidget(
-            central
-        )
+        self.setCentralWidget(central)
 
-        layout_principal = QHBoxLayout(
-            central
-        )
+        layout_principal = QHBoxLayout(central)
 
         layout_principal.setContentsMargins(
             0,
@@ -74,9 +66,7 @@ class MainWindow(QMainWindow):
             0,
         )
 
-        layout_principal.setSpacing(
-            0
-        )
+        layout_principal.setSpacing(0)
 
         # ==================================================
         # SIDEBAR
@@ -84,17 +74,11 @@ class MainWindow(QMainWindow):
 
         self.sidebar = Sidebar()
 
-        self.sidebar.setFixedWidth(
-            250
-        )
+        self.sidebar.setFixedWidth(250)
 
-        self.sidebar.pagina_selecionada.connect(
-            self.trocar_pagina
-        )
+        self.sidebar.pagina_selecionada.connect(self.trocar_pagina)
 
-        layout_principal.addWidget(
-            self.sidebar
-        )
+        layout_principal.addWidget(self.sidebar)
 
         # ==================================================
         # ÁREA DIREITA
@@ -102,13 +86,9 @@ class MainWindow(QMainWindow):
 
         area_direita = QFrame()
 
-        area_direita.setObjectName(
-            "area_direita"
-        )
+        area_direita.setObjectName("area_direita")
 
-        layout_direita = QVBoxLayout(
-            area_direita
-        )
+        layout_direita = QVBoxLayout(area_direita)
 
         layout_direita.setContentsMargins(
             0,
@@ -117,9 +97,7 @@ class MainWindow(QMainWindow):
             0,
         )
 
-        layout_direita.setSpacing(
-            0
-        )
+        layout_direita.setSpacing(0)
 
         # ==================================================
         # HEADER
@@ -127,17 +105,11 @@ class MainWindow(QMainWindow):
 
         header = QFrame()
 
-        header.setObjectName(
-            "header"
-        )
+        header.setObjectName("header")
 
-        header.setFixedHeight(
-            72
-        )
+        header.setFixedHeight(72)
 
-        layout_header = QHBoxLayout(
-            header
-        )
+        layout_header = QHBoxLayout(header)
 
         layout_header.setContentsMargins(
             30,
@@ -146,47 +118,27 @@ class MainWindow(QMainWindow):
             0,
         )
 
-        titulo_header = QLabel(
-            "Monitoramento de Segurança"
-        )
+        titulo_header = QLabel("Monitoramento de Segurança")
 
-        titulo_header.setObjectName(
-            "header_titulo"
-        )
+        titulo_header.setObjectName("header_titulo")
 
-        layout_header.addWidget(
-            titulo_header
-        )
+        layout_header.addWidget(titulo_header)
 
         layout_header.addStretch()
 
-        usuario_nome = QLabel(
-            self.administrator.name
-        )
+        usuario_nome = QLabel(self.administrator.name)
 
-        usuario_nome.setObjectName(
-            "usuario_nome"
-        )
+        usuario_nome.setObjectName("usuario_nome")
 
-        layout_header.addWidget(
-            usuario_nome
-        )
+        layout_header.addWidget(usuario_nome)
 
-        perfil = QLabel(
-            self.administrator.profile.capitalize()
-        )
+        perfil = QLabel(self.administrator.profile.capitalize())
 
-        perfil.setObjectName(
-            "usuario_perfil"
-        )
+        perfil.setObjectName("usuario_perfil")
 
-        layout_header.addWidget(
-            perfil
-        )
+        layout_header.addWidget(perfil)
 
-        layout_direita.addWidget(
-            header
-        )
+        layout_direita.addWidget(header)
 
         # ==================================================
         # STACK DE PÁGINAS
@@ -194,31 +146,22 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
 
-        self.stack.setObjectName(
-            "conteudo"
-        )
+        self.stack.setObjectName("conteudo")
 
-        self.dashboard = (
-            DashboardPage()
-        )
+        self.dashboard = DashboardPage()
 
         self.alerts = AlertsPage()
+        self.operations = OperationsPage()
 
-        self.stack.addWidget(
-            self.dashboard
-        )
+        self.stack.addWidget(self.dashboard)
 
-        self.stack.addWidget(
-            self.alerts
-        )
+        self.stack.addWidget(self.alerts)
 
-        layout_direita.addWidget(
-            self.stack
-        )
+        self.stack.addWidget(self.operations)
 
-        layout_principal.addWidget(
-            area_direita
-        )
+        layout_direita.addWidget(self.stack)
+
+        layout_principal.addWidget(area_direita)
 
     # ======================================================
     # NAVEGAÇÃO
@@ -230,37 +173,24 @@ class MainWindow(QMainWindow):
     ) -> None:
 
         if pagina == "dashboard":
-
-            self.stack.setCurrentWidget(
-                self.dashboard
-            )
+            self.stack.setCurrentWidget(self.dashboard)
 
         elif pagina == "epis":
-
-            self.mostrar_placeholder(
-                "Gestão de EPIs"
-            )
+            self.mostrar_placeholder("Gestão de EPIs")
 
         elif pagina == "alertas":
+            self.stack.setCurrentWidget(self.alerts)
 
-            self.stack.setCurrentWidget(
-                self.alerts
-            )
+        elif pagina == "operacoes":
+            self.stack.setCurrentWidget(self.operations)
 
         elif pagina == "relatorios":
-
-            self.mostrar_placeholder(
-                "Relatórios"
-            )
+            self.mostrar_placeholder("Relatórios")
 
         elif pagina == "configuracoes":
-
-            self.mostrar_placeholder(
-                "Configurações"
-            )
+            self.mostrar_placeholder("Configurações")
 
         elif pagina == "sair":
-
             self.logout_requested.emit()
 
     # ======================================================
@@ -274,33 +204,19 @@ class MainWindow(QMainWindow):
 
         pagina = QWidget()
 
-        layout = QVBoxLayout(
-            pagina
-        )
+        layout = QVBoxLayout(pagina)
 
-        layout.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        label = QLabel(
-            titulo
-        )
+        label = QLabel(titulo)
 
-        label.setObjectName(
-            "placeholder"
-        )
+        label.setObjectName("placeholder")
 
-        layout.addWidget(
-            label
-        )
+        layout.addWidget(label)
 
-        self.stack.addWidget(
-            pagina
-        )
+        self.stack.addWidget(pagina)
 
-        self.stack.setCurrentWidget(
-            pagina
-        )
+        self.stack.setCurrentWidget(pagina)
 
     def set_realtime_status(self, message: str, *, state: str) -> None:
         self.dashboard.set_realtime_status(message, state=state)
@@ -309,6 +225,7 @@ class MainWindow(QMainWindow):
     def show_realtime_alert(self, alert: RealtimeAlert) -> None:
         self.dashboard.show_realtime_alert(alert)
         self.alerts.add_alert(alert)
+        self.realtime_alert_received.emit(alert.alert_id)
 
     # ======================================================
     # ESTILOS
@@ -494,6 +411,30 @@ class MainWindow(QMainWindow):
             min-height: 260px;
         }
 
+        #dashboard_resumo {
+            background-color: #F0F5FF;
+            border: 1px solid #D6E4FF;
+            border-radius: 10px;
+        }
+
+        #dashboard_grafico_painel {
+            background-color: white;
+            border: 1px solid #E5EAF1;
+            border-radius: 14px;
+            min-height: 280px;
+        }
+
+        #grafico_titulo {
+            color: #172033;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        #grafico_descricao {
+            color: #98A2B3;
+            font-size: 11px;
+        }
+
         #painel_titulo {
             color: #172033;
             font-size: 16px;
@@ -506,9 +447,13 @@ class MainWindow(QMainWindow):
         }
 
         #indicador_conformidade {
-            color: #16A34A;
-            font-size: 52px;
-            font-weight: 800;
+            color: #027A48;
+            background-color: #ECFDF3;
+            border: 1px solid #ABEFC6;
+            border-radius: 8px;
+            padding: 5px 9px;
+            font-size: 14px;
+            font-weight: 700;
         }
 
         #sem_alertas {
@@ -544,10 +489,170 @@ class MainWindow(QMainWindow):
             padding: 8px;
         }
 
+        #alerts_list_panel, #alert_detail_container {
+            background-color: white;
+            border: 1px solid #E5EAF1;
+            border-radius: 12px;
+        }
+
+        #alert_detail_scroll {
+            background-color: transparent;
+        }
+
+        #alert_detail_header {
+            background-color: #F8FAFC;
+            border: 1px solid #E5EAF1;
+            border-radius: 10px;
+        }
+
+        #alert_detail_title {
+            color: #172033;
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        #alert_detail_status {
+            color: #B54708;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        #alert_detail_status[status="encerrado"] {
+            color: #667085;
+        }
+
+        #alert_detail_status[status="lido"] {
+            color: #027A48;
+        }
+
+        #alert_detail_summary {
+            color: #344054;
+            font-size: 14px;
+        }
+
+        #alert_detail_section {
+            background-color: white;
+            border: 1px solid #EAECF0;
+            border-radius: 9px;
+        }
+
+        #alert_section_title {
+            color: #172033;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        #alert_detail_key {
+            color: #667085;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        #alert_detail_value {
+            color: #172033;
+            font-size: 12px;
+        }
+
+        #alert_muted, #alert_detail_placeholder {
+            color: #98A2B3;
+            font-size: 12px;
+        }
+
+        #alerts_feedback {
+            background-color: #EFF8FF;
+            border: 1px solid #B2DDFF;
+            border-radius: 8px;
+            color: #175CD3;
+            padding: 8px;
+        }
+
+        #alerts_feedback[state="error"] {
+            background-color: #FEF3F2;
+            border-color: #FECDCA;
+            color: #B42318;
+        }
+
+        #alerts_feedback[state="success"] {
+            background-color: #ECFDF3;
+            border-color: #ABEFC6;
+            color: #027A48;
+        }
+
+        #alerts_refresh, #alert_confirm, #alert_close {
+            border: none;
+            border-radius: 8px;
+            padding: 9px 15px;
+            font-weight: 700;
+        }
+
+        #alerts_refresh, #alert_confirm {
+            background-color: #2563EB;
+            color: white;
+        }
+
+        #alert_close {
+            background-color: #B42318;
+            color: white;
+        }
+
+        #alerts_refresh:disabled, #alert_confirm:disabled, #alert_close:disabled {
+            background-color: #D0D5DD;
+            color: #667085;
+        }
+
         #placeholder {
             color: #667085;
             font-size: 28px;
             font-weight: 700;
         }
+
+        #operations_page {
+            background-color: #F7F9FC;
+        }
+
+        #operations_panel {
+            background-color: white;
+            border: 1px solid #E5EAF1;
+            border-radius: 12px;
+        }
+
+        #operations_section_title, #risk_editor_title {
+            color: #172033;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        #operations_feedback {
+            background-color: #EFF8FF;
+            border: 1px solid #B2DDFF;
+            border-radius: 8px;
+            color: #175CD3;
+            padding: 8px;
+        }
+
+        #operations_feedback[state="error"] {
+            background-color: #FEF3F2;
+            border-color: #FECDCA;
+            color: #B42318;
+        }
+
+        #operations_feedback[state="success"] {
+            background-color: #ECFDF3;
+            border-color: #ABEFC6;
+            color: #027A48;
+        }
+
+        #primary_action {
+            background-color: #2563EB;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-weight: 700;
+        }
+
+        #primary_action:disabled {
+            background-color: #D0D5DD;
+            color: #667085;
+        }
         """
-    

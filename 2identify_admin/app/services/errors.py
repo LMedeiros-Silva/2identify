@@ -16,3 +16,19 @@ class ApiUnavailableError(AdminServiceError):
 
 class InvalidApiResponseError(AdminServiceError):
     """A API respondeu com um payload incompatível com o contrato."""
+
+
+class AlertNotFoundError(AdminServiceError):
+    """O alerta solicitado não existe mais."""
+
+
+class AlertStateConflictError(AdminServiceError):
+    """A transição solicitada não é permitida no estado atual."""
+
+
+class ConfigurationNotFoundError(AdminServiceError):
+    """A configuração de operação ou área não existe mais."""
+
+
+class ConfigurationConflictError(AdminServiceError):
+    """A configuração solicitada conflita com dados persistidos."""

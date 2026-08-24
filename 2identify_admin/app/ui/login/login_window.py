@@ -26,9 +26,7 @@ class LoginWindow(QWidget):
 
         self.setMinimumSize(1100, 700)
 
-        self.setStyleSheet(
-            self.estilos()
-        )
+        self.setStyleSheet(self.estilos())
 
         self.criar_interface()
 
@@ -55,15 +53,11 @@ class LoginWindow(QWidget):
 
         painel_esquerdo = QFrame()
 
-        painel_esquerdo.setObjectName(
-            "painel_esquerdo"
-        )
+        painel_esquerdo.setObjectName("painel_esquerdo")
 
         painel_esquerdo.setMinimumWidth(520)
 
-        layout_esquerdo = QVBoxLayout(
-            painel_esquerdo
-        )
+        layout_esquerdo = QVBoxLayout(painel_esquerdo)
 
         layout_esquerdo.setContentsMargins(
             60,
@@ -72,9 +66,7 @@ class LoginWindow(QWidget):
             50,
         )
 
-        layout_esquerdo.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        layout_esquerdo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Logo / nome
 
@@ -82,68 +74,41 @@ class LoginWindow(QWidget):
 
         logo.setObjectName("logo")
 
-        logo.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout_esquerdo.addWidget(
-            logo
-        )
+        layout_esquerdo.addWidget(logo)
 
-        subtitulo_logo = QLabel(
-            "Inteligência para Segurança Industrial"
-        )
+        subtitulo_logo = QLabel("Inteligência para Segurança Industrial")
 
-        subtitulo_logo.setObjectName(
-            "subtitulo_logo"
-        )
+        subtitulo_logo.setObjectName("subtitulo_logo")
 
-        subtitulo_logo.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        subtitulo_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout_esquerdo.addWidget(
-            subtitulo_logo
-        )
+        layout_esquerdo.addWidget(subtitulo_logo)
 
         layout_esquerdo.addStretch()
 
         descricao = QLabel(
-            "Monitoramento inteligente de EPIs,\n"
-            "segurança e conformidade operacional."
+            "Monitoramento inteligente de EPIs,\nsegurança e conformidade operacional."
         )
 
-        descricao.setObjectName(
-            "descricao"
-        )
+        descricao.setObjectName("descricao")
 
-        descricao.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        descricao.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         descricao.setWordWrap(True)
 
-        layout_esquerdo.addWidget(
-            descricao
-        )
+        layout_esquerdo.addWidget(descricao)
 
         layout_esquerdo.addStretch()
 
-        rodape = QLabel(
-            "2Identify • Industrial Safety"
-        )
+        rodape = QLabel("2Identify • Industrial Safety")
 
-        rodape.setObjectName(
-            "rodape"
-        )
+        rodape.setObjectName("rodape")
 
-        rodape.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        rodape.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout_esquerdo.addWidget(
-            rodape
-        )
+        layout_esquerdo.addWidget(rodape)
 
         # ====================================================
         # LADO DIREITO
@@ -151,13 +116,9 @@ class LoginWindow(QWidget):
 
         painel_direito = QFrame()
 
-        painel_direito.setObjectName(
-            "painel_direito"
-        )
+        painel_direito.setObjectName("painel_direito")
 
-        layout_direito = QVBoxLayout(
-            painel_direito
-        )
+        layout_direito = QVBoxLayout(painel_direito)
 
         layout_direito.setContentsMargins(
             80,
@@ -166,137 +127,83 @@ class LoginWindow(QWidget):
             70,
         )
 
-        layout_direito.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
+        layout_direito.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Container do formulário
 
         formulario = QFrame()
 
-        formulario.setObjectName(
-            "formulario"
-        )
+        formulario.setObjectName("formulario")
 
-        formulario.setMaximumWidth(
-            430
-        )
+        formulario.setMaximumWidth(430)
 
-        layout_formulario = QVBoxLayout(
-            formulario
-        )
+        layout_formulario = QVBoxLayout(formulario)
 
-        layout_formulario.setSpacing(
-            18
-        )
+        layout_formulario.setSpacing(18)
 
         # Título
 
-        titulo = QLabel(
-            "Bem-vindo de volta"
-        )
+        titulo = QLabel("Bem-vindo de volta")
 
-        titulo.setObjectName(
-            "titulo"
-        )
+        titulo.setObjectName("titulo")
 
-        layout_formulario.addWidget(
-            titulo
-        )
+        layout_formulario.addWidget(titulo)
 
-        subtitulo = QLabel(
-            "Entre com suas credenciais para acessar o sistema."
-        )
+        subtitulo = QLabel("Entre com suas credenciais para acessar o sistema.")
 
-        subtitulo.setObjectName(
-            "subtitulo"
-        )
+        subtitulo.setObjectName("subtitulo")
 
         subtitulo.setWordWrap(True)
 
-        layout_formulario.addWidget(
-            subtitulo
-        )
+        layout_formulario.addWidget(subtitulo)
 
-        layout_formulario.addSpacing(
-            18
-        )
+        layout_formulario.addSpacing(18)
 
         # ----------------------------------------------------
         # USUÁRIO
         # ----------------------------------------------------
 
-        label_usuario = QLabel(
-            "Usuário"
-        )
+        label_usuario = QLabel("Usuário")
 
-        label_usuario.setObjectName(
-            "label_campo"
-        )
+        label_usuario.setObjectName("label_campo")
 
-        layout_formulario.addWidget(
-            label_usuario
-        )
+        layout_formulario.addWidget(label_usuario)
 
         self.campo_usuario = QLineEdit()
 
-        self.campo_usuario.setPlaceholderText(
-            "Digite seu usuário"
-        )
+        self.campo_usuario.setPlaceholderText("Digite seu usuário")
 
-        self.campo_usuario.setMinimumHeight(
-            52
-        )
+        self.campo_usuario.setMinimumHeight(52)
 
         self.campo_usuario.setMaxLength(100)
 
-        self.campo_usuario.returnPressed.connect(
-            self.fazer_login
-        )
+        self.campo_usuario.returnPressed.connect(self.fazer_login)
 
-        layout_formulario.addWidget(
-            self.campo_usuario
-        )
+        layout_formulario.addWidget(self.campo_usuario)
 
         # ----------------------------------------------------
         # SENHA
         # ----------------------------------------------------
 
-        label_senha = QLabel(
-            "Senha"
-        )
+        label_senha = QLabel("Senha")
 
-        label_senha.setObjectName(
-            "label_campo"
-        )
+        label_senha.setObjectName("label_campo")
 
-        layout_formulario.addWidget(
-            label_senha
-        )
+        layout_formulario.addWidget(label_senha)
 
         self.campo_senha = QLineEdit()
 
-        self.campo_senha.setPlaceholderText(
-            "Digite sua senha"
-        )
+        self.campo_senha.setPlaceholderText("Digite sua senha")
 
-        self.campo_senha.setEchoMode(
-            QLineEdit.EchoMode.Password
-        )
+        self.campo_senha.setEchoMode(QLineEdit.EchoMode.Password)
 
-        self.campo_senha.setMinimumHeight(
-            52
-        )
+        self.campo_senha.setMinimumHeight(52)
 
         self.campo_senha.setMaxLength(1024)
 
-        self.campo_senha.returnPressed.connect(
-            self.fazer_login
-        )
+        self.campo_senha.returnPressed.connect(self.fazer_login)
 
-        layout_formulario.addWidget(
-            self.campo_senha
-        )
+        layout_formulario.addWidget(self.campo_senha)
 
         # ----------------------------------------------------
         # MENSAGEM DE ERRO
@@ -304,51 +211,31 @@ class LoginWindow(QWidget):
 
         self.mensagem_erro = QLabel()
 
-        self.mensagem_erro.setObjectName(
-            "mensagem_erro"
-        )
+        self.mensagem_erro.setObjectName("mensagem_erro")
 
-        self.mensagem_erro.setWordWrap(
-            True
-        )
+        self.mensagem_erro.setWordWrap(True)
 
         self.mensagem_erro.hide()
 
-        layout_formulario.addWidget(
-            self.mensagem_erro
-        )
+        layout_formulario.addWidget(self.mensagem_erro)
 
         # ----------------------------------------------------
         # BOTÃO
         # ----------------------------------------------------
 
-        self.botao_entrar = QPushButton(
-            "Entrar"
-        )
+        self.botao_entrar = QPushButton("Entrar")
 
-        self.botao_entrar.setObjectName(
-            "botao_entrar"
-        )
+        self.botao_entrar.setObjectName("botao_entrar")
 
-        self.botao_entrar.setMinimumHeight(
-            54
-        )
+        self.botao_entrar.setMinimumHeight(54)
 
-        self.botao_entrar.setCursor(
-            Qt.CursorShape.PointingHandCursor
-        )
+        self.botao_entrar.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        self.botao_entrar.clicked.connect(
-            self.fazer_login
-        )
+        self.botao_entrar.clicked.connect(self.fazer_login)
 
-        layout_formulario.addWidget(
-            self.botao_entrar
-        )
+        layout_formulario.addWidget(self.botao_entrar)
 
-        layout_direito.addWidget(
-            formulario
-        )
+        layout_direito.addWidget(formulario)
 
         layout_principal.addWidget(
             painel_esquerdo,
@@ -366,31 +253,21 @@ class LoginWindow(QWidget):
 
     def fazer_login(self) -> None:
 
-        username = (
-            self.campo_usuario
-            .text()
-            .strip()
-        )
+        username = self.campo_usuario.text().strip()
 
         senha = self.campo_senha.text()
 
         self.mensagem_erro.hide()
 
         if not username:
-
-            self.mostrar_erro(
-                "Digite seu usuário."
-            )
+            self.mostrar_erro("Digite seu usuário.")
 
             self.campo_usuario.setFocus()
 
             return
 
         if not senha:
-
-            self.mostrar_erro(
-                "Digite sua senha."
-            )
+            self.mostrar_erro("Digite sua senha.")
 
             self.campo_senha.setFocus()
 
@@ -412,9 +289,7 @@ class LoginWindow(QWidget):
         mensagem: str,
     ) -> None:
 
-        self.mensagem_erro.setText(
-            mensagem
-        )
+        self.mensagem_erro.setText(mensagem)
 
         self.mensagem_erro.show()
 
@@ -438,6 +313,7 @@ class LoginWindow(QWidget):
             self.mensagem_erro.clear()
             self.mensagem_erro.hide()
         self.campo_usuario.setFocus()
+
     # ========================================================
     # ESTILOS
     # ========================================================
@@ -554,4 +430,3 @@ class LoginWindow(QWidget):
             font-size: 13px;
         }
         """
-    

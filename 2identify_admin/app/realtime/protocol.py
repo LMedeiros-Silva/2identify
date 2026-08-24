@@ -29,9 +29,7 @@ from app.domain.realtime import (
 MAX_REALTIME_MESSAGE_BYTES = 64 * 1024
 _MAX_CLOCK_SKEW = timedelta(minutes=5)
 _DATA_URI = re.compile(r"(?:^|\s)data:[^,\s]+,", re.IGNORECASE)
-_LONG_BASE64 = re.compile(
-    r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{80,}={0,2}(?!\S)"
-)
+_LONG_BASE64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{80,}={0,2}(?!\S)")
 _LOCAL_PATH = re.compile(
     r"(?:file://|(?:^|\s)[a-z]:[\\/]|\\\\[^\\\s]+[\\/]|"
     r"(?:^|\s)/(?:home|users|var|tmp|etc|opt)/)",
@@ -62,7 +60,7 @@ class _StrictModel(BaseModel):
 
 
 class _ReadyPayload(_StrictModel):
-    status: Literal["awaiting_alert_ingestion"]
+    status: Literal["ready", "awaiting_alert_ingestion"]
 
 
 class _HeartbeatPayload(_StrictModel):
@@ -72,6 +70,13 @@ class _HeartbeatPayload(_StrictModel):
 class _AlertPayload(_StrictModel):
     alert_id: PositiveInt
     occurrence_id: PositiveInt
+    category: Literal[
+        "ppe",
+        "ergonomics",
+        "monitoring",
+        "risk_area",
+        "safety",
+    ] = "safety"
     level: Literal["warning", "critical"]
     status: Literal["nao_lido", "lido", "encerrado"]
     summary: str = Field(min_length=1, max_length=500)
@@ -81,25 +86,26 @@ class _AlertPayload(_StrictModel):
     @field_validator("summary")
     @classmethod
     def reject_sensitive_or_non_display_content(cls, value: str) -> str:
-        if any(
-            unicodedata.category(character).startswith("C") for character in value
-        ):
+        if any(unicodedata.category(character).startswith("C") for character in value):
             raise ValueError("summary contém caractere de controle")
         normalized = re.sub(r"\s+", " ", value.strip())
         if not normalized or normalized != value:
             raise ValueError("summary deve estar normalizado")
-        if any(
-            pattern.search(normalized)
-            for pattern in (
-                _DATA_URI,
-                _LONG_BASE64,
-                _LOCAL_PATH,
-                _EMAIL,
-                _CPF,
-                _PHONE,
-                _LABELED_PII,
+        if (
+            any(
+                pattern.search(normalized)
+                for pattern in (
+                    _DATA_URI,
+                    _LONG_BASE64,
+                    _LOCAL_PATH,
+                    _EMAIL,
+                    _CPF,
+                    _PHONE,
+                    _LABELED_PII,
+                )
             )
-        ) or ";base64," in normalized.casefold():
+            or ";base64," in normalized.casefold()
+        ):
             raise ValueError("summary contém conteúdo não permitido")
         return normalized
 
@@ -180,6 +186,7 @@ def parse_realtime_event(raw_message: str) -> RealtimeEvent:
         occurred_at=occurred_at,
         alert_id=envelope.payload.alert_id,
         occurrence_id=envelope.payload.occurrence_id,
+        category=envelope.payload.category,
         level=envelope.payload.level,
         status=envelope.payload.status,
         summary=envelope.payload.summary,

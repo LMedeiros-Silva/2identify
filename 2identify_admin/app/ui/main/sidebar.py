@@ -49,13 +49,9 @@ class Sidebar(QFrame):
 
         layout.addWidget(logo)
 
-        subtitulo = QLabel(
-            "Industrial Safety"
-        )
+        subtitulo = QLabel("Industrial Safety")
 
-        subtitulo.setObjectName(
-            "sidebar_subtitulo"
-        )
+        subtitulo.setObjectName("sidebar_subtitulo")
 
         layout.addWidget(subtitulo)
 
@@ -75,6 +71,12 @@ class Sidebar(QFrame):
             layout,
             "epis",
             "Gestão de EPIs",
+        )
+
+        self.adicionar_botao(
+            layout,
+            "operacoes",
+            "Operações e Áreas",
         )
 
         self.adicionar_botao(
@@ -107,9 +109,7 @@ class Sidebar(QFrame):
             "Sair",
         )
 
-        self.selecionar(
-            "dashboard"
-        )
+        self.selecionar("dashboard")
 
     def adicionar_botao(
         self,
@@ -118,33 +118,19 @@ class Sidebar(QFrame):
         texto: str,
     ) -> None:
 
-        botao = QPushButton(
-            texto
-        )
+        botao = QPushButton(texto)
 
-        botao.setObjectName(
-            "menu_botao"
-        )
+        botao.setObjectName("menu_botao")
 
-        botao.setCursor(
-            Qt.CursorShape.PointingHandCursor
-        )
+        botao.setCursor(Qt.CursorShape.PointingHandCursor)
 
         botao.setCheckable(True)
 
-        botao.clicked.connect(
-            lambda: self.selecionar(
-                identificador
-            )
-        )
+        botao.clicked.connect(lambda: self.selecionar(identificador))
 
-        layout.addWidget(
-            botao
-        )
+        layout.addWidget(botao)
 
-        self.botoes[
-            identificador
-        ] = botao
+        self.botoes[identificador] = botao
 
     def selecionar(
         self,
@@ -152,12 +138,6 @@ class Sidebar(QFrame):
     ) -> None:
 
         for nome, botao in self.botoes.items():
+            botao.setChecked(nome == identificador)
 
-            botao.setChecked(
-                nome == identificador
-            )
-
-        self.pagina_selecionada.emit(
-            identificador
-        )
-        
+        self.pagina_selecionada.emit(identificador)

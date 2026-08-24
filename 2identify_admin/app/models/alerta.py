@@ -61,6 +61,19 @@ class Alerta(Base):
         nullable=True,
     )
 
+    confirmado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    confirmado_por: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "usuarios.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+
     encerrado_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -82,6 +95,11 @@ class Alerta(Base):
     usuario_encerramento = relationship(
         "Usuario",
         foreign_keys=[encerrado_por],
+    )
+
+    usuario_confirmacao = relationship(
+        "Usuario",
+        foreign_keys=[confirmado_por],
     )
 
     def __repr__(self) -> str:

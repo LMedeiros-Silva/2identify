@@ -1,6 +1,7 @@
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSplitter
+from PySide6.QtGui import QImage
+from PySide6.QtWidgets import QDialog, QFrame, QLabel, QPushButton, QSplitter
 
 from app.domain.operation import (
     ManualReferenceKind,
@@ -37,9 +38,7 @@ def test_operations_page_starts_without_inventing_operational_data(qtbot) -> Non
     assert page.findChild(QLabel, "operationsStateTitle").text() == (
         "Aguardando fonte de operações"
     )
-    assert page.findChild(QLabel, "operationDetailsEmptyTitle").text() == (
-        "Selecione uma operação"
-    )
+    assert page.findChild(QLabel, "operationDetailsEmptyTitle").text() == ("Selecione uma operação")
     assert page.findChildren(QPushButton, "operationListButton") == []
 
 
@@ -258,9 +257,7 @@ def test_operations_page_presents_and_emits_associated_risk_area(qtbot) -> None:
 
     assert page.displayed_risk_area is risk_area
     assert page.findChild(QLabel, "operationRiskAreaStatus").text() == "DELIMITADA"
-    assert page.findChild(QLabel, "operationRiskAreaName").text() == (
-        "Linha de Produção A"
-    )
+    assert page.findChild(QLabel, "operationRiskAreaName").text() == ("Linha de Produção A")
     assert risk_area_button.isEnabled()
     with qtbot.waitSignal(page.risk_area_requested, timeout=1_000) as emitted:
         qtbot.mouseClick(risk_area_button, Qt.MouseButton.LeftButton)
@@ -282,13 +279,36 @@ def test_operations_page_visualizes_configured_risk_area(qtbot) -> None:
     page.show_operation_details(operation)
 
     page.show_risk_area(risk_area)
+    page.show_risk_area_snapshot_loading(risk_area.risk_area_id)
+    page.show_risk_area_snapshot(
+        risk_area.risk_area_id,
+        QImage(1280, 720, QImage.Format.Format_RGB888),
+    )
 
     notice = page.findChild(QLabel, "operationRiskAreaNotice")
     preview = page.findChild(CameraFrameView, "operationRiskAreaPreview")
-    assert "zona calibrada" in notice.text()
+    assert "Imagem congelada" in notice.text()
     assert notice.isVisibleTo(page)
     assert preview.isVisibleTo(page)
+    assert preview.minimumHeight() == 300
+    assert preview.has_frame
+    assert preview.aspect_ratio_mode == Qt.AspectRatioMode.KeepAspectRatio
     assert preview.risk_zone_labels == ("Linha de Produção A",)
+
+    expand_button = page.findChild(QPushButton, "operationRiskAreaExpandButton")
+    assert expand_button.isEnabled()
+    qtbot.mouseClick(expand_button, Qt.MouseButton.LeftButton)
+    dialog = page.findChild(QDialog, "expandedCameraDialog")
+    expanded = dialog.findChild(CameraFrameView, "expandedRiskAreaPreview")
+    assert dialog.isVisible()
+    assert dialog.isFullScreen()
+    assert expanded.has_frame
+    assert expanded.aspect_ratio_mode == Qt.AspectRatioMode.KeepAspectRatio
+    assert expanded.risk_zone_labels == ("Linha de Produção A",)
+
+    close_button = dialog.findChild(QPushButton, "expandedCameraCloseButton")
+    qtbot.mouseClick(close_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: expand_button.text() == "EXPANDIR IMAGEM")
 
 
 def test_operations_page_does_not_invent_missing_risk_geometry(qtbot) -> None:
@@ -301,13 +321,14 @@ def test_operations_page_does_not_invent_missing_risk_geometry(qtbot) -> None:
 
     risk_area_button = page.findChild(QPushButton, "operationRiskAreaButton")
     assert not risk_area_button.isEnabled()
-    assert page.findChild(QLabel, "operationRiskAreaStatus").text() == (
-        "SEM GEOMETRIA"
+    assert page.findChild(QLabel, "operationRiskAreaStatus").text() == ("SEM GEOMETRIA")
+    assert (
+        "não há um polígono"
+        in page.findChild(
+            QLabel,
+            "operationRiskAreaNotice",
+        ).text()
     )
-    assert "não há um polígono" in page.findChild(
-        QLabel,
-        "operationRiskAreaNotice",
-    ).text()
 
 
 def test_operations_page_marks_uncalibrated_geometry_as_demonstrative(qtbot) -> None:
@@ -318,14 +339,15 @@ def test_operations_page_marks_uncalibrated_geometry_as_demonstrative(qtbot) -> 
     page.set_operations((operation,))
     page.show_operation_details(operation)
 
-    assert page.findChild(QLabel, "operationRiskAreaStatus").text() == (
-        "DEMONSTRAÇÃO"
-    )
+    assert page.findChild(QLabel, "operationRiskAreaStatus").text() == ("DEMONSTRAÇÃO")
     page.show_risk_area(risk_area)
-    assert "não calibrada" in page.findChild(
-        QLabel,
-        "operationRiskAreaNotice",
-    ).text()
+    assert (
+        "não calibrada"
+        in page.findChild(
+            QLabel,
+            "operationRiskAreaNotice",
+        ).text()
+    )
 
 
 def test_operations_page_requests_preparation_without_claiming_work_started(

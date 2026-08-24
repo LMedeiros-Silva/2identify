@@ -7,13 +7,20 @@ from uuid import UUID
 
 RealtimeAlertLevel = Literal["warning", "critical"]
 RealtimeAlertStatus = Literal["nao_lido", "lido", "encerrado"]
+RealtimeAlertCategory = Literal[
+    "ppe",
+    "ergonomics",
+    "monitoring",
+    "risk_area",
+    "safety",
+]
 
 
 @dataclass(frozen=True, slots=True)
 class ConnectionReadyEvent:
     event_id: UUID
     occurred_at: datetime
-    status: Literal["awaiting_alert_ingestion"]
+    status: Literal["ready", "awaiting_alert_ingestion"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +40,7 @@ class RealtimeAlert:
     summary: str
     detected_at: datetime
     camera_id: int | None
+    category: RealtimeAlertCategory = "safety"
 
 
 RealtimeEvent = ConnectionReadyEvent | HeartbeatEvent | RealtimeAlert
@@ -42,6 +50,7 @@ __all__ = [
     "ConnectionReadyEvent",
     "HeartbeatEvent",
     "RealtimeAlert",
+    "RealtimeAlertCategory",
     "RealtimeAlertLevel",
     "RealtimeAlertStatus",
     "RealtimeEvent",

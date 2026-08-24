@@ -37,8 +37,7 @@ class AdminSessionContext:
         session = AdminSession(
             administrator=authentication.administrator,
             access_token=authentication.access_token,
-            expires_at=datetime.now(UTC)
-            + timedelta(seconds=authentication.expires_in),
+            expires_at=datetime.now(UTC) + timedelta(seconds=authentication.expires_in),
         )
         with self._lock:
             self._session = session

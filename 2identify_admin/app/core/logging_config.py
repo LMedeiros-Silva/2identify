@@ -20,9 +20,7 @@ class _SensitiveDataFilter(logging.Filter):
 def configure_logging(*, log_directory: Path, level: str) -> None:
     log_directory.mkdir(parents=True, exist_ok=True)
 
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     sensitive_filter = _SensitiveDataFilter()
 
     file_handler = RotatingFileHandler(

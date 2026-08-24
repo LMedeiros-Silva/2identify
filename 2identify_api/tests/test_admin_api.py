@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     Engine,
     Integer,
     MetaData,
@@ -94,11 +95,20 @@ def isolated_admin_api() -> Iterator[
             Column("id", Integer, primary_key=True),
             Column("entregue", Boolean, nullable=False),
         ),
+        "ocorrencias": Table(
+            "ocorrencias",
+            dashboard_metadata,
+            Column("id", Integer, primary_key=True),
+            Column("tipo", String(100), nullable=False),
+        ),
         "alertas": Table(
             "alertas",
             dashboard_metadata,
             Column("id", Integer, primary_key=True),
+            Column("ocorrencia_id", Integer, nullable=False),
             Column("nivel", String(30), nullable=False),
+            Column("status", String(30), nullable=False),
+            Column("criado_em", DateTime(timezone=True), nullable=False),
         ),
     }
     dashboard_metadata.create_all(engine)
@@ -344,6 +354,26 @@ def test_dashboard_returns_zero_safe_metrics(isolated_admin_api) -> None:
         "ppe_delivery_percentage": 0.0,
         "alerts": 0,
         "critical_alerts": 0,
+        "alert_status": {
+            "new": 0,
+            "confirmed": 0,
+            "closed": 0,
+            "other": 0,
+        },
+        "alert_categories": {
+            "ppe": 0,
+            "ergonomics": 0,
+            "risk_area": 0,
+            "monitoring": 0,
+            "other": 0,
+        },
+        "alert_trend": [
+            {
+                "day": (datetime.now(UTC).date() - timedelta(days=offset)).isoformat(),
+                "alerts": 0,
+            }
+            for offset in range(6, -1, -1)
+        ],
     }
     assert datetime.fromisoformat(payload["generated_at"]).tzinfo is not None
     assert response.headers["cache-control"] == "no-store"
@@ -362,8 +392,36 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
             [{"entregue": True}, {"entregue": True}, {"entregue": False}],
         )
         connection.execute(
+            tables["ocorrencias"].insert(),
+            [
+                {"id": 1, "tipo": "ppe_absent"},
+                {"id": 2, "tipo": "person_in_risk_area"},
+                {"id": 3, "tipo": "ergonomic_risk"},
+            ],
+        )
+        generated_at = datetime.now(UTC)
+        connection.execute(
             tables["alertas"].insert(),
-            [{"nivel": "critico"}, {"nivel": " CRITICO "}, {"nivel": "aviso"}],
+            [
+                {
+                    "ocorrencia_id": 1,
+                    "nivel": "critico",
+                    "status": "nao_lido",
+                    "criado_em": generated_at - timedelta(days=2),
+                },
+                {
+                    "ocorrencia_id": 2,
+                    "nivel": " CRITICO ",
+                    "status": "lido",
+                    "criado_em": generated_at - timedelta(days=1),
+                },
+                {
+                    "ocorrencia_id": 3,
+                    "nivel": "aviso",
+                    "status": "encerrado",
+                    "criado_em": generated_at,
+                },
+            ],
         )
 
     with TestClient(application) as client:
@@ -381,6 +439,21 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
     assert payload["ppe_delivery_percentage"] == 66.7
     assert payload["alerts"] == 3
     assert payload["critical_alerts"] == 2
+    assert payload["alert_status"] == {
+        "new": 1,
+        "confirmed": 1,
+        "closed": 1,
+        "other": 0,
+    }
+    assert payload["alert_categories"] == {
+        "ppe": 1,
+        "ergonomics": 1,
+        "risk_area": 1,
+        "monitoring": 0,
+        "other": 0,
+    }
+    assert len(payload["alert_trend"]) == 7
+    assert sum(item["alerts"] for item in payload["alert_trend"]) == 3
 
 
 def test_admin_login_database_failure_is_sanitized(isolated_admin_api) -> None:

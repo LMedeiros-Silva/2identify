@@ -24,9 +24,7 @@ _LOCAL_PATH_PATTERN = re.compile(
 )
 _EMAIL_PATTERN = re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}\b")
 _CPF_PATTERN = re.compile(r"(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)")
-_PHONE_PATTERN = re.compile(
-    r"(?<!\d)(?:\+?55[\s.-]*)?\(?\d{2}\)?[\s.-]*9?\d{4}[\s.-]*\d{4}(?!\d)"
-)
+_PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]*)?\(?\d{2}\)?[\s.-]*9?\d{4}[\s.-]*\d{4}(?!\d)")
 _PII_LABEL_PATTERN = re.compile(
     r"(?i)\b(?:cpf|e-?mail|telefone|celular|phone|matr[ií]cula|"
     r"nome\s+(?:do|da)(?:\s+[^\s:]+){0,4})\s*:"
@@ -36,7 +34,7 @@ _PII_LABEL_PATTERN = re.compile(
 class StreamReadyPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    status: Literal["awaiting_alert_ingestion"]
+    status: Literal["ready"]
 
 
 class StreamHeartbeatPayload(BaseModel):
@@ -44,12 +42,19 @@ class StreamHeartbeatPayload(BaseModel):
 
 
 class AlertCreatedPayload(BaseModel):
-    """Future committed-alert payload; no producer exists in this stage."""
+    """Persisted alert delivered to authenticated administrators."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     alert_id: Annotated[int, Field(gt=0)]
     occurrence_id: Annotated[int, Field(gt=0)]
+    category: Literal[
+        "ppe",
+        "ergonomics",
+        "monitoring",
+        "risk_area",
+        "safety",
+    ] = "safety"
     level: Literal["warning", "critical"]
     status: Literal["nao_lido", "lido", "encerrado"]
     summary: Annotated[str, Field(min_length=1, max_length=500)]
@@ -59,26 +64,7 @@ class AlertCreatedPayload(BaseModel):
     @field_validator("summary")
     @classmethod
     def normalize_summary(cls, value: str) -> str:
-        if any(unicodedata.category(character).startswith("C") for character in value):
-            raise ValueError("summary contém caracteres de controle")
-        normalized = re.sub(r"\s+", " ", value.strip())
-        if not normalized:
-            raise ValueError("summary não pode ser vazio")
-        if (
-            _DATA_URI_PATTERN.search(normalized)
-            or ";base64," in normalized.casefold()
-            or _BASE64_BLOB_PATTERN.search(normalized)
-            or _LOCAL_PATH_PATTERN.search(normalized)
-        ):
-            raise ValueError("summary não pode conter imagem ou caminho local")
-        if (
-            _EMAIL_PATTERN.search(normalized)
-            or _CPF_PATTERN.search(normalized)
-            or _PHONE_PATTERN.search(normalized)
-            or _PII_LABEL_PATTERN.search(normalized)
-        ):
-            raise ValueError("summary não pode conter PII")
-        return normalized
+        return normalize_public_summary(value)
 
     @field_validator("detected_at")
     @classmethod
@@ -118,10 +104,9 @@ class RealtimeEventEnvelope(BaseModel):
         }[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("payload incompatível com event_type")
-        if (
-            isinstance(self.payload, AlertCreatedPayload)
-            and self.payload.detected_at > self.occurred_at + timedelta(minutes=5)
-        ):
+        if isinstance(
+            self.payload, AlertCreatedPayload
+        ) and self.payload.detected_at > self.occurred_at + timedelta(minutes=5):
             raise ValueError("detected_at não pode exceder occurred_at em mais de 5 minutos")
         return self
 
@@ -136,7 +121,7 @@ def stream_ready_event() -> RealtimeEventEnvelope:
 
     return RealtimeEventEnvelope(
         event_type="connection.ready",
-        payload=StreamReadyPayload(status="awaiting_alert_ingestion"),
+        payload=StreamReadyPayload(status="ready"),
     )
 
 
@@ -149,6 +134,31 @@ def stream_heartbeat_event() -> RealtimeEventEnvelope:
     )
 
 
+def normalize_public_summary(value: str) -> str:
+    """Normalize an alert summary and reject content unsafe for Admin broadcast."""
+
+    if any(unicodedata.category(character).startswith("C") for character in value):
+        raise ValueError("summary contém caracteres de controle")
+    normalized = re.sub(r"\s+", " ", value.strip())
+    if not normalized:
+        raise ValueError("summary não pode ser vazio")
+    if (
+        _DATA_URI_PATTERN.search(normalized)
+        or ";base64," in normalized.casefold()
+        or _BASE64_BLOB_PATTERN.search(normalized)
+        or _LOCAL_PATH_PATTERN.search(normalized)
+    ):
+        raise ValueError("summary não pode conter imagem ou caminho local")
+    if (
+        _EMAIL_PATTERN.search(normalized)
+        or _CPF_PATTERN.search(normalized)
+        or _PHONE_PATTERN.search(normalized)
+        or _PII_LABEL_PATTERN.search(normalized)
+    ):
+        raise ValueError("summary não pode conter PII")
+    return normalized
+
+
 __all__ = [
     "AlertCreatedPayload",
     "RealtimeEventEnvelope",
@@ -158,4 +168,5 @@ __all__ = [
     "StreamReadyPayload",
     "stream_heartbeat_event",
     "stream_ready_event",
+    "normalize_public_summary",
 ]

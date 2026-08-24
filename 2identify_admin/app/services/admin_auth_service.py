@@ -21,14 +21,10 @@ class AdminAuthService:
 
     def authenticate(self, credentials: AdminCredentials) -> AdminAuthentication:
         authentication = self._provider.login(credentials)
-        current = self._provider.get_current_administrator(
-            authentication.access_token
-        )
+        current = self._provider.get_current_administrator(authentication.access_token)
 
         if current.id != authentication.administrator.id:
-            raise InvalidApiResponseError(
-                "A identidade retornada pela API é inconsistente."
-            )
+            raise InvalidApiResponseError("A identidade retornada pela API é inconsistente.")
 
         return AdminAuthentication(
             administrator=current,
@@ -45,7 +41,5 @@ class AdminAuthService:
             current.id != session.administrator.id
             or current.profile != session.administrator.profile
         ):
-            raise InvalidApiResponseError(
-                "A identidade administrativa revalidada é inconsistente."
-            )
+            raise InvalidApiResponseError("A identidade administrativa revalidada é inconsistente.")
         return current

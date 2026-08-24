@@ -129,8 +129,7 @@ class Settings(BaseSettings):
             )
         if self.realtime_max_connections_per_admin > self.realtime_max_connections:
             raise ValueError(
-                "REALTIME_MAX_CONNECTIONS_PER_ADMIN não pode exceder "
-                "REALTIME_MAX_CONNECTIONS"
+                "REALTIME_MAX_CONNECTIONS_PER_ADMIN não pode exceder REALTIME_MAX_CONNECTIONS"
             )
         return self
 

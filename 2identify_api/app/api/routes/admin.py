@@ -17,9 +17,7 @@ router = APIRouter(prefix="/admin", tags=["administration"])
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 _PROTECTED_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_401_UNAUTHORIZED: {"description": "Token administrativo inválido"},
-    status.HTTP_503_SERVICE_UNAVAILABLE: {
-        "description": "Serviço administrativo indisponível"
-    },
+    status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Serviço administrativo indisponível"},
 }
 
 
@@ -79,5 +77,22 @@ def get_admin_dashboard_summary(
         ppe_delivery_percentage=summary.ppe_delivery_percentage,
         alerts=summary.alerts,
         critical_alerts=summary.critical_alerts,
+        alert_status={
+            "new": summary.new_alerts,
+            "confirmed": summary.confirmed_alerts,
+            "closed": summary.closed_alerts,
+            "other": summary.other_status_alerts,
+        },
+        alert_categories={
+            "ppe": summary.ppe_alerts,
+            "ergonomics": summary.ergonomics_alerts,
+            "risk_area": summary.risk_area_alerts,
+            "monitoring": summary.monitoring_alerts,
+            "other": summary.other_category_alerts,
+        },
+        alert_trend=tuple(
+            {"day": day, "alerts": alerts}
+            for day, alerts in summary.daily_alerts
+        ),
         generated_at=summary.generated_at,
     )

@@ -472,7 +472,7 @@ def test_authenticated_connection_emits_ready_and_heartbeat_and_is_removed(
             assert ready.occurred_at.tzinfo is not None
             assert isinstance(ready.event_id, UUID)
             assert ready.payload == StreamReadyPayload(
-                status="awaiting_alert_ingestion"
+                status="ready"
             )
             assert broker.subscriber_count == 1
 

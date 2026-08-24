@@ -117,9 +117,7 @@ class WebSocketEventSink:
             if self._closed:
                 return
             self._closed = True
-            close_task = asyncio.create_task(
-                self._websocket.close(code=code, reason=reason)
-            )
+            close_task = asyncio.create_task(self._websocket.close(code=code, reason=reason))
             try:
                 done, _pending = await asyncio.wait(
                     {close_task},
@@ -178,22 +176,16 @@ class InMemoryRealtimeEventBroker:
         if owner_id is not None and owner_id <= 0:
             raise ValueError("owner_id deve ser positivo")
         subscription_id = uuid4()
-        queue: asyncio.Queue[RealtimeEventEnvelope] = asyncio.Queue(
-            maxsize=self._queue_capacity
-        )
+        queue: asyncio.Queue[RealtimeEventEnvelope] = asyncio.Queue(maxsize=self._queue_capacity)
         async with self._lock:
             if self._closed:
                 raise BrokerClosedError("broker em encerramento")
             if len(self._subscribers) >= self._max_connections:
                 raise BrokerCapacityError("capacidade global de conexões atingida")
             owner_connections = sum(
-                subscriber.owner_id == owner_id
-                for subscriber in self._subscribers.values()
+                subscriber.owner_id == owner_id for subscriber in self._subscribers.values()
             )
-            if (
-                owner_id is not None
-                and owner_connections >= self._max_connections_per_owner
-            ):
+            if owner_id is not None and owner_connections >= self._max_connections_per_owner:
                 raise BrokerCapacityError("capacidade de conexões da conta atingida")
             writer_task = asyncio.create_task(
                 self._writer_loop(subscription_id, sink, queue),

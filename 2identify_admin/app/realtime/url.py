@@ -21,9 +21,7 @@ def derive_admin_websocket_url(api_url: str) -> str:
 
     websocket_scheme = "wss" if parsed.scheme == "https" else "ws"
     if websocket_scheme == "ws" and not _is_loopback(parsed.hostname):
-        raise InvalidWebSocketUrlError(
-            "WebSocket sem TLS é permitido somente em loopback."
-        )
+        raise InvalidWebSocketUrlError("WebSocket sem TLS é permitido somente em loopback.")
 
     base_path = parsed.path.rstrip("/")
     endpoint_path = f"{base_path}/ws/admin/alerts"

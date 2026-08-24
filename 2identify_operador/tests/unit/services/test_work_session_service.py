@@ -39,7 +39,7 @@ def _operation() -> Operation:
             PpeRequirement(1, "Capacete", "capacete"),
             PpeRequirement(2, "Botas", "bota"),
         ),
-        risk_area=RiskAreaReference(7, "Linha A"),
+        risk_area=RiskAreaReference(7, "Linha A", camera_id=3, camera_name="Webcam USB"),
     )
 
 
@@ -72,6 +72,7 @@ def test_work_session_service_starts_and_completes_one_local_session() -> None:
     assert active.session_id == _SESSION_ID
     assert active.operator_id == 15
     assert active.operation_id == 41
+    assert active.camera_id == 3
     assert active.risk_area_id == 7
     assert active.verified_ppe_ids == (1, 2)
     assert active.status is WorkSessionStatus.ACTIVE

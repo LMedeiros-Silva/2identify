@@ -36,8 +36,7 @@ async def request_validation_error_handler(
     if not isinstance(error, RequestValidationError):
         raise error
     safe_errors = [
-        {key: item[key] for key in ("type", "loc", "msg") if key in item}
-        for item in error.errors()
+        {key: item[key] for key in ("type", "loc", "msg") if key in item} for item in error.errors()
     ]
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

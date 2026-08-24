@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +60,55 @@ class AdminAuthentication:
 
 
 @dataclass(frozen=True, slots=True)
+class DashboardAlertStatus:
+    new: int = 0
+    confirmed: int = 0
+    closed: int = 0
+    other: int = 0
+
+    def __post_init__(self) -> None:
+        if any(value < 0 for value in self.values):
+            raise ValueError("As contagens por status não podem ser negativas.")
+
+    @property
+    def values(self) -> tuple[int, ...]:
+        return (self.new, self.confirmed, self.closed, self.other)
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardAlertCategories:
+    ppe: int = 0
+    ergonomics: int = 0
+    risk_area: int = 0
+    monitoring: int = 0
+    other: int = 0
+
+    def __post_init__(self) -> None:
+        if any(value < 0 for value in self.values):
+            raise ValueError("As contagens por categoria não podem ser negativas.")
+
+    @property
+    def values(self) -> tuple[int, ...]:
+        return (
+            self.ppe,
+            self.ergonomics,
+            self.risk_area,
+            self.monitoring,
+            self.other,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardAlertTrendPoint:
+    day: date
+    alerts: int
+
+    def __post_init__(self) -> None:
+        if self.alerts < 0:
+            raise ValueError("A contagem diária de alertas não pode ser negativa.")
+
+
+@dataclass(frozen=True, slots=True)
 class DashboardSummary:
     active_employees: int
     ppe_assignments: int
@@ -68,6 +117,11 @@ class DashboardSummary:
     alerts: int
     critical_alerts: int
     generated_at: datetime
+    alert_status: DashboardAlertStatus = field(default_factory=DashboardAlertStatus)
+    alert_categories: DashboardAlertCategories = field(
+        default_factory=DashboardAlertCategories
+    )
+    alert_trend: tuple[DashboardAlertTrendPoint, ...] = ()
 
     def __post_init__(self) -> None:
         counts = (
@@ -87,3 +141,18 @@ class DashboardSummary:
             raise ValueError("O percentual de entrega de EPIs é inválido.")
         if self.generated_at.tzinfo is None:
             raise ValueError("generated_at deve conter fuso horário.")
+        if not isinstance(self.alert_status, DashboardAlertStatus):
+            raise ValueError("alert_status é inválido.")
+        if not isinstance(self.alert_categories, DashboardAlertCategories):
+            raise ValueError("alert_categories é inválido.")
+        trend = tuple(self.alert_trend)
+        if any(not isinstance(item, DashboardAlertTrendPoint) for item in trend):
+            raise ValueError("alert_trend é inválido.")
+        if trend and (
+            len(trend) != 7
+            or tuple(item.day for item in trend)
+            != tuple(sorted(item.day for item in trend))
+            or len({item.day for item in trend}) != len(trend)
+        ):
+            raise ValueError("alert_trend deve possuir sete dias únicos e ordenados.")
+        object.__setattr__(self, "alert_trend", trend)

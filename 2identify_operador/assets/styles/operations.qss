@@ -525,7 +525,8 @@ QLabel#operationRiskAreaName {
   font-size: 11px;
 }
 
-QPushButton#operationRiskAreaButton {
+QPushButton#operationRiskAreaButton,
+QPushButton#operationRiskAreaExpandButton {
   min-height: 38px;
   color: #176daf;
   background-color: #eef7fe;
@@ -537,20 +538,23 @@ QPushButton#operationRiskAreaButton {
   letter-spacing: 1px;
 }
 
-QPushButton#operationRiskAreaButton:hover {
+QPushButton#operationRiskAreaButton:hover,
+QPushButton#operationRiskAreaExpandButton:hover {
   color: #ffffff;
   background-color: #1677d2;
   border-color: #1677d2;
 }
 
-QPushButton#operationRiskAreaButton:pressed {
+QPushButton#operationRiskAreaButton:pressed,
+QPushButton#operationRiskAreaExpandButton:pressed {
   color: #ffffff;
   background-color: #0f5ca5;
   border-color: #0f5ca5;
   padding-top: 1px;
 }
 
-QPushButton#operationRiskAreaButton:disabled {
+QPushButton#operationRiskAreaButton:disabled,
+QPushButton#operationRiskAreaExpandButton:disabled {
   color: #8b9bab;
   background-color: #edf2f6;
   border-color: #d2dce6;

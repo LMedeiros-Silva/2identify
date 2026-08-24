@@ -19,10 +19,12 @@ from app.domain import (
 )
 from app.engine import (
     AlertEngine,
+    ErgonomicAssessment,
     PpeRequirementSafetyState,
     PpeSafetyAssessment,
     PpeSafetyEngine,
     PpeStabilityEngine,
+    RiskAreaAssessment,
 )
 from app.ui.active import ActiveOperationPage
 from app.vision.ppe import (
@@ -92,6 +94,9 @@ class ActivePpeMonitoringController(QObject):
             ),
         )
         self._model_classes: frozenset[str] = frozenset()
+        self._ppe_violations: tuple[SafetyViolation, ...] = ()
+        self._ergonomic_violations: tuple[SafetyViolation, ...] = ()
+        self._risk_area_violations: tuple[SafetyViolation, ...] = ()
         self._model_ready = False
         self._worker: PpeInferenceWorker | None = None
         self._restart_after_finish = False
@@ -200,9 +205,38 @@ class ActivePpeMonitoringController(QObject):
             snapshot,
         )
         self._page.update_monitoring_assessment(assessment)
+        self._ppe_violations = self._violations_for(assessment)
+        self._observe_alerts()
+
+    @Slot(object)
+    def handle_ergonomic_assessment(self, value: object) -> None:
+        """Merge pose risks with PPE violations before temporal alert debounce."""
+
+        if not isinstance(value, ErgonomicAssessment):
+            return
+        self._ergonomic_violations = value.violations
+        self._observe_alerts()
+
+    @Slot(object)
+    def handle_risk_area_assessment(self, value: object) -> None:
+        """Merge risk-area presence with every other safety violation."""
+
+        if not isinstance(value, RiskAreaAssessment):
+            return
+        self._risk_area_violations = value.violations
+        self._observe_alerts()
+
+    def _observe_alerts(self) -> None:
+        work_session = self._page.work_session
+        if not self._page.is_monitoring_active or work_session is None:
+            return
         alert_update = self._alert_engine.observe(
             work_session,
-            self._violations_for(assessment),
+            (
+                *self._ppe_violations,
+                *self._ergonomic_violations,
+                *self._risk_area_violations,
+            ),
             datetime.now(UTC),
         )
         if alert_update.raised_alerts or alert_update.resolved_alerts:
@@ -244,6 +278,9 @@ class ActivePpeMonitoringController(QObject):
         self._model_classes = frozenset()
         self._stability_engine.reset()
         self._tracker.reset()
+        self._ppe_violations = ()
+        self._ergonomic_violations = ()
+        self._risk_area_violations = ()
 
     @staticmethod
     def _violations_for(

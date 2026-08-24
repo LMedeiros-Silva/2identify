@@ -31,6 +31,10 @@ class ActiveCameraController(QObject):
     ) -> None:
         super().__init__(page)
         self._page = page
+        analysis_fps = max(
+            settings.ppe_inference_fps,
+            settings.pose_inference_fps if settings.pose_estimation_enabled else 0.0,
+        )
         self._worker_factory = worker_factory or partial(
             SafetyCameraWorker,
             camera_factory=partial(
@@ -43,7 +47,7 @@ class ActiveCameraController(QObject):
             ),
             preview_fps=settings.camera_preview_fps,
             maximum_failed_reads=settings.camera_max_failed_reads,
-            analysis_fps=settings.ppe_inference_fps,
+            analysis_fps=analysis_fps,
         )
         self._worker: SafetyCameraWorker | None = None
         self._automatic_retries_remaining = 3

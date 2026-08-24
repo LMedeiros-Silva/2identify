@@ -7,14 +7,18 @@ from PySide6.QtCore import QObject, Slot
 from PySide6.QtWidgets import QApplication
 
 from app.api import AdminApiClient
+from app.controllers.alerts_controller import AlertsController
 from app.controllers.dashboard_controller import DashboardController
 from app.controllers.login_controller import LoginController
+from app.controllers.operations_controller import OperationsController
 from app.controllers.realtime_controller import RealtimeController
 from app.core.config import Settings
 from app.core.session import AdminSessionContext
 from app.domain import AdminAuthentication
+from app.services.admin_alerts_service import AdminAlertsService
 from app.services.admin_auth_service import AdminAuthService
 from app.services.admin_dashboard_service import AdminDashboardService
+from app.services.admin_operations_service import AdminOperationsService
 from app.ui.login.login_window import LoginWindow
 from app.ui.main.main_window import MainWindow
 
@@ -38,7 +42,9 @@ class ApplicationController(QObject):
         self._api_client = api_client
         self._session_context = AdminSessionContext()
         self._auth_service = AdminAuthService(api_client)
+        self._alerts_service = AdminAlertsService(api_client)
         self._dashboard_service = AdminDashboardService(api_client)
+        self._operations_service = AdminOperationsService(api_client)
         self._realtime_controller_factory = realtime_controller_factory
         self._shutting_down = False
         self._pending_login_message: str | None = None
@@ -53,6 +59,8 @@ class ApplicationController(QObject):
 
         self.main_window: MainWindow | None = None
         self.dashboard_controller: DashboardController | None = None
+        self.alerts_controller: AlertsController | None = None
+        self.operations_controller: OperationsController | None = None
         self.realtime_controller: RealtimeController | None = None
         self._application.aboutToQuit.connect(self.shutdown)
         self._about_to_quit_connected = True
@@ -63,9 +71,7 @@ class ApplicationController(QObject):
     @Slot(object)
     def _open_dashboard(self, authentication: object) -> None:
         if not isinstance(authentication, AdminAuthentication):
-            self.login_window.show_error(
-                "A API retornou uma autenticação incompatível."
-            )
+            self.login_window.show_error("A API retornou uma autenticação incompatível.")
             return
 
         session = self._session_context.open(authentication)
@@ -77,12 +83,27 @@ class ApplicationController(QObject):
             shutdown_timeout_ms=self._settings.worker_shutdown_timeout_ms,
         )
         self.dashboard_controller.session_expired.connect(self._session_expired)
-        self.dashboard_controller.shutdown_complete.connect(
-            self._resume_pending_return_to_login
+        self.dashboard_controller.shutdown_complete.connect(self._resume_pending_return_to_login)
+        self.dashboard_controller.shutdown_complete.connect(self._finish_application_shutdown)
+        self.alerts_controller = AlertsController(
+            self.main_window.alerts,
+            self._alerts_service,
+            self._session_context,
+            shutdown_timeout_ms=self._settings.worker_shutdown_timeout_ms,
         )
-        self.dashboard_controller.shutdown_complete.connect(
-            self._finish_application_shutdown
+        self.alerts_controller.session_expired.connect(self._session_expired)
+        self.alerts_controller.alerts_changed.connect(self.dashboard_controller.request_refresh)
+        self.alerts_controller.shutdown_complete.connect(self._resume_pending_return_to_login)
+        self.alerts_controller.shutdown_complete.connect(self._finish_application_shutdown)
+        self.operations_controller = OperationsController(
+            self.main_window.operations,
+            self._operations_service,
+            self._session_context,
+            shutdown_timeout_ms=self._settings.worker_shutdown_timeout_ms,
         )
+        self.operations_controller.session_expired.connect(self._session_expired)
+        self.operations_controller.shutdown_complete.connect(self._resume_pending_return_to_login)
+        self.operations_controller.shutdown_complete.connect(self._finish_application_shutdown)
         self.realtime_controller = self._realtime_controller_factory(
             self._settings,
             self._session_context,
@@ -91,17 +112,16 @@ class ApplicationController(QObject):
             self.dashboard_controller.request_refresh,
         )
         self.realtime_controller.session_expired.connect(self._session_expired)
-        self.realtime_controller.shutdown_complete.connect(
-            self._resume_pending_return_to_login
-        )
-        self.realtime_controller.shutdown_complete.connect(
-            self._finish_application_shutdown
-        )
+        self.realtime_controller.shutdown_complete.connect(self._resume_pending_return_to_login)
+        self.realtime_controller.shutdown_complete.connect(self._finish_application_shutdown)
         self.main_window.logout_requested.connect(self.logout)
+        self.main_window.realtime_alert_received.connect(self.alerts_controller.request_refresh)
 
         self.main_window.show()
         self.login_window.hide()
         self.dashboard_controller.start()
+        self.alerts_controller.start()
+        self.operations_controller.start()
         self.realtime_controller.start()
         logger.info(
             "Sessão administrativa iniciada",
@@ -126,7 +146,20 @@ class ApplicationController(QObject):
         if self.dashboard_controller is not None:
             dashboard_stopped = self.dashboard_controller.shutdown()
 
-        if not realtime_stopped or not dashboard_stopped:
+        alerts_stopped = True
+        if self.alerts_controller is not None:
+            alerts_stopped = self.alerts_controller.shutdown()
+
+        operations_stopped = True
+        if self.operations_controller is not None:
+            operations_stopped = self.operations_controller.shutdown()
+
+        if (
+            not realtime_stopped
+            or not dashboard_stopped
+            or not alerts_stopped
+            or not operations_stopped
+        ):
             if self.main_window is not None:
                 self.main_window.setEnabled(False)
             return
@@ -147,6 +180,12 @@ class ApplicationController(QObject):
         if self.dashboard_controller is not None:
             self.dashboard_controller.deleteLater()
             self.dashboard_controller = None
+        if self.alerts_controller is not None:
+            self.alerts_controller.deleteLater()
+            self.alerts_controller = None
+        if self.operations_controller is not None:
+            self.operations_controller.deleteLater()
+            self.operations_controller = None
 
         if self.main_window is not None:
             self.main_window.hide()
@@ -179,15 +218,25 @@ class ApplicationController(QObject):
         dashboard_stopped = True
         if self.dashboard_controller is not None:
             dashboard_stopped = self.dashboard_controller.shutdown()
-        if login_stopped and realtime_stopped and dashboard_stopped:
+        alerts_stopped = True
+        if self.alerts_controller is not None:
+            alerts_stopped = self.alerts_controller.shutdown()
+        operations_stopped = True
+        if self.operations_controller is not None:
+            operations_stopped = self.operations_controller.shutdown()
+        if (
+            login_stopped
+            and realtime_stopped
+            and dashboard_stopped
+            and alerts_stopped
+            and operations_stopped
+        ):
             self._session_context.clear()
             self._api_client.close()
             self._disconnect_about_to_quit()
             logger.info("Cliente administrativo encerrado")
         else:
-            logger.error(
-                "Cliente HTTP preservado enquanto workers são encerrados"
-            )
+            logger.error("Cliente HTTP preservado enquanto workers são encerrados")
 
     def _disconnect_about_to_quit(self) -> None:
         if not self._about_to_quit_connected:

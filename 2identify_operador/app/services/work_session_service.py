@@ -86,7 +86,11 @@ class WorkSessionService:
                 session_id=self._session_id_factory(),
                 operator_id=operator_session.operator_id,
                 operation_id=operation.operation_id,
-                camera_id=None,
+                camera_id=(
+                    operation.risk_area.camera_id
+                    if operation.risk_area is not None
+                    else None
+                ),
                 risk_area_id=(
                     operation.risk_area.risk_area_id
                     if operation.risk_area is not None

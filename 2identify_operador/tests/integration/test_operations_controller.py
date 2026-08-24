@@ -42,6 +42,13 @@ class RecordingLauncher:
         return True
 
 
+def _wait_for_load(qtbot, page: OperationsPage) -> None:
+    qtbot.waitUntil(
+        lambda: page.state is not OperationsPageState.LOADING,
+        timeout=2_000,
+    )
+
+
 def test_operations_controller_loads_service_data_into_page(qtbot) -> None:
     page = OperationsPage()
     qtbot.addWidget(page)
@@ -52,6 +59,7 @@ def test_operations_controller_loads_service_data_into_page(qtbot) -> None:
     )
 
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     assert page.state is OperationsPageState.READY
     assert page.operations == (Operation(8, "Inspeção industrial"),)
@@ -63,6 +71,7 @@ def test_operations_controller_maps_provider_failure_to_safe_error_state(qtbot) 
     controller = OperationsController(OperationService(FailingProvider()), page)
 
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     assert page.state is OperationsPageState.ERROR
 
@@ -72,6 +81,7 @@ def test_operations_controller_resolves_selection_from_loaded_snapshot(qtbot) ->
     qtbot.addWidget(page)
     controller = OperationsController(OperationService(StaticProvider()), page)
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     page.operation_selected.emit(8)
 
@@ -84,6 +94,7 @@ def test_operations_controller_ignores_unknown_selection(qtbot, caplog) -> None:
     qtbot.addWidget(page)
     controller = OperationsController(OperationService(StaticProvider()), page)
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     page.operation_selected.emit(999)
 
@@ -107,6 +118,7 @@ def test_operations_controller_opens_selected_manual_through_service(
         manual_service=ManualService(tmp_path, launcher),
     )
     controller.load_operations()
+    _wait_for_load(qtbot, page)
     page.operation_selected.emit(8)
 
     page.manual_requested.emit(8)
@@ -128,6 +140,7 @@ def test_operations_controller_maps_missing_manual_to_safe_view_error(
         manual_service=ManualService(tmp_path, RecordingLauncher()),
     )
     controller.load_operations()
+    _wait_for_load(qtbot, page)
     page.operation_selected.emit(8)
 
     page.manual_requested.emit(8)
@@ -159,6 +172,7 @@ def test_operations_controller_forwards_validated_risk_area_intent(qtbot) -> Non
         page,
     )
     controller.load_operations()
+    _wait_for_load(qtbot, page)
     page.operation_selected.emit(8)
 
     with qtbot.waitSignal(controller.risk_area_requested, timeout=1_000) as emitted:
@@ -179,6 +193,7 @@ def test_operations_controller_ignores_risk_area_for_unknown_selection(
     qtbot.addWidget(page)
     controller = OperationsController(OperationService(StaticProvider()), page)
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     page.risk_area_requested.emit(999)
 
@@ -196,6 +211,7 @@ def test_operations_controller_forwards_selected_operation_for_safety_preparatio
         page,
     )
     controller.load_operations()
+    _wait_for_load(qtbot, page)
     page.operation_selected.emit(8)
 
     with qtbot.waitSignal(
@@ -215,6 +231,7 @@ def test_operations_controller_ignores_safety_request_outside_selection(
     qtbot.addWidget(page)
     controller = OperationsController(OperationService(StaticProvider()), page)
     controller.load_operations()
+    _wait_for_load(qtbot, page)
 
     page.safety_verification_requested.emit(8)
 

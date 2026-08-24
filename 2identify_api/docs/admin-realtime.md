@@ -1,7 +1,7 @@
-# WebSocket administrativo — Etapa 36
+# WebSocket administrativo e alertas do Operador
 
-Esta etapa estabelece somente o transporte autenticado e o contrato de eventos entre a API e
-o Admin. Ela não cria `POST /alerts`, não escreve no PostgreSQL e não publica alertas reais.
+O transporte autenticado publica ao Admin alertas reais já confirmados no PostgreSQL pelo
+endpoint `POST /operator/alerts`.
 
 ## Conexão e autenticação
 
@@ -36,7 +36,7 @@ Todo frame enviado pela API é JSON e segue:
   "event_type": "connection.ready",
   "occurred_at": "2026-08-20T20:00:00Z",
   "payload": {
-    "status": "awaiting_alert_ingestion"
+    "status": "ready"
   }
 }
 ```
@@ -51,11 +51,10 @@ Todo frame enviado pela API é JSON e segue:
 Primeiro evento de uma conexão autorizada:
 
 ```json
-{"status": "awaiting_alert_ingestion"}
+{"status": "ready"}
 ```
 
-Esse estado é intencional: o canal está operacional, mas a ingestão/persistência de alertas ainda
-depende de contrato e migration aprovados.
+Esse estado confirma que o canal e o contrato de ingestão estão disponíveis.
 
 ### `connection.heartbeat`
 
@@ -71,12 +70,13 @@ evitar uma tempestade de consultas ao banco.
 
 ### `alert.created`
 
-Contrato reservado ao futuro publisher interno, ainda sem produtor nesta etapa:
+Evento publicado somente depois do commit de ocorrência, alerta e idempotência:
 
 ```json
 {
   "alert_id": 17,
   "occurrence_id": 31,
+  "category": "ergonomics",
   "level": "critical",
   "status": "nao_lido",
   "summary": "Capacete obrigatório ausente",
@@ -85,7 +85,8 @@ Contrato reservado ao futuro publisher interno, ainda sem produtor nesta etapa:
 }
 ```
 
-`alert_id` e `occurrence_id` são inteiros positivos; `camera_id` é nulo ou positivo; `level`
+`alert_id` e `occurrence_id` são inteiros positivos; `category` identifica `ppe`, `ergonomics`,
+`monitoring`, `risk_area` ou `safety`; `camera_id` é nulo ou positivo; `level`
 aceita `warning` ou `critical`; `status` aceita `nao_lido`, `lido` ou `encerrado`; `summary`
 possui de 1 a 500 caracteres. O schema rejeita Base64/data URI, caminhos locais, caracteres de
 controle e PII óbvia. `detected_at` é normalizado para UTC. Não existe `sector_id`, pois o schema
@@ -124,9 +125,9 @@ Códigos relevantes somente depois que o upgrade foi aceito:
 
 ## Limites intencionais
 
-- não há produtor nem endpoint público de simulação;
-- não há persistência, replay ou garantia de entrega;
+- não há endpoint público de simulação;
+- alertas são persistidos, mas o WebSocket não possui replay nem garantia de entrega;
 - o broker e seus limites são locais ao processo; execute um único worker;
 - reiniciar a API encerra os sockets e descarta somente eventos transitórios ainda em fila;
 - HTTPS/WSS e rate limiting são obrigatórios antes de exposição fora de `localhost`;
-- `POST /alerts`, idempotência e outbox aguardam aprovação do contrato de schema/migration.
+- a idempotência está implementada; a outbox durável do Operador ainda não existe.

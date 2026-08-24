@@ -71,10 +71,10 @@ class Settings(BaseSettings):
     def worker_shutdown_timeout_ms(self) -> int:
         maximum_request_seconds = sum(
             (
-            self.api_connect_timeout_seconds,
-            self.api_read_timeout_seconds,
-            self.api_write_timeout_seconds,
-            self.api_pool_timeout_seconds,
+                self.api_connect_timeout_seconds,
+                self.api_read_timeout_seconds,
+                self.api_write_timeout_seconds,
+                self.api_pool_timeout_seconds,
             )
         )
         return int((maximum_request_seconds + 2) * 1000)

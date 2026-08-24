@@ -17,11 +17,37 @@ Rotas consumidas:
 - `POST /auth/admin/login`
 - `GET /admin/me`
 - `GET /admin/dashboard/summary`
+- `GET /admin/operations/catalog`
+- `POST /admin/cameras`
+- `GET|POST|PUT /admin/operations`
+- `GET|POST|PUT /admin/risk-areas`
 
 O token JWT permanece somente em memória, não é escrito em arquivo ou log e é
 descartado no logout, na expiração da sessão e no encerramento da aplicação.
+
+Quando ainda não existe câmera ativa, a tela **Operações e Áreas** permite cadastrá-la
+pela API informando nome, setor e fonte. Use `0` para a webcam principal, `1` para a
+segunda câmera local ou uma URL RTSP/HTTP. Após o cadastro, a câmera é selecionada e o
+editor da área de risco é habilitado automaticamente.
 Erros de conexão mantêm o login recuperável e exibem “Tentar novamente” no
 dashboard sem bloquear a thread da interface.
+
+O dashboard combina os cards de síntese com três gráficos alimentados pelo endpoint
+administrativo: evolução diária de alertas nos últimos sete dias, distribuição por categoria
+(EPI, ergonomia, área de risco e monitoramento) e situação das ocorrências. Os gráficos são
+renderizados nativamente pelo Qt e não adicionam dependências externas.
+
+## Operações e áreas de risco
+
+A página **Operações e Áreas** cadastra o nome da operação, os EPIs obrigatórios
+e uma área de risco associada a uma câmera. Ao configurar a área, o Admin captura
+uma imagem atual da origem cadastrada (`arquivo`, `vídeo`, `RTSP` ou índice local),
+e o administrador desenha e fecha um polígono com no mínimo três pontos.
+
+O editor desconsidera o letterbox, mantém os vértices alinhados ao redimensionar
+e envia somente coordenadas normalizadas entre `0.0` e `1.0`. Áreas existentes
+podem ser selecionadas e reabertas para edição. Todo cadastro passa pela FastAPI;
+o desktop não abre conexão PostgreSQL nesse fluxo.
 
 ## Configuração
 

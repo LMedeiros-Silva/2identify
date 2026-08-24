@@ -1,9 +1,8 @@
 # 2Identify API
 
 Backend independente do 2Identify, iniciado na etapa 33. A API usa FastAPI, SQLAlchemy 2.x
-síncrono e PostgreSQL. Na etapa 35 também fornece ao Admin autenticação isolada e um resumo
-operacional somente leitura. A etapa 36 acrescenta um canal WebSocket administrativo autenticado,
-sem criar ou alterar o schema e sem fingir que a ingestão de alertas já existe.
+síncrono e PostgreSQL. Também fornece autenticação isolada, dashboard administrativo, ingestão
+idempotente de alertas do Operador e canal WebSocket autenticado para o Admin.
 
 ## Responsabilidades nesta etapa
 
@@ -21,9 +20,12 @@ sem criar ou alterar o schema e sem fingir que a ingestão de alertas já existe
 - expor `WS /ws/admin/alerts` somente a administradores revalidados;
 - emitir readiness honesto e heartbeat em envelope versionado;
 - isolar clientes lentos com fila limitada e fechamento explícito, sem descarte silencioso.
+- receber `POST /operator/alerts` somente de operadores revalidados;
+- persistir ocorrência e alerta antes de publicar `alert.created` ao Admin;
+- impedir duplicação por UUID e hash do payload em `alertas_ingestao`.
 
-O Admin continua responsável pela estrutura atualmente existente. A API só assumirá modelos
-e migrações depois de uma reconciliação explícita do esquema em etapa futura.
+O Admin continua responsável pelas tabelas existentes. A migration compartilhada adiciona apenas
+`alertas_ingestao`, usada pela API para idempotência e contexto operacional.
 
 O WebSocket desta etapa é deliberadamente executado em um único processo. Use somente um worker
 do Uvicorn até existir um broker distribuído; processos diferentes não compartilham o broker em
@@ -112,7 +114,8 @@ Envie o token em `Authorization: Bearer <token>` para:
 
 - `GET /admin/me`, que reconsulta a conta ativa e o perfil pelo `sub` do token;
 - `GET /admin/dashboard/summary`, que retorna contagens de funcionários ativos, atribuições e
-  entregas de EPI, percentual de entrega de EPI e alertas totais/críticos.
+  entregas de EPI, percentual de entrega, alertas totais/críticos e agregações para gráficos:
+  evolução dos últimos sete dias, categorias e situação do tratamento administrativo.
 
 `ppe_delivery_percentage` é apenas uma razão de entregas; não representa conformidade ou
 garantia de segurança industrial. Todas as respostas desses endpoints usam
@@ -126,6 +129,45 @@ ativa e perfil administrativo usando uma sessão curta de banco por ciclo. Limit
 administrador impedem criação ilimitada de filas, tarefas e consultas periódicas. Consulte
 `docs/admin-realtime.md` para o envelope, códigos posteriores ao upgrade e as limitações
 intencionais desta etapa.
+
+## Alertas do Operador
+
+`POST /operator/alerts` exige o mesmo bearer `2identify-operator` emitido no login. O corpo contém
+UUID do evento e da sessão de trabalho, operação, câmera/área opcionais, tipo, chave de
+deduplicação, resumo, severidade e timestamps UTC. O primeiro envio retorna `201`; uma repetição
+idêntica retorna `200` com `duplicate=true`; reutilizar o UUID com outro payload retorna `409`.
+O Admin recebe a categoria `ergonomics`, `ppe`, `risk_area` ou `monitoring` no evento WebSocket.
+
+## Tratamento de alertas pelo Admin
+
+Os endpoints abaixo exigem bearer administrativo e retornam `Cache-Control: no-store`:
+
+- `GET /admin/alerts`: histórico com alerta, ocorrência, funcionário, câmera, setores,
+  evidências e contexto operacional;
+- `GET /admin/alerts/{id}`: detalhe de um alerta;
+- `PATCH /admin/alerts/{id}/confirm`: confirma o recebimento e audita administrador/data;
+- `PATCH /admin/alerts/{id}/close`: encerra a ocorrência após a confirmação.
+
+O encerramento antes da confirmação retorna `409`. Repetir uma confirmação ou um encerramento
+já concluído é idempotente, desde que o alerta permaneça em um estado compatível.
+
+## Operações e áreas de risco
+
+Os recursos administrativos abaixo exigem o bearer do Admin:
+
+- `GET /admin/operations/catalog`: câmeras, EPIs e setores ativos;
+- `POST /admin/cameras`: cadastra uma câmera associada a um setor ativo;
+- `GET|POST /admin/risk-areas` e `PUT /admin/risk-areas/{id}`;
+- `GET|POST /admin/operations` e `PUT /admin/operations/{id}`.
+
+`areas_risco.geometria` é JSONB no formato `polygon`, com ao menos três pontos
+normalizados entre `0.0` e `1.0`. A API rejeita vértices repetidos, área zero e
+auto-interseção. Operações exigem uma área ativa e ao menos um EPI ativo.
+
+O Operador possui somente leitura em `GET /operator/operations`; a resposta usa
+o mesmo polígono persistido para permitir a projeção sobre qualquer resolução de
+câmera. A troca do provider mock do desktop Operador por esse endpoint permanece
+como uma etapa separada.
 
 Antes de qualquer exposição fora do computador local, remova credenciais previsíveis de seed,
 gere um segredo JWT exclusivo, habilite HTTPS e limitação de tentativas no proxy. O comando de
@@ -154,14 +196,12 @@ alterar os dados reais.
 
 ## Alembic
 
-A pasta `alembic/versions` contém cópias idênticas das revisões do Admin para reconhecer a
-linhagem existente. Não execute `upgrade`, `downgrade`, `stamp` ou `revision --autogenerate`
-nesta etapa. O autogenerate está bloqueado até que os metadados da API representem todo o
-esquema real. Consulte `alembic/README.md`.
+A pasta `alembic/versions` contém cópias idênticas das revisões do Admin. Depois de backup,
+aplique uma única vez `python -m alembic upgrade head` a partir da API ou do Admin.
+O autogenerate continua bloqueado. Consulte `alembic/README.md`.
 
 ## Próxima etapa
 
-A fila offline/outbox do Operator permanece fora desta entrega. Antes dela, o contrato de
-ingestão e idempotência de alertas precisa ser aprovado, pois o schema atual não armazena a
-identidade UUID do alerta local nem todo o contexto de operação. Operações continuam mockadas,
-e Face ID continua local somente em desenvolvimento/testes. Nenhuma migration foi antecipada.
+A fila offline/outbox durável do Operator permanece fora desta entrega. O endpoint
+de operações já está disponível; o desktop Operador ainda usa o provider mock até
+a etapa de integração. Face ID continua local somente em desenvolvimento/testes.

@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 
 from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -25,7 +26,7 @@ from app.domain.operation import (
     PpeRequirement,
     RiskAreaReference,
 )
-from app.ui.components import CameraFrameView, CameraRiskZone
+from app.ui.components import CameraFrameView, CameraRiskZone, ExpandedCameraDialog
 
 
 class OperationsPageState(StrEnum):
@@ -83,6 +84,7 @@ class OperationsPage(QWidget):
         self._displayed_required_ppe: tuple[PpeRequirement, ...] = ()
         self._displayed_risk_area: RiskAreaReference | None = None
         self._selected_operation_id: int | None = None
+        self._expanded_risk_area_dialog: ExpandedCameraDialog | None = None
         self.setObjectName("operationsPage")
         self._build_ui()
         self.set_list_state(OperationsPageState.NOT_LOADED)
@@ -230,18 +232,20 @@ class OperationsPage(QWidget):
             or risk_area.geometry is None
         ):
             raise ValueError("a área de risco não possui geometria visualizável")
+        self._close_expanded_risk_area()
+        self._risk_area_preview.clear_frame()
         self._risk_area_preview.set_risk_zones(
             (
                 CameraRiskZone(
                     risk_area.name,
-                    tuple(
-                        (point.x, point.y)
-                        for point in risk_area.geometry.vertices
-                    ),
+                    tuple((point.x, point.y) for point in risk_area.geometry.vertices),
                 ),
             )
         )
         self._risk_area_preview.show()
+        self._risk_area_expand_button.setText("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setEnabled(False)
+        self._risk_area_expand_button.show()
         if risk_area.geometry_calibrated:
             self._risk_area_notice.setText(
                 "Representação normalizada da zona calibrada para a câmera operacional."
@@ -252,11 +256,71 @@ class OperationsPage(QWidget):
             )
         self._risk_area_notice.show()
 
+    def show_risk_area_snapshot_loading(self, risk_area_id: int) -> None:
+        """Keep the polygon visible while a frozen camera frame is captured."""
+
+        if not self._is_displayed_risk_area(risk_area_id):
+            return
+        self._close_expanded_risk_area()
+        self._risk_area_preview.clear_frame()
+        self._risk_area_preview.show()
+        self._risk_area_expand_button.setText("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setEnabled(False)
+        self._risk_area_expand_button.show()
+        self._risk_area_notice.setText(
+            "Capturando uma imagem atual da câmera operacional para posicionar a área de risco."
+        )
+        self._risk_area_notice.show()
+
+    def show_risk_area_snapshot(self, risk_area_id: int, frame: QImage) -> None:
+        """Present one frozen camera frame underneath the normalized polygon."""
+
+        if not self._is_displayed_risk_area(risk_area_id) or frame.isNull():
+            return
+        self._risk_area_preview.set_frame(frame)
+        self._risk_area_preview.show()
+        self._risk_area_expand_button.setEnabled(True)
+        self._risk_area_expand_button.show()
+        risk_area = self._displayed_risk_area
+        camera_name = (
+            risk_area.camera_name
+            if risk_area is not None and risk_area.camera_name is not None
+            else "câmera operacional"
+        )
+        if risk_area is not None and risk_area.geometry_calibrated:
+            notice = f"Imagem congelada de {camera_name} com a área de risco delimitada."
+        else:
+            notice = (
+                f"Imagem congelada de {camera_name} com geometria demonstrativa, "
+                "sem validade operacional."
+            )
+        self._risk_area_notice.setText(notice)
+        self._risk_area_notice.show()
+
+    def show_risk_area_snapshot_failure(self, risk_area_id: int, message: str) -> None:
+        """Keep a safe geometry-only fallback when the camera cannot be captured."""
+
+        if not self._is_displayed_risk_area(risk_area_id):
+            return
+        self._close_expanded_risk_area()
+        self._risk_area_preview.clear_frame()
+        self._risk_area_preview.show()
+        self._risk_area_expand_button.setText("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setEnabled(False)
+        self._risk_area_expand_button.show()
+        self._risk_area_notice.setText(
+            f"{message} O polígono continua disponível como referência normalizada."
+        )
+        self._risk_area_notice.show()
+
     def show_risk_area_unavailable(self) -> None:
         """Explain an associated area whose camera geometry is still absent."""
 
+        self._close_expanded_risk_area()
+        self._risk_area_preview.clear_frame()
         self._risk_area_preview.clear_risk_zones()
         self._risk_area_preview.hide()
+        self._risk_area_expand_button.hide()
         self._risk_area_notice.setText(
             "A área está associada, mas sua geometria de câmera não foi configurada."
         )
@@ -487,9 +551,7 @@ class OperationsPage(QWidget):
 
         ppe_header = QHBoxLayout()
         ppe_header.setSpacing(10)
-        ppe_header.addWidget(
-            self._label("EPIs OBRIGATÓRIOS", "operationDetailsSectionLabel")
-        )
+        ppe_header.addWidget(self._label("EPIs OBRIGATÓRIOS", "operationDetailsSectionLabel"))
         ppe_header.addStretch(1)
         self._ppe_count = self._label("", "operationPpeCount")
         self._ppe_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -521,9 +583,7 @@ class OperationsPage(QWidget):
 
         manual_header = QHBoxLayout()
         manual_header.setSpacing(10)
-        manual_header.addWidget(
-            self._label("MANUAL DA OPERAÇÃO", "operationDetailsSectionLabel")
-        )
+        manual_header.addWidget(self._label("MANUAL DA OPERAÇÃO", "operationDetailsSectionLabel"))
         manual_header.addStretch(1)
         self._manual_status = self._label("", "operationManualStatus")
         self._manual_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -557,9 +617,7 @@ class OperationsPage(QWidget):
 
         risk_area_header = QHBoxLayout()
         risk_area_header.setSpacing(10)
-        risk_area_header.addWidget(
-            self._label("ÁREA DE RISCO", "operationDetailsSectionLabel")
-        )
+        risk_area_header.addWidget(self._label("ÁREA DE RISCO", "operationDetailsSectionLabel"))
         risk_area_header.addStretch(1)
         self._risk_area_status = self._label("", "operationRiskAreaStatus")
         self._risk_area_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -579,10 +637,22 @@ class OperationsPage(QWidget):
         self._risk_area_button.clicked.connect(self._handle_risk_area_click)
         risk_area_layout.addWidget(self._risk_area_button)
 
-        self._risk_area_preview = CameraFrameView("operationRiskAreaPreview")
-        self._risk_area_preview.setMinimumHeight(170)
+        self._risk_area_preview = CameraFrameView(
+            "operationRiskAreaPreview",
+            aspect_ratio_mode=Qt.AspectRatioMode.KeepAspectRatio,
+        )
+        self._risk_area_preview.setMinimumHeight(300)
         self._risk_area_preview.hide()
         risk_area_layout.addWidget(self._risk_area_preview)
+
+        self._risk_area_expand_button = QPushButton("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setObjectName("operationRiskAreaExpandButton")
+        self._risk_area_expand_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._risk_area_expand_button.setAccessibleName("Expandir imagem da área de risco")
+        self._risk_area_expand_button.clicked.connect(self._toggle_expanded_risk_area)
+        self._risk_area_expand_button.setEnabled(False)
+        self._risk_area_expand_button.hide()
+        risk_area_layout.addWidget(self._risk_area_expand_button)
 
         self._risk_area_notice = self._label("", "operationRiskAreaNotice")
         self._risk_area_notice.setWordWrap(True)
@@ -621,9 +691,7 @@ class OperationsPage(QWidget):
         self._safety_start_button.setAccessibleName(
             "Abrir a preparação da verificação de segurança"
         )
-        self._safety_start_button.clicked.connect(
-            self._handle_safety_verification_click
-        )
+        self._safety_start_button.clicked.connect(self._handle_safety_verification_click)
         safety_start_layout.addWidget(self._safety_start_button)
         layout.addWidget(safety_start_card)
         layout.addStretch(1)
@@ -718,9 +786,7 @@ class OperationsPage(QWidget):
         if manual is None:
             self._manual_status.setText("NÃO CONFIGURADO")
             self._manual_status.setProperty("state", "missing")
-            self._manual_title.setText(
-                "Nenhum manual PDF foi associado a esta operação."
-            )
+            self._manual_title.setText("Nenhum manual PDF foi associado a esta operação.")
             self._manual_button.setText("MANUAL NÃO CONFIGURADO")
             self._manual_button.setEnabled(False)
         else:
@@ -732,17 +798,20 @@ class OperationsPage(QWidget):
         self._refresh_style(self._manual_status)
 
     def _set_risk_area(self, risk_area: RiskAreaReference | None) -> None:
+        self._close_expanded_risk_area()
         self._displayed_risk_area = risk_area
+        self._risk_area_preview.clear_frame()
         self._risk_area_preview.clear_risk_zones()
         self._risk_area_preview.hide()
+        self._risk_area_expand_button.setText("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setEnabled(False)
+        self._risk_area_expand_button.hide()
         self._risk_area_notice.clear()
         self._risk_area_notice.hide()
         if risk_area is None:
             self._risk_area_status.setText("NÃO CONFIGURADA")
             self._risk_area_status.setProperty("state", "missing")
-            self._risk_area_name.setText(
-                "Nenhuma área de risco foi associada a esta operação."
-            )
+            self._risk_area_name.setText("Nenhuma área de risco foi associada a esta operação.")
             self._risk_area_button.setText("ÁREA DE RISCO NÃO CONFIGURADA")
             self._risk_area_button.setEnabled(False)
         elif risk_area.geometry is None:
@@ -768,6 +837,46 @@ class OperationsPage(QWidget):
             self._risk_area_button.setText("VISUALIZAR ÁREA DE RISCO")
             self._risk_area_button.setEnabled(True)
         self._refresh_style(self._risk_area_status)
+
+    def _is_displayed_risk_area(self, risk_area_id: int) -> bool:
+        risk_area = self._displayed_risk_area
+        return risk_area is not None and risk_area.risk_area_id == risk_area_id
+
+    @Slot()
+    def _toggle_expanded_risk_area(self) -> None:
+        dialog = self._expanded_risk_area_dialog
+        if dialog is not None:
+            dialog.close()
+            return
+        if not self._risk_area_preview.has_frame:
+            return
+
+        dialog = ExpandedCameraDialog(
+            parent=self,
+            window_title="2Identify · Área de risco expandida",
+            header_text="ÁREA DE RISCO · IMAGEM DA CÂMERA",
+            preview_object_name="expandedRiskAreaPreview",
+            aspect_ratio_mode=Qt.AspectRatioMode.KeepAspectRatio,
+        )
+        self._risk_area_preview.copy_presentation_to(dialog.camera_view)
+        dialog.closed.connect(self._handle_expanded_risk_area_closed)
+        self._expanded_risk_area_dialog = dialog
+        self._risk_area_expand_button.setText("RESTAURAR IMAGEM")
+        dialog.showFullScreen()
+
+    @Slot()
+    def _handle_expanded_risk_area_closed(self) -> None:
+        dialog = self._expanded_risk_area_dialog
+        self._expanded_risk_area_dialog = None
+        self._risk_area_expand_button.setText("EXPANDIR IMAGEM")
+        self._risk_area_expand_button.setEnabled(self._risk_area_preview.has_frame)
+        if dialog is not None:
+            dialog.deleteLater()
+
+    def _close_expanded_risk_area(self) -> None:
+        dialog = self._expanded_risk_area_dialog
+        if dialog is not None:
+            dialog.close()
 
     @Slot()
     def _handle_manual_click(self) -> None:

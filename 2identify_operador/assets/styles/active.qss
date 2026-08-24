@@ -91,6 +91,8 @@ QLabel#activeMonitoringTitle {
 
 QLabel#activeCameraStatus,
 QLabel#activeInferenceStatus,
+QLabel#activeErgonomicsStatus,
+QLabel#activeRiskAreaStatus,
 QLabel#activeOverlayStatus {
   color: #687b8f;
   background-color: #edf2f6;
@@ -103,14 +105,18 @@ QLabel#activeOverlayStatus {
 }
 
 QLabel#activeCameraStatus[state="starting"],
-QLabel#activeInferenceStatus[state="loading"] {
+QLabel#activeInferenceStatus[state="loading"],
+QLabel#activeErgonomicsStatus[state="loading"],
+QLabel#activeRiskAreaStatus[state="loading"] {
   color: #176daf;
   background-color: #e8f3fc;
   border-color: #b4d8f2;
 }
 
 QLabel#activeCameraStatus[state="active"],
-QLabel#activeInferenceStatus[state="active"] {
+QLabel#activeInferenceStatus[state="active"],
+QLabel#activeErgonomicsStatus[state="active"],
+QLabel#activeRiskAreaStatus[state="active"] {
   color: #238056;
   background-color: #e5f7ed;
   border-color: #9cd8b7;
@@ -118,13 +124,17 @@ QLabel#activeInferenceStatus[state="active"] {
 
 QLabel#activeCameraStatus[state="unavailable"],
 QLabel#activeCameraStatus[state="error"],
-QLabel#activeInferenceStatus[state="error"] {
+QLabel#activeInferenceStatus[state="error"],
+QLabel#activeErgonomicsStatus[state="error"],
+QLabel#activeRiskAreaStatus[state="error"] {
   color: #a23838;
   background-color: #fcebea;
   border-color: #efb9b5;
 }
 
-QPushButton#activeCameraRetryButton {
+QPushButton#activeCameraRetryButton,
+QPushButton#activeCameraExpandButton,
+QPushButton#expandedCameraCloseButton {
   min-height: 25px;
   color: #176daf;
   background-color: #eef7fe;
@@ -133,6 +143,35 @@ QPushButton#activeCameraRetryButton {
   padding: 0 9px;
   font-size: 7px;
   font-weight: 700;
+}
+
+QPushButton#activeCameraExpandButton:hover,
+QPushButton#expandedCameraCloseButton:hover {
+  color: #ffffff;
+  background-color: #176daf;
+}
+
+QPushButton#activeCameraExpandButton:disabled {
+  color: #8da0b1;
+  background-color: #edf1f4;
+  border-color: #d7e0e7;
+}
+
+QDialog#expandedCameraDialog {
+  background-color: #07182b;
+  color: #ffffff;
+}
+
+QDialog#expandedCameraDialog QLabel {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+QFrame#expandedCameraPreview {
+  background-color: #10243e;
+  border: 1px solid #315473;
+  border-radius: 8px;
 }
 
 QStackedWidget#activeCameraStack,

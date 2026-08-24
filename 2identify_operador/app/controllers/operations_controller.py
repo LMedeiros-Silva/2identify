@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 
 from PySide6.QtCore import QObject, Signal, Slot
 
 from app.domain.operation import Operation
 from app.services.manual_service import ManualService, ManualServiceError
-from app.services.operation_service import OperationService, OperationServiceError
+from app.services.operation_service import OperationService
 from app.ui.operations import OperationsPage, OperationsPageState
+from app.workers.operation_load_worker import OperationLoadWorker
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ class OperationsController(QObject):
         self._source_notice = source_notice
         self._manual_service = manual_service
         self._operations_by_id: dict[int, Operation] = {}
+        self._worker: OperationLoadWorker | None = None
         self._page.operation_selected.connect(self.select_operation)
         self._page.manual_requested.connect(self.open_manual)
         self._page.risk_area_requested.connect(self.request_risk_area)
@@ -46,20 +49,52 @@ class OperationsController(QObject):
 
         self._operations_by_id.clear()
         self._page.set_list_state(OperationsPageState.LOADING)
-        try:
-            operations = self._service.list_available_operations()
-        except OperationServiceError:
-            logger.exception("operation_list_load_failed")
-            self._page.set_list_state(
-                OperationsPageState.ERROR,
-                "Não foi possível consultar as operações. Tente novamente mais tarde.",
-            )
+        worker = self._worker
+        if worker is not None and worker.isRunning():
             return
+        self._dispose_finished_worker()
+        worker = OperationLoadWorker(self._service)
+        worker.operations_loaded.connect(self._handle_operations_loaded)
+        worker.load_failed.connect(self._handle_operation_load_failure)
+        worker.finished.connect(partial(self._dispose_worker, worker))
+        self._worker = worker
+        worker.start()
 
+    @Slot(object)
+    def _handle_operations_loaded(self, value: object) -> None:
+        operations = tuple(value) if isinstance(value, tuple) else ()
         self._operations_by_id = {
             operation.operation_id: operation for operation in operations
         }
         self._page.set_operations(operations, source_notice=self._source_notice)
+
+    @Slot(str)
+    def _handle_operation_load_failure(self, message: str) -> None:
+        logger.warning("operation_list_load_failed")
+        self._page.set_list_state(
+            OperationsPageState.ERROR,
+            message or "Não foi possível consultar as operações. Tente novamente mais tarde.",
+        )
+
+    def shutdown(self, wait_timeout_ms: int = 15_000) -> None:
+        worker = self._worker
+        if worker is None:
+            return
+        worker.requestInterruption()
+        if worker.isRunning() and not worker.wait(wait_timeout_ms):
+            logger.error("operation_load_worker_shutdown_timeout")
+            return
+        self._dispose_worker(worker)
+
+    def _dispose_finished_worker(self) -> None:
+        worker = self._worker
+        if worker is not None and not worker.isRunning():
+            self._dispose_worker(worker)
+
+    def _dispose_worker(self, worker: OperationLoadWorker) -> None:
+        if self._worker is worker:
+            self._worker = None
+        worker.deleteLater()
 
     @Slot(int)
     def select_operation(self, operation_id: int) -> None:
