@@ -10,10 +10,13 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.active_operations import ActiveOperationSnapshot
+
 RealtimeEventType = Literal[
     "connection.ready",
     "connection.heartbeat",
     "alert.created",
+    "ppe.session.updated",
 ]
 
 _DATA_URI_PATTERN = re.compile(r"(?i)(?:^|\s)data:[^,\s]+,")
@@ -74,7 +77,12 @@ class AlertCreatedPayload(BaseModel):
         return value.astimezone(UTC)
 
 
-RealtimeEventPayload = StreamReadyPayload | StreamHeartbeatPayload | AlertCreatedPayload
+RealtimeEventPayload = (
+    StreamReadyPayload
+    | StreamHeartbeatPayload
+    | AlertCreatedPayload
+    | ActiveOperationSnapshot
+)
 
 
 class RealtimeEventEnvelope(BaseModel):
@@ -101,6 +109,7 @@ class RealtimeEventEnvelope(BaseModel):
             "connection.ready": StreamReadyPayload,
             "connection.heartbeat": StreamHeartbeatPayload,
             "alert.created": AlertCreatedPayload,
+            "ppe.session.updated": ActiveOperationSnapshot,
         }[self.event_type]
         if not isinstance(self.payload, expected_payload):
             raise ValueError("payload incompatível com event_type")

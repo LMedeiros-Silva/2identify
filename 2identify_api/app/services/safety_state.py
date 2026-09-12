@@ -1,17 +1,19 @@
-"""Process-local aggregation of Operator safety snapshots for signal hardware."""
+"""Small realtime cache derived from the persisted active alert lifecycle."""
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from starlette.concurrency import run_in_threadpool
+
 from app.realtime.broker import RealtimeEventBroker
 from app.schemas.safety_state import (
     HardwareSafetyState,
-    OperatorSafetyStateSnapshot,
     SafetyConditionReason,
     SafetyConditionSnapshot,
     SafetyStateMessage,
@@ -19,6 +21,7 @@ from app.schemas.safety_state import (
 )
 
 Clock = Callable[[], datetime]
+logger = logging.getLogger(__name__)
 
 _LEVEL_RANK = {"medium": 1, "critical": 2}
 _STATE_FOR_LEVEL: dict[str, HardwareSafetyState] = {
@@ -26,6 +29,8 @@ _STATE_FOR_LEVEL: dict[str, HardwareSafetyState] = {
     "critical": "RED",
 }
 _REASON_PRIORITY: dict[SafetyConditionReason, int] = {
+    "OTHER_SAFETY_ALERT": 0,
+    "MONITORING_INTERRUPTED": 0,
     "ERGONOMIC_RISK": 1,
     "PPE_MISSING": 2,
     "PERSON_IN_RISK_AREA": 3,
@@ -39,7 +44,7 @@ class SafetyStateUpdateResult:
 
 
 class SafetyStateAggregator:
-    """Merge complete per-session snapshots and publish only effective changes."""
+    """Serialize database reads and publish only effective changes, without polling."""
 
     def __init__(
         self,
@@ -49,7 +54,6 @@ class SafetyStateAggregator:
     ) -> None:
         self._broker = broker
         self._clock = clock or _utc_now
-        self._sources: dict[tuple[int, UUID], tuple[SafetyConditionSnapshot, ...]] = {}
         self._lock = asyncio.Lock()
         self._current: SafetyStateMessage | None = None
 
@@ -62,39 +66,51 @@ class SafetyStateAggregator:
 
         async with self._lock:
             if self._current is None:
-                return True
+                return False
             return await self._broker.send_to(subscription_id, self._current)
 
-    async def update(
+    async def refresh(
         self,
-        *,
-        operator_id: int,
-        snapshot: OperatorSafetyStateSnapshot,
+        read_active: Callable[[], tuple[SafetyConditionSnapshot, ...]],
     ) -> SafetyStateUpdateResult:
-        if operator_id <= 0:
-            raise ValueError("operator_id deve ser positivo")
-        source_key = (operator_id, snapshot.work_session_id)
+        """Read after commit, inside the lock, so concurrent mutations cannot regress state."""
         async with self._lock:
-            if snapshot.conditions:
-                self._sources[source_key] = snapshot.conditions
-            else:
-                self._sources.pop(source_key, None)
-            candidate = self._calculate_message()
+            try:
+                conditions = await run_in_threadpool(read_active)
+                candidate = self._calculate_message(conditions)
+            except Exception:
+                # Never keep advertising a cached GREEN after an authoritative read fails.
+                self._current = None
+                raise
             if self._current is not None and _same_effective_state(
                 candidate,
                 self._current,
             ):
                 return SafetyStateUpdateResult(self._current, False)
             self._current = candidate
-            await self._broker.publish(candidate)
+            try:
+                await self._broker.publish(candidate)
+            except Exception:
+                self._current = None
+                raise
             return SafetyStateUpdateResult(candidate, True)
 
-    def _calculate_message(self) -> SafetyStateMessage:
-        conditions = tuple(
-            condition
-            for source_conditions in self._sources.values()
-            for condition in source_conditions
-        )
+    async def refresh_after_commit(
+        self,
+        read_active: Callable[[], tuple[SafetyConditionSnapshot, ...]],
+    ) -> None:
+        """A failed hardware cache must not undo an acknowledged alert/Admin event."""
+        try:
+            await self.refresh(read_active)
+        except Exception as error:
+            logger.error(
+                "safety_tower_refresh_failed_after_commit",
+                extra={"error_type": type(error).__name__},
+            )
+
+    def _calculate_message(
+        self, conditions: tuple[SafetyConditionSnapshot, ...]
+    ) -> SafetyStateMessage:
         now = _as_utc(self._clock())
         if not conditions:
             return safe_state_message(now)

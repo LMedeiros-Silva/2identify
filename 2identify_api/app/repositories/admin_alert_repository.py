@@ -12,6 +12,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from app.models import (
+    OPERATIONS,
     PERSISTED_SAFETY_ALERTS,
     SAFETY_CAMERAS,
     SAFETY_EMPLOYEES,
@@ -68,6 +69,7 @@ class AdminAlertRecord:
     operator_id: int | None
     operator_name: str | None
     operation_id: int | None
+    operation_name: str | None
     risk_area_id: int | None
     violation_type: str | None
     subject_key: str | None
@@ -86,6 +88,7 @@ class AdminAlertRepository:
         self._confirmer = users.alias("usuario_confirmacao")
         self._closer = users.alias("usuario_encerramento")
         self._ingestion = SafetyAlertIngestion.__table__
+        self._operation = OPERATIONS.alias("operacao")
 
     def list(
         self,
@@ -206,6 +209,10 @@ class AdminAlertRepository:
             )
             .outerjoin(self._ingestion, self._ingestion.c.alerta_id == alerts.c.id)
             .outerjoin(
+                self._operation,
+                self._operation.c.id == self._ingestion.c.operacao_id,
+            )
+            .outerjoin(
                 self._operator,
                 self._operator.c.id == self._ingestion.c.operador_usuario_id,
             )
@@ -252,6 +259,7 @@ class AdminAlertRepository:
             self._ingestion.c.operador_usuario_id.label("operator_id"),
             self._operator.c.nome.label("operator_name"),
             self._ingestion.c.operacao_id.label("operation_id"),
+            self._operation.c.nome.label("operation_name"),
             self._ingestion.c.area_risco_id.label("risk_area_id"),
             self._ingestion.c.violacao_tipo.label("violation_type"),
             self._ingestion.c.assunto_chave.label("subject_key"),

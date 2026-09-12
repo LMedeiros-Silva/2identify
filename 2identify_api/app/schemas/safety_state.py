@@ -14,8 +14,17 @@ SafetyConditionReason = Literal[
     "PPE_MISSING",
     "ERGONOMIC_RISK",
     "PERSON_IN_RISK_AREA",
+    "MONITORING_INTERRUPTED",
+    "OTHER_SAFETY_ALERT",
 ]
 HardwareSafetyState = Literal["GREEN", "YELLOW", "RED"]
+PpeRequirementState = Literal[
+    "collecting",
+    "confirmed",
+    "absent",
+    "unstable",
+    "unmapped",
+]
 
 
 class SafetyConditionSnapshot(BaseModel):
@@ -42,6 +51,15 @@ class SafetyConditionSnapshot(BaseModel):
         return value.astimezone(UTC)
 
 
+class OperatorPpeStateSnapshot(BaseModel):
+    """One required PPE state already calculated by the Operator pipeline."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ppe_id: Annotated[int, Field(gt=0)]
+    state: PpeRequirementState
+
+
 class OperatorSafetyStateSnapshot(BaseModel):
     """Complete current safety state for one local WorkSession."""
 
@@ -51,18 +69,32 @@ class OperatorSafetyStateSnapshot(BaseModel):
     operation_id: Annotated[int, Field(gt=0)]
     camera_id: Annotated[int, Field(gt=0)] | None = None
     observed_at: AwareDatetime
+    started_at: AwareDatetime | None = None
+    session_status: Literal["active", "ended"] = "active"
+    ppe: Annotated[tuple[OperatorPpeStateSnapshot, ...], Field(max_length=100)] = ()
     conditions: Annotated[tuple[SafetyConditionSnapshot, ...], Field(max_length=100)] = ()
 
-    @field_validator("observed_at")
+    @field_validator("observed_at", "started_at")
     @classmethod
-    def normalize_timestamp(cls, value: datetime) -> datetime:
-        return value.astimezone(UTC)
+    def normalize_timestamp(cls, value: datetime | None) -> datetime | None:
+        return value.astimezone(UTC) if value is not None else None
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> OperatorSafetyStateSnapshot:
         identifiers = tuple(item.condition_id for item in self.conditions)
         if len(set(identifiers)) != len(identifiers):
             raise ValueError("conditions não pode conter identificadores duplicados")
+        ppe_ids = tuple(item.ppe_id for item in self.ppe)
+        if len(set(ppe_ids)) != len(ppe_ids):
+            raise ValueError("ppe não pode conter identificadores duplicados")
+        if self.started_at is None and self.ppe:
+            raise ValueError("ppe exige started_at")
+        if self.started_at is not None and self.started_at > self.observed_at:
+            raise ValueError("started_at não pode ocorrer depois de observed_at")
+        if self.session_status == "ended" and self.started_at is None:
+            raise ValueError("snapshot encerrado exige started_at")
+        if self.session_status == "ended" and (self.ppe or self.conditions):
+            raise ValueError("snapshot encerrado deve estar vazio")
         if any(
             item.first_observed_at > self.observed_at + timedelta(minutes=5)
             for item in self.conditions
@@ -114,7 +146,9 @@ def safe_state_message(at: datetime) -> SafetyStateMessage:
 
 __all__ = [
     "HardwareSafetyState",
+    "OperatorPpeStateSnapshot",
     "OperatorSafetyStateSnapshot",
+    "PpeRequirementState",
     "SafetyConditionLevel",
     "SafetyConditionReason",
     "SafetyConditionSnapshot",

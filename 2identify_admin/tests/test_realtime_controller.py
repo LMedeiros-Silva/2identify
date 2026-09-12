@@ -151,6 +151,27 @@ def alert_event(event_id: int) -> str:
     )
 
 
+def ppe_event(event_id: int, *, status: str = "active") -> str:
+    return event(
+        "ppe.session.updated",
+        {
+            "work_session_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "session_status": status,
+            "operator_id": 15,
+            "operator_name": "Breno Barbosa",
+            "operation_id": 7,
+            "operation_name": "Linha de montagem",
+            "started_at": "2026-08-20T11:30:00Z",
+            "observed_at": "2026-08-20T12:00:00Z",
+            "camera_id": 3,
+            "camera_name": "Câmera Linha A",
+            "ppe": [{"ppe_id": 1, "name": "Capacete", "state": "confirmed"}],
+            "overall_status": "compliant",
+        },
+        event_id=event_id,
+    )
+
+
 def build_controller(
     *,
     socket: FakeWebSocket,
@@ -213,6 +234,28 @@ def test_ready_alert_ui_and_dashboard_refresh_are_debounced(qapp) -> None:
     assert not controller.has_active_timers
     assert not controller.validation_is_active
     assert socket.fake_state == QAbstractSocket.SocketState.UnconnectedState
+    view.close()
+
+
+def test_ppe_session_event_updates_existing_admin_page_without_polling(qapp) -> None:
+    socket = FakeWebSocket()
+    view = MainWindow(administrator())
+    controller = build_controller(
+        socket=socket,
+        context=session_context(),
+        view=view,
+        refresh=lambda: None,
+    )
+    controller.start()
+    socket.simulate_connected()
+    socket.textMessageReceived.emit(ready_event())
+    socket.textMessageReceived.emit(ppe_event(70))
+
+    assert view.ppe_management.card_count == 1
+    assert "Breno Barbosa" in view.ppe_management.cards_text()
+    socket.textMessageReceived.emit(ppe_event(71, status="ended"))
+    assert view.ppe_management.card_count == 0
+    controller.shutdown()
     view.close()
 
 

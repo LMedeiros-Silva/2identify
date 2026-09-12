@@ -1,6 +1,11 @@
 """Public HTTP response contracts."""
 
 from app.schemas.admin import AdminDashboardSummary
+from app.schemas.active_operations import (
+    ActiveOperationOverallStatus,
+    ActiveOperationPpe,
+    ActiveOperationSnapshot,
+)
 from app.schemas.admin_alerts import (
     AdminAlertActionRequest,
     AdminAlertDetail,
@@ -35,6 +40,7 @@ from app.schemas.realtime import (
 )
 from app.schemas.safety_state import (
     HardwareSafetyState,
+    OperatorPpeStateSnapshot,
     OperatorSafetyStateSnapshot,
     SafetyConditionLevel,
     SafetyConditionReason,
@@ -44,6 +50,9 @@ from app.schemas.safety_state import (
 
 __all__ = [
     "AdminAlertActionRequest",
+    "ActiveOperationOverallStatus",
+    "ActiveOperationPpe",
+    "ActiveOperationSnapshot",
     "AdminAlertDetail",
     "AdminAlertList",
     "AdminCredentialLoginResponse",
@@ -61,6 +70,7 @@ __all__ = [
     "OperationDetail",
     "OperationWrite",
     "OperatorPayload",
+    "OperatorPpeStateSnapshot",
     "OperatorAlertCreate",
     "OperatorAlertReceipt",
     "OperatorSafetyStateSnapshot",

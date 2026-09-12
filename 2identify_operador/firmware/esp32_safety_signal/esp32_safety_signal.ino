@@ -1,157 +1,147 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <WiFi.h>
 #include <WebSocketsClient.h>
+#include <ArduinoJson.h>
 
+// Opcional: mantenha as credenciais em device_config.h (ignorado pelo Git).
+// Ao colar somente este .ino no Arduino IDE, edite os valores abaixo.
+#if __has_include("device_config.h")
 #include "device_config.h"
+#else
+const char* WIFI_SSID = "SEU_WIFI";
+const char* WIFI_PASSWORD = "SUA_SENHA";
+const char* API_HOST = "192.168.0.100";  // IP do PC, nunca localhost.
+const uint16_t API_PORT = 8000;
+const char* API_PATH = "/ws/devices/safety";
+const char* DEVICE_TOKEN = "SEU_DEVICE_TOKEN";
+#endif
 
-constexpr uint8_t PIN_BUTTON = 13;
-constexpr uint8_t PIN_WHITE_1 = 14;
-constexpr uint8_t PIN_WHITE_2 = 27;
-constexpr uint8_t PIN_GREEN_1 = 26;
-constexpr uint8_t PIN_GREEN_2 = 25;
-constexpr uint8_t PIN_YELLOW_1 = 33;
-constexpr uint8_t PIN_YELLOW_2 = 32;
-constexpr uint8_t PIN_RED_1 = 21;
-constexpr uint8_t PIN_RED_2 = 22;
-constexpr uint8_t PIN_BUZZER = 23;
+const int pinoVerde = 26;
+const int pinoAmarelo = 33;
+const int pinoVermelho = 21;
+const int pinoBuzina = 23;
+const int pinoBotao = 13;  // Reservado; nao controla o estado integrado.
 
-constexpr unsigned long RED_BLINK_INTERVAL_MS = 500;
-constexpr unsigned long DISCONNECTED_BLINK_INTERVAL_MS = 1000;
-constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
-constexpr uint16_t BUZZER_FREQUENCY_HZ = 1000;
+const uint32_t RED_BLINK_MS = 500;
+const uint32_t DISCONNECTED_BLINK_MS = 1000;
+const uint32_t WIFI_RETRY_MS = 10000;
+const uint32_t SERVER_TIMEOUT_MS = 30000;
 
-enum class DeviceMode : uint8_t {
-  GREEN,
-  YELLOW,
-  RED,
-  DISCONNECTED,
-};
+enum class TowerState { DISCONNECTED, GREEN, YELLOW, RED };
 
 WebSocketsClient webSocket;
-DeviceMode currentMode = DeviceMode::DISCONNECTED;
-bool blinkOutputOn = true;
+TowerState towerState = TowerState::DISCONNECTED;
+bool outputsInitialized = false;
+bool blinkOn = true;
+bool wifiWasConnected = false;
 bool socketConnected = false;
 bool stateReceived = false;
-unsigned long lastBlinkAt = 0;
-unsigned long lastWifiAttemptAt = 0;
+uint32_t lastBlinkMillis = 0;
+uint32_t lastWifiAttemptMillis = 0;
+uint32_t lastServerMessageMillis = 0;
 String authorizationHeader;
 
-void setPair(uint8_t firstPin, uint8_t secondPin, bool enabled) {
-  digitalWrite(firstPin, enabled ? HIGH : LOW);
-  digitalWrite(secondPin, enabled ? HIGH : LOW);
+// Prototipos explicitos para tipos definidos neste sketch.
+void setTowerState(TowerState next);
+const char* stateName(TowerState state);
+
+void acionarRele(int pino, bool ligar) {
+  digitalWrite(pino, ligar ? LOW : HIGH);  // ACTIVE LOW
 }
 
-void keepWhiteOn() {
-  setPair(PIN_WHITE_1, PIN_WHITE_2, true);
+const char* stateName(TowerState state) {
+  switch (state) {
+    case TowerState::GREEN: return "GREEN";
+    case TowerState::YELLOW: return "YELLOW";
+    case TowerState::RED: return "RED";
+    default: return "DISCONNECTED";
+  }
 }
 
-void clearSafetyOutputs() {
-  setPair(PIN_GREEN_1, PIN_GREEN_2, false);
-  setPair(PIN_YELLOW_1, PIN_YELLOW_2, false);
-  setPair(PIN_RED_1, PIN_RED_2, false);
-  noTone(PIN_BUZZER);
-}
+void setTowerState(TowerState next) {
+  // Heartbeats repetidos nao reiniciam o pisca.
+  if (outputsInitialized && towerState == next) return;
+  towerState = next;
+  outputsInitialized = true;
+  blinkOn = true;
+  lastBlinkMillis = millis();
 
-void beginMode(DeviceMode mode) {
-  currentMode = mode;
-  blinkOutputOn = true;
-  lastBlinkAt = millis();
-  keepWhiteOn();
-  clearSafetyOutputs();
-}
+  // Desliga todas as saidas antes de aplicar o novo estado.
+  acionarRele(pinoVerde, false);
+  acionarRele(pinoAmarelo, false);
+  acionarRele(pinoVermelho, false);
+  acionarRele(pinoBuzina, false);
 
-void setGreen() {
-  beginMode(DeviceMode::GREEN);
-  setPair(PIN_GREEN_1, PIN_GREEN_2, true);
-}
-
-void setYellow() {
-  beginMode(DeviceMode::YELLOW);
-  setPair(PIN_YELLOW_1, PIN_YELLOW_2, true);
-}
-
-void setRed() {
-  beginMode(DeviceMode::RED);
-  setPair(PIN_RED_1, PIN_RED_2, true);
-  tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ);
-}
-
-void setDisconnected() {
-  beginMode(DeviceMode::DISCONNECTED);
-  setPair(PIN_YELLOW_1, PIN_YELLOW_2, true);
+  switch (next) {
+    case TowerState::GREEN:
+      acionarRele(pinoVerde, true);
+      break;
+    case TowerState::YELLOW:
+    case TowerState::DISCONNECTED:
+      acionarRele(pinoAmarelo, true);
+      break;
+    case TowerState::RED:
+      acionarRele(pinoVermelho, true);
+      acionarRele(pinoBuzina, true);
+      break;
+  }
+  Serial.printf("[TOWER] %s\n", stateName(next));
 }
 
 void updateBlink() {
-  keepWhiteOn();
-  const unsigned long now = millis();
-  unsigned long interval = 0;
+  uint32_t interval;
+  if (towerState == TowerState::RED) interval = RED_BLINK_MS;
+  else if (towerState == TowerState::DISCONNECTED) interval = DISCONNECTED_BLINK_MS;
+  else return;
 
-  if (currentMode == DeviceMode::RED) {
-    interval = RED_BLINK_INTERVAL_MS;
-  } else if (currentMode == DeviceMode::DISCONNECTED) {
-    interval = DISCONNECTED_BLINK_INTERVAL_MS;
+  const uint32_t now = millis();
+  if (uint32_t(now - lastBlinkMillis) < interval) return;
+  lastBlinkMillis = now;
+  blinkOn = !blinkOn;
+  if (towerState == TowerState::RED) {
+    acionarRele(pinoVermelho, blinkOn);
+    acionarRele(pinoBuzina, blinkOn);
   } else {
-    return;
-  }
-
-  if (now - lastBlinkAt < interval) {
-    return;
-  }
-
-  lastBlinkAt = now;
-  blinkOutputOn = !blinkOutputOn;
-  if (currentMode == DeviceMode::RED) {
-    setPair(PIN_RED_1, PIN_RED_2, blinkOutputOn);
-    if (blinkOutputOn) {
-      tone(PIN_BUZZER, BUZZER_FREQUENCY_HZ);
-    } else {
-      noTone(PIN_BUZZER);
-    }
-  } else {
-    setPair(PIN_YELLOW_1, PIN_YELLOW_2, blinkOutputOn);
-    noTone(PIN_BUZZER);
+    acionarRele(pinoAmarelo, blinkOn);
   }
 }
 
-void applySafetyState(const char* state) {
-  if (strcmp(state, "GREEN") == 0) {
-    setGreen();
-  } else if (strcmp(state, "YELLOW") == 0) {
-    setYellow();
-  } else if (strcmp(state, "RED") == 0) {
-    setRed();
-  } else {
-    Serial.printf("Estado de segurança desconhecido: %s\n", state);
-    setDisconnected();
-    stateReceived = false;
-    return;
-  }
-  stateReceived = true;
+void rejectMessage() {
+  stateReceived = false;
+  setTowerState(TowerState::DISCONNECTED);
+  Serial.println("[WS] Mensagem invalida; aguardando estado valido.");
 }
 
-void handleWebSocketMessage(uint8_t* payload, size_t length) {
+void handleMessage(uint8_t* payload, size_t length) {
+  if (!socketConnected || WiFi.status() != WL_CONNECTED) return;
+  if (length == 0 || length > 1024) {
+    rejectMessage();
+    return;
+  }
   JsonDocument document;
-  const DeserializationError error = deserializeJson(document, payload, length);
-  if (error) {
-    Serial.printf("Mensagem JSON inválida: %s\n", error.c_str());
+  const DeserializationError error = deserializeJson(
+      document, payload, length, DeserializationOption::NestingLimit(4));
+  if (error || !document["type"].is<const char*>() ||
+      strcmp(document["type"].as<const char*>(), "safety_state") != 0 ||
+      !document["schema_version"].is<int>() ||
+      document["schema_version"].as<int>() != 1 ||
+      !document["state"].is<const char*>()) {
+    rejectMessage();
     return;
   }
 
-  const char* type = document["type"] | "";
-  const int schemaVersion = document["schema_version"] | 0;
-  const char* state = document["state"] | "";
-  if (strcmp(type, "safety_state") != 0 || schemaVersion != 1) {
-    Serial.println("Mensagem WebSocket incompatível ignorada.");
+  const char* state = document["state"].as<const char*>();
+  TowerState next;
+  if (strcmp(state, "GREEN") == 0) next = TowerState::GREEN;
+  else if (strcmp(state, "YELLOW") == 0) next = TowerState::YELLOW;
+  else if (strcmp(state, "RED") == 0) next = TowerState::RED;
+  else {
+    rejectMessage();
     return;
   }
-
-  Serial.printf(
-      "Estado recebido: %s; motivo: %s; condições: %d\n",
-      state,
-      document["reason"] | "SAFE",
-      document["active_conditions"] | 0);
-  applySafetyState(state);
+  lastServerMessageMillis = millis();
+  stateReceived = true;
+  setTowerState(next);
 }
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -159,95 +149,104 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     case WStype_CONNECTED:
       socketConnected = true;
       stateReceived = false;
-      setDisconnected();
-      Serial.println("WebSocket conectado; aguardando estado atual da API.");
+      lastServerMessageMillis = millis();  // Prazo para o primeiro snapshot.
+      setTowerState(TowerState::DISCONNECTED);
+      Serial.println("[WS] Conectado; aguardando estado da API.");
       break;
     case WStype_TEXT:
-      handleWebSocketMessage(payload, length);
+      handleMessage(payload, length);
       break;
     case WStype_DISCONNECTED:
     case WStype_ERROR:
       socketConnected = false;
       stateReceived = false;
-      setDisconnected();
-      Serial.println("WebSocket desconectado; sinalizador em modo de falha.");
+      setTowerState(TowerState::DISCONNECTED);
+      Serial.println("[WS] Desconectado.");
       break;
     case WStype_PING:
     case WStype_PONG:
-    case WStype_BIN:
-    case WStype_FRAGMENT_TEXT_START:
-    case WStype_FRAGMENT_BIN_START:
-    case WStype_FRAGMENT:
-    case WStype_FRAGMENT_FIN:
+      // A biblioteca responde automaticamente. PONG nao valida o cache da API.
+      break;
+    default:
+      rejectMessage();  // Binarios/fragmentos nao fazem parte deste protocolo.
       break;
   }
 }
 
-void beginWifi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.persistent(false);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  lastWifiAttemptAt = millis();
-}
-
-void updateWifiConnection() {
-  if (WiFi.status() == WL_CONNECTED) {
+void updateWifi() {
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  if (connected) {
+    if (!wifiWasConnected) {
+      Serial.print("[WIFI] Conectado: ");
+      Serial.println(WiFi.localIP());
+      Serial.println("[WS] Conectando...");
+    }
+    wifiWasConnected = true;
     return;
   }
-  if (currentMode != DeviceMode::DISCONNECTED) {
-    setDisconnected();
-  }
+  const bool mustDisconnectSocket = wifiWasConnected || socketConnected;
+  wifiWasConnected = false;
   socketConnected = false;
   stateReceived = false;
-
-  const unsigned long now = millis();
-  if (now - lastWifiAttemptAt < WIFI_RETRY_INTERVAL_MS) {
-    return;
+  setTowerState(TowerState::DISCONNECTED);
+  if (mustDisconnectSocket) {
+    Serial.println("[WIFI] Desconectado.");
+    webSocket.disconnect();
   }
-  lastWifiAttemptAt = now;
-  Serial.println("Tentando reconectar ao Wi-Fi...");
-  WiFi.disconnect();
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  const uint32_t now = millis();
+  if (uint32_t(now - lastWifiAttemptMillis) >= WIFI_RETRY_MS) {
+    lastWifiAttemptMillis = now;
+    Serial.println("[WIFI] Reconectando...");
+    WiFi.reconnect();
+  }
 }
 
-void configurePins() {
-  pinMode(PIN_BUTTON, INPUT_PULLUP);
-  pinMode(PIN_WHITE_1, OUTPUT);
-  pinMode(PIN_WHITE_2, OUTPUT);
-  pinMode(PIN_GREEN_1, OUTPUT);
-  pinMode(PIN_GREEN_2, OUTPUT);
-  pinMode(PIN_YELLOW_1, OUTPUT);
-  pinMode(PIN_YELLOW_2, OUTPUT);
-  pinMode(PIN_RED_1, OUTPUT);
-  pinMode(PIN_RED_2, OUTPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
+void checkServerTimeout() {
+  if (socketConnected &&
+      uint32_t(millis() - lastServerMessageMillis) >= SERVER_TIMEOUT_MS) {
+    Serial.println("[WS] Timeout de mensagens da API.");
+    socketConnected = false;
+    stateReceived = false;
+    setTowerState(TowerState::DISCONNECTED);
+    webSocket.disconnect();  // O cliente tentara reconectar automaticamente.
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  configurePins();
-  setDisconnected();
-  beginWifi();
+  const int pins[] = {pinoVerde, pinoAmarelo, pinoVermelho, pinoBuzina};
+  for (int pin : pins) {
+    digitalWrite(pin, HIGH);
+    pinMode(pin, OUTPUT);
+    acionarRele(pin, false);
+  }
+  pinMode(pinoBotao, INPUT_PULLUP);  // Intencionalmente sem leitura do botao.
+  setTowerState(TowerState::DISCONNECTED);
 
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  Serial.println("[WIFI] Conectando...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  lastWifiAttemptMillis = millis();
+
+  webSocket.begin(API_HOST, API_PORT, API_PATH);
   authorizationHeader = "Authorization: Bearer ";
   authorizationHeader += DEVICE_TOKEN;
   authorizationHeader += "\r\n";
   webSocket.setExtraHeaders(authorizationHeader.c_str());
-  webSocket.begin(API_HOST, API_PORT, API_PATH);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(3000);
-  webSocket.enableHeartbeat(15000, 3000, 2);
+  webSocket.enableHeartbeat(10000, 3000, 2);
 }
 
 void loop() {
-  updateWifiConnection();
+  updateWifi();
+  checkServerTimeout();
   webSocket.loop();
-
+  checkServerTimeout();
   if (!socketConnected || !stateReceived || WiFi.status() != WL_CONNECTED) {
-    if (currentMode != DeviceMode::DISCONNECTED) {
-      setDisconnected();
-    }
+    setTowerState(TowerState::DISCONNECTED);
   }
   updateBlink();
 }

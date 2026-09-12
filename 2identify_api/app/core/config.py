@@ -7,6 +7,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -48,6 +49,7 @@ class Settings(BaseSettings):
     auth_admin_token_audience: str = "2identify-admin"
     auth_allowed_profiles: Annotated[frozenset[str], NoDecode] = frozenset({"operador"})
     operator_catalog_token: SecretStr | None = None
+    mobile_cors_origins: Annotated[tuple[str, ...], NoDecode] = ()
     realtime_heartbeat_interval_seconds: Annotated[
         float,
         Field(ge=0.05, le=300.0),
@@ -144,6 +146,34 @@ class Settings(BaseSettings):
         if not profiles or "" in profiles:
             raise ValueError("AUTH_ALLOWED_PROFILES deve informar ao menos um perfil")
         return profiles
+
+    @field_validator("mobile_cors_origins", mode="before")
+    @classmethod
+    def parse_mobile_cors_origins(cls, value: object) -> tuple[str, ...]:
+        raw_origins = value.split(",") if isinstance(value, str) else value
+        if raw_origins in (None, ""):
+            return ()
+        if not isinstance(raw_origins, list | tuple | set | frozenset):
+            raise ValueError("MOBILE_CORS_ORIGINS deve ser uma lista separada por vírgulas")
+        origins: list[str] = []
+        for item in raw_origins:
+            raw_origin = str(item).strip()
+            parsed = urlsplit(raw_origin)
+            if (
+                raw_origin == "*"
+                or parsed.scheme.casefold() not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("MOBILE_CORS_ORIGINS contém uma origem inválida")
+            origin = f"{parsed.scheme.casefold()}://{parsed.netloc.casefold()}"
+            if origin not in origins:
+                origins.append(origin)
+        return tuple(origins)
 
     @model_validator(mode="after")
     def validate_realtime_resource_policy(self) -> Settings:

@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain import (
+    Operation,
+    PpeRequirement,
     SafetyAlert,
     SafetyAlertSeverity,
     SafetyAlertStatus,
@@ -11,10 +13,13 @@ from app.domain import (
     WorkSessionStatus,
 )
 from app.services.safety_state_service import (
+    PpeLiveState,
     SafetyStateLevel,
     SafetyStateReason,
     SafetyStateSnapshot,
 )
+from app.engine import PpeRequirementSafetyState, PpeSafetyAssessment, PpeSafetyStatus
+from app.engine.ppe_safety import PpeRequirementAssessment
 
 _OBSERVED_AT = datetime(2026, 8, 24, 15, 0, tzinfo=UTC)
 
@@ -106,3 +111,47 @@ def test_snapshot_maps_the_three_required_conditions_and_ignores_monitoring_faul
         (SafetyStateReason.ERGONOMIC_RISK, SafetyStateLevel.CRITICAL),
         (SafetyStateReason.PERSON_IN_RISK_AREA, SafetyStateLevel.MEDIUM),
     }
+
+
+def test_monitoring_snapshot_carries_existing_ppe_assessment_and_lifecycle() -> None:
+    assessment = PpeSafetyAssessment(
+        operation_id=41,
+        operation_active=True,
+        status=PpeSafetyStatus.BLOCKED,
+        requirements=(
+            PpeRequirementAssessment(
+                ppe_id=4,
+                name="Mangote",
+                detection_class="mangote",
+                state=PpeRequirementSafetyState.ABSENT,
+            ),
+        ),
+        sample_count=8,
+        window_size=8,
+    )
+    active = SafetyStateSnapshot.from_alerts(
+        _work_session(),
+        (),
+        _OBSERVED_AT,
+        ppe_assessment=assessment,
+    )
+    assert active.started_at == _OBSERVED_AT
+    assert active.session_status.value == "active"
+    assert active.ppe[0].ppe_id == 4
+    assert active.ppe[0].state is PpeLiveState.ABSENT
+
+    initial = SafetyStateSnapshot.initial(
+        _work_session(),
+        Operation(
+            41,
+            "Inspeção",
+            required_ppe=(PpeRequirement(4, "Mangote", "mangote"),),
+        ),
+        _OBSERVED_AT,
+    )
+    assert initial.ppe[0].state is PpeLiveState.COLLECTING
+
+    ended = SafetyStateSnapshot.ended(_work_session(), _OBSERVED_AT)
+    assert ended.session_status.value == "ended"
+    assert ended.ppe == ()
+    assert ended.conditions == ()

@@ -41,6 +41,10 @@ class AlertDeliveryWorker(QThread):
         self._retry_delay_ms = round(retry_delay_seconds * 1_000)
 
     @property
+    def alert(self) -> SafetyAlert:
+        return self._alert
+
+    @property
     def event_id(self) -> str:
         return str(self._alert.alert_id)
 

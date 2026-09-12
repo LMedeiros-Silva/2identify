@@ -135,6 +135,7 @@ _PPE_DETECTION_CLASS_BY_CODE = {
     "EPI-004": "mangote",
     "EPI-005": "oculos",
     "EPI-006": "protetor_headset",
+    "HEADSET": "protetor_headset",
 }
 _PPE_DETECTION_CLASS_BY_NAME = {
     "bota": "bota",
@@ -149,7 +150,13 @@ _PPE_DETECTION_CLASS_BY_NAME = {
     "mascara": "mascara",
     "oculos": "oculos",
     "oculos de protecao": "oculos",
+    "abafador": "protetor_headset",
+    "abafador de ruido": "protetor_headset",
+    "headset": "protetor_headset",
+    "protetor auditivo": "protetor_headset",
     "protetor auricular": "protetor_headset",
+    "protetor auricular tipo concha": "protetor_headset",
+    "protetor headset": "protetor_headset",
 }
 
 
@@ -250,9 +257,7 @@ class OperatorApiClient:
         return self._request_operations(
             path="operator/operations/catalog",
             token=token,
-            authorization_error=(
-                "O token de leitura do catálogo foi rejeitado pela API."
-            ),
+            authorization_error=("O token de leitura do catálogo foi rejeitado pela API."),
         )
 
     def _request_operations(
@@ -306,9 +311,7 @@ class OperatorApiClient:
     ) -> AlertDeliveryReceipt:
         token = access_token.strip()
         if not token:
-            raise AlertDeliveryRejectedError(
-                "O alerta exige uma sessão autenticada pela API."
-            )
+            raise AlertDeliveryRejectedError("O alerta exige uma sessão autenticada pela API.")
         payload = {
             "event_id": str(alert.alert_id),
             "work_session_id": str(alert.work_session_id),
@@ -319,6 +322,8 @@ class OperatorApiClient:
             "subject_key": alert.violation.subject_key,
             "summary": alert.violation.summary,
             "severity": alert.violation.severity.value,
+            "status": alert.status.value,
+            "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
             "first_observed_at": alert.first_observed_at.isoformat(),
             "raised_at": alert.raised_at.isoformat(),
         }
@@ -338,9 +343,7 @@ class OperatorApiClient:
             httpx.codes.CONFLICT,
             httpx.codes.UNPROCESSABLE_ENTITY,
         }:
-            raise AlertDeliveryRejectedError(
-                "A API rejeitou o alerta ou a sessão do operador."
-            )
+            raise AlertDeliveryRejectedError("A API rejeitou o alerta ou a sessão do operador.")
         try:
             response.raise_for_status()
             receipt = _AlertReceiptPayload.model_validate(response.json())
@@ -374,6 +377,11 @@ class OperatorApiClient:
             "operation_id": snapshot.operation_id,
             "camera_id": snapshot.camera_id,
             "observed_at": snapshot.observed_at.isoformat(),
+            "started_at": (
+                snapshot.started_at.isoformat() if snapshot.started_at is not None else None
+            ),
+            "session_status": snapshot.session_status.value,
+            "ppe": [{"ppe_id": item.ppe_id, "state": item.state.value} for item in snapshot.ppe],
             "conditions": [
                 {
                     "condition_id": item.condition_id,

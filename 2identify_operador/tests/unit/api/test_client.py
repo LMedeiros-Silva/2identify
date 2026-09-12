@@ -29,6 +29,8 @@ from app.services.operation_service import (
 )
 from app.services.safety_state_service import (
     HardwareSafetyState,
+    PpeLiveState,
+    PpeLiveStateSnapshot,
     SafetyConditionState,
     SafetyStateLevel,
     SafetyStateReason,
@@ -188,6 +190,12 @@ def test_list_operations_maps_api_catalog_with_ppe_and_calibrated_risk_area() ->
                             "code": "EPI-005",
                             "description": None,
                         },
+                        {
+                            "id": 6,
+                            "name": "Headset",
+                            "code": "HEAD-001",
+                            "description": "Protetor auricular tipo concha.",
+                        },
                     ],
                     "risk_area": {
                         "id": 8,
@@ -219,6 +227,7 @@ def test_list_operations_maps_api_catalog_with_ppe_and_calibrated_risk_area() ->
     assert [item.detection_class for item in operation.required_ppe] == [
         "capacete",
         "oculos",
+        "protetor_headset",
     ]
     assert operation.risk_area is not None
     assert operation.risk_area.camera_id == 3
@@ -235,9 +244,7 @@ def test_list_operations_maps_api_catalog_with_ppe_and_calibrated_risk_area() ->
 
 def test_list_operations_with_catalog_token_uses_read_only_endpoint() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url == (
-            "https://api.example.test/v1/operator/operations/catalog"
-        )
+        assert request.url == ("https://api.example.test/v1/operator/operations/catalog")
         assert request.headers["Authorization"] == "Bearer catalog-token"
         return httpx.Response(200, json=[])
 
@@ -381,6 +388,8 @@ def test_send_safety_state_uses_authenticated_complete_snapshot() -> None:
         operation_id=41,
         camera_id=3,
         observed_at=observed_at,
+        started_at=observed_at,
+        ppe=(PpeLiveStateSnapshot(1, PpeLiveState.CONFIRMED),),
         conditions=(
             SafetyConditionState(
                 condition_id="risk_area:8",
@@ -397,6 +406,9 @@ def test_send_safety_state_uses_authenticated_complete_snapshot() -> None:
         assert request.headers["Authorization"] == "Bearer token-operador"
         payload = json.loads(request.content)
         assert payload["work_session_id"] == str(snapshot.work_session_id)
+        assert payload["started_at"] == observed_at.isoformat()
+        assert payload["session_status"] == "active"
+        assert payload["ppe"] == [{"ppe_id": 1, "state": "confirmed"}]
         assert payload["conditions"] == [
             {
                 "condition_id": "risk_area:8",
@@ -424,3 +436,28 @@ def test_send_safety_state_uses_authenticated_complete_snapshot() -> None:
     assert receipt.reason is SafetyStateReason.PERSON_IN_RISK_AREA
     assert receipt.active_conditions == 1
     client.close()
+
+
+def test_send_alert_delivers_resolution_with_original_event_identity() -> None:
+    alert = _ergonomic_alert().resolve(datetime(2026, 8, 23, 18, 1, tzinfo=UTC))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["event_id"] == str(alert.alert_id)
+        assert payload["status"] == "resolved"
+        assert payload["resolved_at"] == alert.resolved_at.isoformat()
+        return httpx.Response(
+            200,
+            json={
+                "event_id": str(alert.alert_id),
+                "alert_id": 1,
+                "occurrence_id": 2,
+                "duplicate": False,
+            },
+        )
+
+    client = _client(handler)
+    try:
+        assert client.send_alert(alert, "test-token").alert_id == 1
+    finally:
+        client.close()

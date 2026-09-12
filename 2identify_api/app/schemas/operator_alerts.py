@@ -40,6 +40,8 @@ class OperatorAlertCreate(BaseModel):
     severity: Literal["warning", "critical"]
     first_observed_at: AwareDatetime
     raised_at: AwareDatetime
+    status: Literal["active", "resolved"] = "active"
+    resolved_at: AwareDatetime | None = None
 
     @field_validator("subject_key")
     @classmethod
@@ -54,15 +56,19 @@ class OperatorAlertCreate(BaseModel):
     def normalize_summary(cls, value: str) -> str:
         return normalize_public_summary(value)
 
-    @field_validator("first_observed_at", "raised_at")
+    @field_validator("first_observed_at", "raised_at", "resolved_at")
     @classmethod
-    def normalize_timestamp(cls, value: datetime) -> datetime:
-        return value.astimezone(UTC)
+    def normalize_timestamp(cls, value: datetime | None) -> datetime | None:
+        return value.astimezone(UTC) if value is not None else None
 
     @model_validator(mode="after")
     def validate_timeline(self) -> OperatorAlertCreate:
         if self.raised_at < self.first_observed_at:
             raise ValueError("raised_at não pode anteceder first_observed_at")
+        if (self.status == "resolved") != (self.resolved_at is not None):
+            raise ValueError("status resolved exige resolved_at; active não permite resolved_at")
+        if self.resolved_at is not None and self.resolved_at < self.raised_at:
+            raise ValueError("resolved_at não pode anteceder raised_at")
         return self
 
 

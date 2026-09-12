@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07182d">
+    <title>2Identify — Alertas</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section id="login-view" class="login-view" aria-labelledby="login-title">
+        <div class="brand-mark" aria-hidden="true">2I</div>
+        <p class="eyebrow">ACESSO ADMINISTRATIVO</p>
+        <h1 id="login-title">Alertas na palma da mão</h1>
+        <p class="intro">Entre com o mesmo usuário administrador do 2Identify.</p>
+        <form id="login-form" class="login-card">
+          <label for="username">Usuário</label>
+          <input id="username" name="username" autocomplete="username" required>
+          <label for="password">Senha</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <p id="login-error" class="error-message" role="alert" hidden></p>
+          <button id="login-button" class="primary-button" type="submit">Entrar</button>
+        </form>
+      </section>
+
+      <section id="alerts-view" class="alerts-view" aria-labelledby="alerts-title" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">2IDENTIFY</p>
+            <h1 id="alerts-title">Alertas</h1>
+          </div>
+          <button id="logout-button" class="icon-button" type="button">Sair</button>
+        </header>
+
+        <div class="summary-panel">
+          <div>
+            <span class="summary-label">Monitoramento</span>
+            <strong id="summary-count">0 ocorrências</strong>
+          </div>
+          <button id="refresh-button" class="refresh-button" type="button">Atualizar</button>
+        </div>
+
+        <nav class="filters" aria-label="Filtros de alertas">
+          <button class="filter-button active" data-filter="all" type="button">Todos</button>
+          <button class="filter-button" data-filter="critical" type="button">Críticos</button>
+          <button class="filter-button" data-filter="attention" type="button">Atenção</button>
+          <button class="filter-button" data-filter="resolved" type="button">Resolvidos</button>
+        </nav>
+
+        <p id="alerts-error" class="error-banner" role="alert" hidden></p>
+        <p id="loading-state" class="status-message" aria-live="polite" hidden>Atualizando alertas…</p>
+        <section id="alerts-list" class="alerts-list" aria-live="polite"></section>
+        <p id="last-updated" class="last-updated"></p>
+      </section>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

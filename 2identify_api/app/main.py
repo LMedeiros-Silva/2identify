@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
@@ -22,7 +23,7 @@ from app.realtime import (
     RealtimeEventBroker,
     UnavailableAdminRealtimeAuthorizer,
 )
-from app.services import SafetyStateAggregator
+from app.services import ActiveOperationRegistry, SafetyStateAggregator
 
 logger = logging.getLogger(__name__)
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -78,6 +79,9 @@ def create_app(
         sink_close_timeout_seconds=resolved_settings.realtime_sink_close_timeout_seconds,
     )
     resolved_safety_state_aggregator = SafetyStateAggregator(resolved_safety_state_broker)
+    resolved_active_operation_registry = ActiveOperationRegistry(
+        resolved_realtime_event_broker
+    )
     if admin_realtime_authorizer is not None:
         resolved_admin_realtime_authorizer = admin_realtime_authorizer
     elif isinstance(resolved_database, DatabaseManager):
@@ -128,8 +132,17 @@ def create_app(
     application.state.realtime_event_broker = resolved_realtime_event_broker
     application.state.safety_state_broker = resolved_safety_state_broker
     application.state.safety_state_aggregator = resolved_safety_state_aggregator
+    application.state.active_operation_registry = resolved_active_operation_registry
     application.state.admin_realtime_authorizer = resolved_admin_realtime_authorizer
     application.add_exception_handler(RequestValidationError, request_validation_error_handler)
+    if resolved_settings.mobile_cors_origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(resolved_settings.mobile_cors_origins),
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
     application.include_router(router)
     return application
 

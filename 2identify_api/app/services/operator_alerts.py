@@ -9,6 +9,7 @@ from typing import Literal, cast
 from app.repositories.safety_alert_repository import SafetyAlertRepository, StoredAlert
 from app.schemas.operator_alerts import OperatorAlertCreate
 from app.schemas.realtime import AlertCreatedPayload, RealtimeEventEnvelope
+from app.schemas.safety_state import SafetyConditionSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,9 @@ class OperatorAlertService:
     def __init__(self, repository: SafetyAlertRepository) -> None:
         self._repository = repository
 
+    def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
+        return self._repository.active_conditions()
+
     def ingest(
         self,
         payload: OperatorAlertCreate,
@@ -28,11 +32,13 @@ class OperatorAlertService:
         operator_id: int,
     ) -> OperatorAlertResult:
         legacy_payload_hash = sha256(
-            payload.model_dump_json(exclude_none=False).encode("utf-8")
+            payload.model_dump_json(exclude={"status", "resolved_at"}, exclude_none=False).encode(
+                "utf-8"
+            )
         ).hexdigest()
         payload_hash = sha256(
             payload.model_dump_json(
-                exclude={"severity"},
+                exclude={"severity", "status", "resolved_at"},
                 exclude_none=False,
             ).encode("utf-8")
         ).hexdigest()
@@ -50,6 +56,7 @@ class OperatorAlertService:
             summary=payload.summary,
             severity=payload.severity,
             detected_at=payload.raised_at,
+            resolved_at=payload.resolved_at,
         )
         category = cast(
             Literal["ppe", "ergonomics", "monitoring", "risk_area"],
@@ -61,15 +68,14 @@ class OperatorAlertService:
             }[payload.violation_type],
         )
         event = RealtimeEventEnvelope(
-            event_id=payload.event_id,
             event_type="alert.created",
-            occurred_at=payload.raised_at,
+            occurred_at=payload.resolved_at or payload.raised_at,
             payload=AlertCreatedPayload(
                 alert_id=stored.alert_id,
                 occurrence_id=stored.occurrence_id,
                 category=category,
-                level=payload.severity,
-                status="nao_lido",
+                level=cast(Literal["warning", "critical"], stored.severity),
+                status=cast(Literal["nao_lido", "lido", "encerrado"], stored.status),
                 summary=payload.summary,
                 detected_at=payload.raised_at,
                 camera_id=payload.camera_id,

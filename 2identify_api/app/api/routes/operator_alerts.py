@@ -7,16 +7,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import (
     get_current_operator,
     get_operator_alert_service,
     get_realtime_event_broker,
+    get_safety_state_aggregator,
 )
 from app.realtime import RealtimeEventBroker
 from app.repositories import AlertEventConflictError
 from app.schemas import OperatorAlertCreate, OperatorAlertReceipt
-from app.services import OperatorAlertService, OperatorPrincipal
+from app.services import OperatorAlertService, OperatorPrincipal, SafetyStateAggregator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/operator", tags=["operator-alerts"])
@@ -34,16 +36,18 @@ _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
         status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Persistência indisponível"},
     },
 )
-def ingest_operator_alert(
+async def ingest_operator_alert(
     payload: OperatorAlertCreate,
     response: Response,
     background_tasks: BackgroundTasks,
     principal: Annotated[OperatorPrincipal, Depends(get_current_operator)],
     service: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
     broker: Annotated[RealtimeEventBroker, Depends(get_realtime_event_broker)],
+    aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
 ) -> OperatorAlertReceipt:
     try:
-        result = service.ingest(payload, operator_id=principal.account_id)
+        result = await run_in_threadpool(service.ingest, payload, operator_id=principal.account_id)
+        await aggregator.refresh_after_commit(service.active_conditions)
     except AlertEventConflictError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

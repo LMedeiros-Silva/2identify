@@ -1,6 +1,10 @@
 """Application use cases."""
 
 from app.services.admin_alerts import AdminAlertsService
+from app.services.active_operations import (
+    ActiveOperationRegistry,
+    ActiveOperationSnapshotConflictError,
+)
 from app.services.admin_authorization import (
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,
@@ -23,6 +27,8 @@ from app.services.safety_state import SafetyStateAggregator, SafetyStateUpdateRe
 
 __all__ = [
     "AdminAlertsService",
+    "ActiveOperationRegistry",
+    "ActiveOperationSnapshotConflictError",
     "AdministratorPrincipal",
     "AdminAuthorizationRejectedError",
     "AdminAuthorizationService",

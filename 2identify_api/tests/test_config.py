@@ -75,3 +75,34 @@ def test_per_admin_realtime_limit_cannot_exceed_global_limit() -> None:
             realtime_max_connections_per_admin=3,
             _env_file=None,
         )
+
+
+def test_mobile_cors_origins_are_empty_by_default_and_parse_explicit_origins() -> None:
+    default = Settings(
+        database_url="postgresql+psycopg2://user:password@localhost/identify_db",
+        _env_file=None,
+    )
+    configured = Settings(
+        database_url="postgresql+psycopg2://user:password@localhost/identify_db",
+        mobile_cors_origins="http://localhost:5173,http://192.168.1.20:5173/",
+        _env_file=None,
+    )
+
+    assert default.mobile_cors_origins == ()
+    assert configured.mobile_cors_origins == (
+        "http://localhost:5173",
+        "http://192.168.1.20:5173",
+    )
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["*", "http://localhost:5173/app", "http://user:password@localhost:5173"],
+)
+def test_mobile_cors_rejects_wildcard_paths_and_credentials(origin: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            database_url="postgresql+psycopg2://user:password@localhost/identify_db",
+            mobile_cors_origins=origin,
+            _env_file=None,
+        )

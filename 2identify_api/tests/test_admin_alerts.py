@@ -30,7 +30,12 @@ from app.models import Base, SafetyAlertIngestion, Usuario
 from tests.test_admin_api import LifecycleDatabase, make_settings
 
 
-def _alert_api() -> Iterator[tuple[FastAPI, sessionmaker[Session], Table]]:
+def _alert_api(
+    *,
+    operation_id: int = 12,
+    seed_operation: bool = True,
+    include_ingestion: bool = True,
+) -> Iterator[tuple[FastAPI, sessionmaker[Session], Table]]:
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -89,6 +94,12 @@ def _alert_api() -> Iterator[tuple[FastAPI, sessionmaker[Session], Table]]:
         Column("confirmado_por", Integer),
         Column("encerrado_em", DateTime(timezone=True)),
         Column("encerrado_por", Integer),
+    )
+    operations = Table(
+        "operacoes",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("nome", String(150), nullable=False),
     )
     metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
@@ -173,20 +184,23 @@ def _alert_api() -> Iterator[tuple[FastAPI, sessionmaker[Session], Table]]:
                 "encerrado_por": None,
             },
         )
-        session.add(
-            SafetyAlertIngestion(
-                evento_id=uuid4(),
-                payload_hash="a" * 64,
-                alerta_id=20,
-                sessao_trabalho_id=uuid4(),
-                operador_usuario_id=operator.id,
-                operacao_id=12,
-                area_risco_id=7,
-                violacao_tipo="ergonomic_risk",
-                assunto_chave="ergonomics:trunk_inclination",
-                recebido_em=now,
+        if seed_operation:
+            session.execute(operations.insert(), {"id": operation_id, "nome": "Soldagem"})
+        if include_ingestion:
+            session.add(
+                SafetyAlertIngestion(
+                    evento_id=uuid4(),
+                    payload_hash="a" * 64,
+                    alerta_id=20,
+                    sessao_trabalho_id=uuid4(),
+                    operador_usuario_id=operator.id,
+                    operacao_id=operation_id,
+                    area_risco_id=7,
+                    violacao_tipo="ergonomic_risk",
+                    assunto_chave="ergonomics:trunk_inclination",
+                    recebido_em=now,
+                )
             )
-        )
     application.state.test_admin_id = administrator.id
     yield application, sessions, alerts
     application.dependency_overrides.clear()
@@ -224,7 +238,42 @@ def test_alert_list_exposes_complete_ergonomic_occurrence() -> None:
         assert alert["occurrence"]["camera"]["sector"]["name"] == "Montagem"
         assert alert["operational_context"]["operator"]["name"] == "Operador Ergonomia"
         assert alert["operational_context"]["operation_id"] == 12
+        assert alert["operational_context"]["operation_name"] == "Soldagem"
         assert response.headers["cache-control"] == "no-store"
+    finally:
+        fixture.close()
+
+
+def test_unknown_logical_operation_keeps_alert_with_null_operation_name() -> None:
+    fixture = _alert_api(operation_id=999, seed_operation=False)
+    application, _sessions, _alerts = next(fixture)
+    try:
+        with TestClient(application) as client:
+            response = client.get(
+                "/admin/alerts",
+                headers={"Authorization": f"Bearer {_token(client)}"},
+            )
+
+        assert response.status_code == 200
+        context = response.json()["items"][0]["operational_context"]
+        assert context["operation_id"] == 999
+        assert context["operation_name"] is None
+    finally:
+        fixture.close()
+
+
+def test_alert_without_ingestion_is_still_returned_without_operation() -> None:
+    fixture = _alert_api(seed_operation=False, include_ingestion=False)
+    application, _sessions, _alerts = next(fixture)
+    try:
+        with TestClient(application) as client:
+            response = client.get(
+                "/admin/alerts",
+                headers={"Authorization": f"Bearer {_token(client)}"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["items"][0]["operational_context"] is None
     finally:
         fixture.close()
 

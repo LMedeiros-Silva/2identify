@@ -145,6 +145,34 @@ deduplicação, resumo, severidade e timestamps UTC. O primeiro envio retorna `2
 idêntica retorna `200` com `duplicate=true`; reutilizar o UUID com outro payload retorna `409`.
 O Admin recebe a categoria `ergonomics`, `ppe`, `risk_area` ou `monitoring` no evento WebSocket.
 
+## Torre de sinalização ESP32
+
+O canal existente `WS /ws/devices/safety` exige `Authorization: Bearer` com o
+token exclusivo de `SAFETY_DEVICE_TOKEN` no `.env` (já previsto no `.env.example`).
+Não usa JWT de usuário nem aceita credenciais por query string.
+
+`SafetyStateAggregator` calcula o estado a partir de `alertas` não encerrados:
+nenhum alerta = GREEN; aviso = YELLOW; qualquer crítico = RED. `lido` ainda conta
+como ativo; `encerrado` não. Eventos do Operator agora aceitam `status=resolved`
+e `resolved_at`, preservando o mesmo UUID, a maior severidade e a compatibilidade
+dos payloads antigos. Isso usa as colunas existentes; não exige migration nova.
+
+O recálculo ocorre após criar/escalar/resolver um alerta ou confirmar/encerrar no
+Admin. Um envio antigo não reabre um evento encerrado. A torre não substitui a
+publicação de alertas ao Admin: falha no cache do hardware não descarta evento
+já persistido. O snapshot de gestão de EPI continua separado e não limpa alertas.
+
+Conexão/reconexão consulta imediatamente os alertas persistidos. O broker envia
+mudanças e repete o estado validado a cada no máximo 10 s como heartbeat de
+aplicação, sem polling do banco. Se o recálculo falhar, invalida o cache e fecha
+os dispositivos no próximo heartbeat. O firmware tem watchdog adicional de 30 s.
+
+Use um processo Uvicorn (`--workers 1`), pois o broker/cache é em memória. Para
+vários processos será necessária infraestrutura compartilhada, fora deste escopo.
+O firmware usa `ws://` somente em rede privada confiável; exposição pública exige
+WSS/HTTPS com certificado validado. Veja o guia completo de IP, token, bibliotecas,
+relés e teste em `../2identify_operador/firmware/esp32_safety_signal/README.md`.
+
 ## Tratamento de alertas pelo Admin
 
 Os endpoints abaixo exigem bearer administrativo e retornam `Cache-Control: no-store`:

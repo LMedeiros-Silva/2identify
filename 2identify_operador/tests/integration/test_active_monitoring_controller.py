@@ -23,6 +23,7 @@ from app.domain import (
     WorkSession,
     WorkSessionStatus,
 )
+from app.services.safety_state_service import PpeLiveState
 from app.ui.active import ActiveOperationPage
 from app.ui.components import CameraFrameView
 from app.vision.pose import COCO_KEYPOINT_COUNT, CocoKeypoint, PersonPose, PoseKeypoint
@@ -198,6 +199,8 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
         camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
     )
+    snapshots = []
+    inference_controller.safety_state_snapshot_ready.connect(snapshots.append)
 
     page.activate_monitoring()
 
@@ -213,6 +216,14 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
     assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
         "EPIs CONFORMES NO MONITORAMENTO ATUAL"
     )
+    qtbot.waitUntil(
+        lambda: any(
+            item.ppe and item.ppe[0].state is PpeLiveState.CONFIRMED
+            for item in snapshots
+        ),
+        timeout=2_000,
+    )
+    assert snapshots[0].ppe[0].state is PpeLiveState.COLLECTING
 
     page.deactivate_monitoring()
 
@@ -225,6 +236,7 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
         timeout=2_000,
     )
     assert not preview.has_frame
+    assert snapshots[-1].session_status.value == "ended"
     inference_controller.shutdown()
     camera_controller.shutdown()
 

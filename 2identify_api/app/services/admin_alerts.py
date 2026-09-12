@@ -118,6 +118,7 @@ class AdminAlertsService:
                 event_id=record.event_id,
                 work_session_id=record.work_session_id,
                 operation_id=record.operation_id,
+                operation_name=_optional_text(record.operation_name),
                 risk_area_id=record.risk_area_id,
                 violation_type=record.violation_type,
                 subject_key=record.subject_key,

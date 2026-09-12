@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from typing import Annotated
@@ -11,6 +12,7 @@ from fastapi import APIRouter, Depends, WebSocket, status
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import (
+    get_operator_alert_service,
     get_runtime_settings,
     get_safety_state_aggregator,
     get_safety_state_broker,
@@ -22,7 +24,7 @@ from app.realtime import (
     RealtimeEventBroker,
     WebSocketEventSink,
 )
-from app.services import SafetyStateAggregator
+from app.services import OperatorAlertService, SafetyStateAggregator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["device-safety"])
@@ -92,6 +94,7 @@ async def safety_device_stream(
     settings: Annotated[Settings, Depends(get_runtime_settings)],
     aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
     broker: Annotated[RealtimeEventBroker, Depends(get_safety_state_broker)],
+    alerts: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
 ) -> None:
     """Send the current state immediately and then only effective changes."""
 
@@ -124,6 +127,17 @@ async def safety_device_stream(
         )
         return
 
+    try:
+        await aggregator.refresh(alerts.active_conditions)
+    except Exception as error:
+        logger.warning(
+            "safety_device_snapshot_unavailable", extra={"error_type": type(error).__name__}
+        )
+        await _deny_handshake(
+            websocket, status_code=503, detail="Estado de segurança indisponível."
+        )
+        return
+
     await websocket.accept()
     sink = WebSocketEventSink(
         websocket,
@@ -134,7 +148,13 @@ async def safety_device_stream(
         subscription_id = await broker.subscribe(sink)
         if not await aggregator.send_current(subscription_id):
             return
-        await _receive_until_disconnect(websocket, broker, subscription_id)
+        await _run_connection(
+            websocket,
+            broker,
+            aggregator,
+            subscription_id,
+            min(settings.realtime_heartbeat_interval_seconds, 10.0),
+        )
     except BrokerClosedError:
         await sink.close(
             code=_SERVICE_RESTART_CLOSE_CODE,
@@ -164,3 +184,37 @@ async def safety_device_stream(
     finally:
         if subscription_id is not None:
             await broker.unsubscribe(subscription_id)
+
+
+async def _heartbeat(
+    broker: RealtimeEventBroker,
+    aggregator: SafetyStateAggregator,
+    subscription_id: UUID,
+    interval: float,
+) -> None:
+    while True:
+        await asyncio.sleep(interval)
+        if not await aggregator.send_current(subscription_id):
+            await broker.disconnect(subscription_id, code=1011, reason="Estado indisponível")
+            return
+
+
+async def _run_connection(
+    websocket: WebSocket,
+    broker: RealtimeEventBroker,
+    aggregator: SafetyStateAggregator,
+    subscription_id: UUID,
+    interval: float,
+) -> None:
+    tasks = {
+        asyncio.create_task(_heartbeat(broker, aggregator, subscription_id, interval)),
+        asyncio.create_task(_receive_until_disconnect(websocket, broker, subscription_id)),
+    }
+    try:
+        done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

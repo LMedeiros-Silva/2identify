@@ -73,6 +73,7 @@ class AdminAlertOperationalContext(BaseModel):
     event_id: UUID
     work_session_id: UUID
     operation_id: Annotated[int, Field(gt=0)]
+    operation_name: str | None = Field(default=None, max_length=150)
     risk_area_id: Annotated[int, Field(gt=0)] | None = None
     violation_type: Annotated[str, Field(min_length=1, max_length=50)]
     subject_key: Annotated[str, Field(min_length=1, max_length=150)]

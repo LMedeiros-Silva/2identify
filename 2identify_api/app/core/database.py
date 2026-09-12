@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
 
-from fastapi import Request
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.requests import HTTPConnection
 
 from app.core.config import Settings
 
@@ -68,7 +68,7 @@ class DatabaseManager:
         self.engine.dispose()
 
 
-def get_database_manager(request: Request) -> DatabaseManager:
+def get_database_manager(request: HTTPConnection) -> DatabaseManager:
     """Resolve the application-owned database manager."""
 
     database = getattr(request.app.state, "database", None)
@@ -77,7 +77,7 @@ def get_database_manager(request: Request) -> DatabaseManager:
     return database
 
 
-def get_db(request: Request) -> Iterator[Session]:
+def get_db(request: HTTPConnection) -> Iterator[Session]:
     """Provide one SQLAlchemy session and always close it after the request."""
 
     database = get_database_manager(request)

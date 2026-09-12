@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.admin_active_operations import router as admin_active_operations_router
 from app.api.routes.admin_alerts import router as admin_alerts_router
 from app.api.routes.admin_authentication import router as admin_authentication_router
 from app.api.routes.admin_operations import router as admin_operations_router
@@ -19,6 +20,7 @@ router.include_router(foundation_router)
 router.include_router(authentication_router)
 router.include_router(admin_authentication_router)
 router.include_router(admin_router)
+router.include_router(admin_active_operations_router)
 router.include_router(admin_alerts_router)
 router.include_router(admin_operations_router)
 router.include_router(admin_realtime_router)

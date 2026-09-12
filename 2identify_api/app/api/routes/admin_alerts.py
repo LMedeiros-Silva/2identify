@@ -7,11 +7,22 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
-from app.api.dependencies import get_admin_alerts_service, get_current_admin
+from app.api.dependencies import (
+    get_admin_alerts_service,
+    get_current_admin,
+    get_operator_alert_service,
+    get_safety_state_aggregator,
+)
 from app.repositories import AdminAlertNotFoundError, AdminAlertStateConflictError
 from app.schemas import AdminAlertActionRequest, AdminAlertDetail, AdminAlertList
-from app.services import AdminAlertsService, AdministratorPrincipal
+from app.services import (
+    AdminAlertsService,
+    AdministratorPrincipal,
+    OperatorAlertService,
+    SafetyStateAggregator,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/alerts", tags=["administrative-alerts"])
@@ -58,20 +69,25 @@ def get_admin_alert(
 
 
 @router.patch("/{alert_id}/confirm", response_model=AdminAlertDetail)
-def confirm_admin_alert(
+async def confirm_admin_alert(
     alert_id: int,
     payload: AdminAlertActionRequest,
     response: Response,
     administrator: Annotated[AdministratorPrincipal, Depends(get_current_admin)],
     service: Annotated[AdminAlertsService, Depends(get_admin_alerts_service)],
+    safety_alerts: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
+    aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
 ) -> AdminAlertDetail:
     response.headers.update(_NO_STORE_HEADERS)
     try:
-        return service.confirm_alert(
+        result = await run_in_threadpool(
+            service.confirm_alert,
             alert_id,
             administrator_id=administrator.account_id,
             observation=payload.observation,
         )
+        await aggregator.refresh_after_commit(safety_alerts.active_conditions)
+        return result
     except AdminAlertNotFoundError as error:
         raise _not_found() from error
     except AdminAlertStateConflictError as error:
@@ -81,20 +97,25 @@ def confirm_admin_alert(
 
 
 @router.patch("/{alert_id}/close", response_model=AdminAlertDetail)
-def close_admin_alert(
+async def close_admin_alert(
     alert_id: int,
     payload: AdminAlertActionRequest,
     response: Response,
     administrator: Annotated[AdministratorPrincipal, Depends(get_current_admin)],
     service: Annotated[AdminAlertsService, Depends(get_admin_alerts_service)],
+    safety_alerts: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
+    aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
 ) -> AdminAlertDetail:
     response.headers.update(_NO_STORE_HEADERS)
     try:
-        return service.close_alert(
+        result = await run_in_threadpool(
+            service.close_alert,
             alert_id,
             administrator_id=administrator.account_id,
             observation=payload.observation,
         )
+        await aggregator.refresh_after_commit(safety_alerts.active_conditions)
+        return result
     except AdminAlertNotFoundError as error:
         raise _not_found() from error
     except AdminAlertStateConflictError as error:

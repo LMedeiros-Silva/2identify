@@ -102,6 +102,22 @@ def operations_api() -> Iterator[tuple[TestClient, sessionmaker[Session]]]:
         Column("epi_id", Integer, primary_key=True),
         Column("criado_em", DateTime(timezone=True), nullable=False),
     )
+    # The tower reads persisted alerts independently from the live PPE snapshot.
+    Table(
+        "ocorrencias",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("tipo", String(100)),
+    )
+    Table(
+        "alertas",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("ocorrencia_id", Integer),
+        Column("nivel", String(30)),
+        Column("status", String(30)),
+        Column("criado_em", DateTime(timezone=True)),
+    )
     metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     with engine.begin() as connection:
@@ -214,6 +230,62 @@ def test_admin_creates_area_and_operation_operator_reads_same_polygon(operations
     )
     assert face_id_view.status_code == 200
     assert face_id_view.json() == operator_view.json()
+
+
+def test_operator_publishes_active_ppe_snapshot_for_admin(operations_api) -> None:
+    client, _sessions = operations_api
+    area = client.post(
+        "/admin/risk-areas",
+        json={
+            "camera_id": 5,
+            "name": "Linha monitorada",
+            "geometry": {
+                "type": "polygon",
+                "points": [[0.1, 0.1], [0.9, 0.1], [0.5, 0.9]],
+            },
+        },
+    ).json()
+    operation = client.post(
+        "/admin/operations",
+        json={
+            "name": "Montagem monitorada",
+            "description": None,
+            "epi_ids": [1, 2],
+            "risk_area_id": area["id"],
+        },
+    ).json()
+    started_at = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
+    base_payload = {
+        "work_session_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "operation_id": operation["id"],
+        "camera_id": 5,
+        "started_at": started_at.isoformat(),
+        "observed_at": started_at.isoformat(),
+        "session_status": "active",
+        "ppe": [
+            {"ppe_id": 1, "state": "confirmed"},
+            {"ppe_id": 2, "state": "absent"},
+        ],
+        "conditions": [],
+    }
+
+    published = client.put("/operator/safety-state", json=base_payload)
+    assert published.status_code == 200
+    active = client.get("/admin/active-operations")
+    assert active.status_code == 200
+    assert active.json()[0]["operator_id"] == 2
+    assert active.json()[0]["operator_name"] == "Operador"
+    assert active.json()[0]["operation_name"] == "Montagem monitorada"
+    assert active.json()[0]["overall_status"] == "non_compliant"
+
+    ended_payload = {
+        **base_payload,
+        "session_status": "ended",
+        "ppe": [],
+    }
+    ended = client.put("/operator/safety-state", json=ended_payload)
+    assert ended.status_code == 200
+    assert client.get("/admin/active-operations").json() == []
 
 
 def test_operator_catalog_rejects_missing_or_invalid_device_token(operations_api) -> None:

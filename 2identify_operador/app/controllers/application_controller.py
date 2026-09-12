@@ -15,10 +15,14 @@ from app.core.session import (
     OperatorSessionAlreadyActiveError,
     OperatorSessionContext,
 )
-from app.domain import OperationStartAuthorization, SafetyAlert
+from app.domain import OperationStartAuthorization, SafetyAlert, SafetyAlertStatus
 from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
 from app.engine import AlertEngineUpdate
-from app.services.alert_delivery_service import AlertDeliveryReceipt, AlertSender
+from app.services.alert_delivery_service import (
+    AlertDeliveryError,
+    AlertDeliveryReceipt,
+    AlertSender,
+)
 from app.services.manual_service import ManualService
 from app.services.operation_service import OperationService
 from app.services.safety_state_service import (
@@ -302,7 +306,7 @@ class ApplicationController(QObject):
     def _handle_local_alert_update(self, value: object) -> None:
         if not isinstance(value, AlertEngineUpdate):
             return
-        delivery_alerts = (*value.raised_alerts, *value.escalated_alerts)
+        delivery_alerts = (*value.raised_alerts, *value.escalated_alerts, *value.resolved_alerts)
         if not delivery_alerts:
             return
         main_window = self._main_window
@@ -321,7 +325,8 @@ class ApplicationController(QObject):
         for alert in delivery_alerts:
             event_id = str(alert.alert_id)
             if event_id in self._alert_delivery_workers:
-                if alert in value.escalated_alerts:
+                pending = self._pending_alert_deliveries.get(event_id)
+                if pending is None or pending.status is not SafetyAlertStatus.RESOLVED:
                     self._pending_alert_deliveries[event_id] = alert
                 continue
             self._start_alert_delivery(alert, session.access_token)
@@ -372,12 +377,7 @@ class ApplicationController(QObject):
         session = self._session_context.current
         settings = self._settings
         sender = self._safety_state_sender
-        if (
-            session is None
-            or session.access_token is None
-            or settings is None
-            or sender is None
-        ):
+        if session is None or session.access_token is None or settings is None or sender is None:
             logger.warning(
                 "safety_state_sync_skipped_without_api_session",
                 extra={"work_session_id": str(value.work_session_id)},
@@ -407,9 +407,7 @@ class ApplicationController(QObject):
         )
         worker.delivered.connect(self._handle_safety_state_delivered)
         worker.delivery_failed.connect(self._handle_safety_state_delivery_failed)
-        worker.finished.connect(
-            partial(self._dispose_safety_state_delivery_worker, worker)
-        )
+        worker.finished.connect(partial(self._dispose_safety_state_delivery_worker, worker))
         self._safety_state_delivery_worker = worker
         worker.start()
 
@@ -456,12 +454,7 @@ class ApplicationController(QObject):
         self._pending_safety_state_snapshot = None
         session = self._session_context.current
         sender = self._safety_state_sender
-        if (
-            pending is None
-            or session is None
-            or session.access_token is None
-            or sender is None
-        ):
+        if pending is None or session is None or session.access_token is None or sender is None:
             return
         try:
             sender.send_safety_state(pending, session.access_token)
@@ -472,6 +465,8 @@ class ApplicationController(QObject):
             )
 
     def _dispose_alert_delivery_worker(self, worker: AlertDeliveryWorker) -> None:
+        if self._alert_delivery_workers.get(worker.event_id) is not worker:
+            return
         self._alert_delivery_workers.pop(worker.event_id, None)
         worker.deleteLater()
         pending = self._pending_alert_deliveries.pop(worker.event_id, None)
@@ -480,8 +475,10 @@ class ApplicationController(QObject):
             self._start_alert_delivery(pending, session.access_token)
 
     def _shutdown_alert_delivery_workers(self, wait_timeout_ms: int = 5_000) -> None:
-        self._pending_alert_deliveries.clear()
         workers = tuple(self._alert_delivery_workers.values())
+        final_alerts = {worker.event_id: worker.alert for worker in workers}
+        final_alerts.update(self._pending_alert_deliveries)
+        self._pending_alert_deliveries.clear()
         for worker in workers:
             worker.requestInterruption()
         for worker in workers:
@@ -492,6 +489,20 @@ class ApplicationController(QObject):
                 )
                 continue
             self._dispose_alert_delivery_worker(worker)
+        # Flush already-observed transitions before discarding this login's token.
+        # The API accepts resolution before a delayed raise and never reopens it.
+        session = self._session_context.current
+        sender = self._alert_sender
+        if session is None or session.access_token is None or sender is None:
+            return
+        for alert in final_alerts.values():
+            try:
+                sender.send_alert(alert, session.access_token)
+            except AlertDeliveryError as error:
+                logger.warning(
+                    "alert_final_sync_failed",
+                    extra={"event_id": str(alert.alert_id), "error_type": type(error).__name__},
+                )
 
     @Slot(object)
     def handle_operation_start_authorized(self, value: object) -> None:

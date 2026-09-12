@@ -24,6 +24,7 @@ from app.repositories import (
 )
 from app.services import (
     AdminAlertsService,
+    ActiveOperationRegistry,
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,
     AdminDashboardService,
@@ -70,6 +71,13 @@ def get_safety_state_aggregator(connection: HTTPConnection) -> SafetyStateAggreg
     if not isinstance(aggregator, SafetyStateAggregator):
         raise RuntimeError("agregador de segurança não disponível")
     return aggregator
+
+
+def get_active_operation_registry(connection: HTTPConnection) -> ActiveOperationRegistry:
+    registry = getattr(connection.app.state, "active_operation_registry", None)
+    if not isinstance(registry, ActiveOperationRegistry):
+        raise RuntimeError("registro de operações ativas não disponível")
+    return registry
 
 
 def get_admin_realtime_authorizer(

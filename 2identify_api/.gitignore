@@ -1,4 +1,5 @@
 .env
+.env.mobile
 .venv/
 __pycache__/
 *.py[cod]
@@ -16,4 +17,3 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
-

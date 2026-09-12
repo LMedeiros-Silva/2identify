@@ -15,6 +15,14 @@ from app.models import (
     SAFETY_OCCURRENCES,
     SafetyAlertIngestion,
 )
+from app.schemas.safety_state import SafetyConditionReason, SafetyConditionSnapshot
+
+_REASON_BY_TYPE: dict[str, SafetyConditionReason] = {
+    "ppe_absent": "PPE_MISSING",
+    "ergonomic_risk": "ERGONOMIC_RISK",
+    "person_in_risk_area": "PERSON_IN_RISK_AREA",
+    "monitoring_interrupted": "MONITORING_INTERRUPTED",
+}
 
 
 class AlertEventConflictError(RuntimeError):
@@ -27,11 +35,45 @@ class StoredAlert:
     alert_id: int
     occurrence_id: int
     duplicate: bool
+    status: str = "nao_lido"
+    severity: str = "warning"
 
 
 class SafetyAlertRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
+        """Read all non-closed alerts and release the transaction even on WebSockets."""
+        alerts = PERSISTED_SAFETY_ALERTS
+        try:
+            rows = self._session.execute(
+                select(alerts.c.id, alerts.c.nivel, alerts.c.criado_em, SAFETY_OCCURRENCES.c.tipo)
+                .select_from(
+                    alerts.outerjoin(
+                        SAFETY_OCCURRENCES, SAFETY_OCCURRENCES.c.id == alerts.c.ocorrencia_id
+                    )
+                )
+                .where(alerts.c.status != "encerrado")
+                .order_by(alerts.c.id)
+            ).all()
+            return tuple(
+                SafetyConditionSnapshot(
+                    condition_id=f"alert:{row.id}",
+                    reason=_REASON_BY_TYPE.get(row.tipo, "OTHER_SAFETY_ALERT"),
+                    level="critical"
+                    if row.nivel.strip().casefold() in {"critico", "critical"}
+                    else "medium",
+                    first_observed_at=(
+                        row.criado_em.replace(tzinfo=UTC)
+                        if row.criado_em.tzinfo is None
+                        else row.criado_em
+                    ),
+                )
+                for row in rows
+            )
+        finally:
+            self._session.rollback()
 
     def store(
         self,
@@ -49,6 +91,7 @@ class SafetyAlertRepository:
         summary: str,
         severity: str,
         detected_at: datetime,
+        resolved_at: datetime | None = None,
     ) -> StoredAlert:
         existing = self._session.get(SafetyAlertIngestion, event_id)
         if existing is not None:
@@ -57,6 +100,8 @@ class SafetyAlertRepository:
                 payload_hash,
                 legacy_payload_hash,
                 severity,
+                operator_id,
+                resolved_at,
             )
 
         now = datetime.now(UTC)
@@ -79,11 +124,11 @@ class SafetyAlertRepository:
             .values(
                 ocorrencia_id=occurrence_id,
                 nivel="critico" if severity == "critical" else "aviso",
-                status="nao_lido",
+                status="encerrado" if resolved_at is not None else "nao_lido",
                 observacao=summary,
                 criado_em=detected_at,
                 recebido_em=now,
-                encerrado_em=None,
+                encerrado_em=resolved_at,
                 encerrado_por=None,
             )
             .returning(PERSISTED_SAFETY_ALERTS.c.id)
@@ -113,8 +158,17 @@ class SafetyAlertRepository:
                 payload_hash,
                 legacy_payload_hash,
                 severity,
+                operator_id,
+                resolved_at,
             )
-        return StoredAlert(event_id, alert_id, occurrence_id, False)
+        return StoredAlert(
+            event_id,
+            alert_id,
+            occurrence_id,
+            False,
+            "encerrado" if resolved_at is not None else "nao_lido",
+            severity,
+        )
 
     def _existing(
         self,
@@ -122,18 +176,36 @@ class SafetyAlertRepository:
         payload_hash: str,
         legacy_payload_hash: str,
         severity: str,
+        operator_id: int,
+        resolved_at: datetime | None,
     ) -> StoredAlert:
+        if ingestion.operador_usuario_id != operator_id:
+            raise AlertEventConflictError("evento pertence a outra sessão de operador")
         if ingestion.payload_hash not in {payload_hash, legacy_payload_hash}:
             raise AlertEventConflictError("event_id já utilizado por outro payload")
-        occurrence_id = self._session.scalar(
-            select(PERSISTED_SAFETY_ALERTS.c.ocorrencia_id).where(
-                PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id
+        row = self._session.execute(
+            select(
+                PERSISTED_SAFETY_ALERTS.c.ocorrencia_id,
+                PERSISTED_SAFETY_ALERTS.c.status,
+                PERSISTED_SAFETY_ALERTS.c.nivel,
             )
-        )
-        if occurrence_id is None:
+            .where(PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id)
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
             raise RuntimeError("registro idempotente aponta para alerta inexistente")
-        escalated = False
-        if severity == "critical":
+        changed = False
+        alert_status = row.status
+        stored_severity = "critical" if row.nivel in {"critico", "critical"} else "warning"
+        if alert_status != "encerrado" and resolved_at is not None:
+            self._session.execute(
+                update(PERSISTED_SAFETY_ALERTS)
+                .where(PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id)
+                .values(status="encerrado", encerrado_em=resolved_at, encerrado_por=None)
+            )
+            alert_status = "encerrado"
+            changed = True
+        if row.status != "encerrado" and severity == "critical":
             result = self._session.execute(
                 update(PERSISTED_SAFETY_ALERTS)
                 .where(
@@ -142,13 +214,16 @@ class SafetyAlertRepository:
                 )
                 .values(nivel="critico")
             )
-            escalated = result.rowcount == 1
-            if escalated:
-                ingestion.payload_hash = payload_hash
-                self._session.commit()
+            changed = changed or result.rowcount == 1
+            stored_severity = "critical"
+        if changed:
+            ingestion.payload_hash = payload_hash
+            self._session.commit()
         return StoredAlert(
             event_id=ingestion.evento_id,
             alert_id=ingestion.alerta_id,
-            occurrence_id=occurrence_id,
-            duplicate=not escalated,
+            occurrence_id=row.ocorrencia_id,
+            duplicate=not changed,
+            status=alert_status,
+            severity=stored_severity,
         )

@@ -77,6 +77,9 @@ class OperationsService:
             for item in self._repository.list_operations(active_only=active_only)
         )
 
+    def get_operation(self, operation_id: int) -> OperationDetail:
+        return self._operation(self._repository.get_operation(operation_id))
+
     def create_operation(self, payload: OperationWrite) -> OperationDetail:
         return self._operation(
             self._repository.create_operation(

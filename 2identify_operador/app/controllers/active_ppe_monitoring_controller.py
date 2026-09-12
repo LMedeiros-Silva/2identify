@@ -115,6 +115,7 @@ class ActivePpeMonitoringController(QObject):
             ),
         )
         self._model_classes: frozenset[str] = frozenset()
+        self._latest_ppe_assessment: PpeSafetyAssessment | None = None
         self._ppe_violations: tuple[SafetyViolation, ...] = ()
         self._ergonomic_violations: tuple[SafetyViolation, ...] = ()
         self._risk_area_violations: tuple[SafetyViolation, ...] = ()
@@ -145,6 +146,7 @@ class ActivePpeMonitoringController(QObject):
         self._dispose_finished_worker()
         self._restart_after_finish = False
         self._reset_runtime()
+        self._emit_initial_snapshot()
         self._page.show_monitoring_inference_loading()
         worker = self._worker_factory()
         worker.model_ready.connect(self._handle_model_ready)
@@ -229,9 +231,17 @@ class ActivePpeMonitoringController(QObject):
             self._model_classes,
             snapshot,
         )
+        previous_states = (
+            tuple(item.state for item in self._latest_ppe_assessment.requirements)
+            if self._latest_ppe_assessment is not None
+            else ()
+        )
+        current_states = tuple(item.state for item in assessment.requirements)
+        ppe_state_changed = current_states != previous_states
+        self._latest_ppe_assessment = assessment
         self._page.update_monitoring_assessment(assessment)
         self._ppe_violations = self._violations_for(assessment)
-        self._observe_alerts()
+        self._observe_alerts(force_snapshot=ppe_state_changed)
 
     @Slot(object)
     def handle_ergonomic_assessment(self, value: object) -> None:
@@ -251,7 +261,7 @@ class ActivePpeMonitoringController(QObject):
         self._risk_area_violations = value.violations
         self._observe_alerts()
 
-    def _observe_alerts(self) -> None:
+    def _observe_alerts(self, *, force_snapshot: bool = False) -> None:
         work_session = self._page.work_session
         if not self._page.is_monitoring_active or work_session is None:
             return
@@ -311,7 +321,8 @@ class ActivePpeMonitoringController(QObject):
             or safety_update.escalated_alerts
         )
         if (
-            safety_changed
+            force_snapshot
+            or safety_changed
             or self._last_safety_state_sync_at is None
             or observed_at - self._last_safety_state_sync_at
             >= self._safety_state_sync_interval
@@ -334,6 +345,7 @@ class ActivePpeMonitoringController(QObject):
     def _reset_runtime(self) -> None:
         self._model_ready = False
         self._model_classes = frozenset()
+        self._latest_ppe_assessment = None
         self._stability_engine.reset()
         self._tracker.reset()
         self._ppe_violations = ()
@@ -353,6 +365,7 @@ class ActivePpeMonitoringController(QObject):
             work_session,
             update.active_alerts,
             observed_at,
+            ppe_assessment=self._latest_ppe_assessment,
         )
         self._last_safety_state_sync_at = observed_at
         self.safety_state_snapshot_ready.emit(snapshot)
@@ -364,7 +377,18 @@ class ActivePpeMonitoringController(QObject):
         observed_at = datetime.now(UTC)
         self._last_safety_state_sync_at = observed_at
         self.safety_state_snapshot_ready.emit(
-            SafetyStateSnapshot.from_alerts(work_session, (), observed_at)
+            SafetyStateSnapshot.ended(work_session, observed_at)
+        )
+
+    def _emit_initial_snapshot(self) -> None:
+        work_session = self._page.work_session
+        operation = self._page.operation
+        if work_session is None or operation is None:
+            return
+        observed_at = datetime.now(UTC)
+        self._last_safety_state_sync_at = observed_at
+        self.safety_state_snapshot_ready.emit(
+            SafetyStateSnapshot.initial(work_session, operation, observed_at)
         )
 
     @staticmethod

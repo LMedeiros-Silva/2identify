@@ -6,7 +6,12 @@ from uuid import UUID
 
 import pytest
 
-from app.domain import ConnectionReadyEvent, HeartbeatEvent, RealtimeAlert
+from app.domain import (
+    ConnectionReadyEvent,
+    HeartbeatEvent,
+    PpeSessionUpdatedEvent,
+    RealtimeAlert,
+)
 from app.realtime import (
     MAX_REALTIME_MESSAGE_BYTES,
     InvalidRealtimeEventError,
@@ -77,10 +82,35 @@ def test_parses_all_strict_v1_event_types() -> None:
     alert = parse_realtime_event(
         json.dumps(envelope("alert.created", alert_payload()))
     )
+    ppe = parse_realtime_event(
+        json.dumps(
+            envelope(
+                "ppe.session.updated",
+                {
+                    "work_session_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "session_status": "active",
+                    "operator_id": 15,
+                    "operator_name": "Breno Barbosa",
+                    "operation_id": 7,
+                    "operation_name": "Linha de montagem",
+                    "started_at": "2026-08-20T11:30:00Z",
+                    "observed_at": "2026-08-20T12:00:00Z",
+                    "camera_id": 3,
+                    "camera_name": "Câmera Linha A",
+                    "ppe": [
+                        {"ppe_id": 1, "name": "Capacete", "state": "confirmed"}
+                    ],
+                    "overall_status": "compliant",
+                },
+            )
+        )
+    )
 
     assert isinstance(ready, ConnectionReadyEvent)
     assert isinstance(heartbeat, HeartbeatEvent)
     assert isinstance(alert, RealtimeAlert)
+    assert isinstance(ppe, PpeSessionUpdatedEvent)
+    assert ppe.snapshot.operator_name == "Breno Barbosa"
     assert alert.event_id == UUID("12345678-1234-4234-8234-123456789abc")
     assert alert.detected_at.tzinfo == UTC
     assert alert.camera_id == 2
