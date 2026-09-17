@@ -23,6 +23,7 @@ from app.services.errors import (
     InvalidCredentialsError,
     SessionExpiredError,
 )
+from app.services.local_camera_source import LocalCameraSourceError, resolve_camera_source
 
 logger = logging.getLogger(__name__)
 
@@ -182,11 +183,14 @@ class AdminAlertsListWorker(QThread):
                 self.succeeded.emit(result)
         except SessionExpiredError:
             self._emit_failure("Sua sessão expirou. Entre novamente.", True)
-        except (ApiUnavailableError, InvalidApiResponseError):
+        except InvalidApiResponseError:
             self._emit_failure(
-                "Não foi possível carregar os alertas. Verifique a conexão.",
+                "A API retornou dados de alertas incompatíveis com o Admin. "
+                "Atualize o aplicativo.",
                 False,
             )
+        except ApiUnavailableError as error:
+            self._emit_failure(str(error), False)
         except AdminServiceError:
             self._emit_failure("Não foi possível carregar os alertas.", False)
         except Exception as error:
@@ -438,26 +442,32 @@ class CameraFrameWorker(QThread):
     succeeded = Signal(object)
     failed = Signal(str, bool)
 
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, *, camera_id: int | None = None) -> None:
         super().__init__()
         self._source = source.strip()
+        self._camera_id = camera_id
 
     def run(self) -> None:
-        image = QImage(self._source)
-        if not image.isNull():
-            self.succeeded.emit(image.copy())
-            return
         try:
+            source = (
+                resolve_camera_source(self._camera_id, self._source)
+                if self._camera_id is not None
+                else self._source
+            )
+            image = QImage(source)
+            if not image.isNull():
+                self.succeeded.emit(image.copy())
+                return
             import cv2
 
-            source: str | int = int(self._source) if self._source.isdecimal() else self._source
+            capture_source: str | int = int(source) if source.isdecimal() else source
             capture = cv2.VideoCapture()
             try:
                 if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
                     capture.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
                 if hasattr(cv2, "CAP_PROP_READ_TIMEOUT_MSEC"):
                     capture.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000)
-                opened = capture.open(source)
+                opened = capture.open(capture_source)
                 ok, frame = capture.read() if opened else (False, None)
             finally:
                 capture.release()
@@ -474,6 +484,8 @@ class CameraFrameWorker(QThread):
                 QImage.Format.Format_RGB888,
             ).copy()
             self.succeeded.emit(result)
+        except LocalCameraSourceError as error:
+            self.failed.emit(str(error), False)
         except ModuleNotFoundError:
             self.failed.emit(
                 "OpenCV não está instalado. Execute a instalação das dependências do Admin.",

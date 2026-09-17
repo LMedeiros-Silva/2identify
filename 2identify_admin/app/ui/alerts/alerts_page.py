@@ -130,6 +130,8 @@ class AlertsPage(QWidget):
         self._refresh_style(self.connection_status)
 
     def set_alerts(self, page: AdminAlertPage) -> None:
+        self.feedback_label.clear()
+        self.feedback_label.hide()
         selected_id = self._selected_alert_id
         self._alerts = {alert.id: alert for alert in page.items}
         self.alert_list.clear()
@@ -195,6 +197,13 @@ class AlertsPage(QWidget):
     def show_error(self, message: str) -> None:
         self.refresh_button.setEnabled(True)
         self._action_busy = False
+        loaded_count = self.alert_list.count()
+        self.count_label.setText(
+            f"{loaded_count} alerta(s) carregado(s)"
+            if loaded_count
+            else "Histórico indisponível."
+        )
+        self.empty_label.hide()
         self._show_feedback(message, "error")
         self._refresh_actions()
 

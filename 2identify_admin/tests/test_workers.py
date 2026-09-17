@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from threading import Event
 
+import httpx
 from PySide6.QtTest import QSignalSpy
 
+from app.api import AdminApiClient
+from app.core.config import Settings
 from app.core.session import AdminSession
 from app.domain import (
     AdminAuthentication,
@@ -12,8 +15,9 @@ from app.domain import (
     Administrator,
     DashboardSummary,
 )
+from app.services.admin_alerts_service import AdminAlertsService
 from app.services.errors import SessionExpiredError
-from app.workers import AdminLoginWorker, DashboardSummaryWorker
+from app.workers import AdminAlertsListWorker, AdminLoginWorker, DashboardSummaryWorker
 
 
 def administrator() -> Administrator:
@@ -101,3 +105,30 @@ def test_interrupted_login_worker_does_not_emit_late_result(qapp) -> None:
 
     assert success_spy.count() == 0
     assert failure_spy.count() == 0
+
+
+def test_alert_worker_reports_invalid_api_response_separately_from_connection(qapp) -> None:
+    session = AdminSession(
+        administrator=administrator(),
+        access_token="test-token",
+        expires_at=datetime.now(UTC) + timedelta(minutes=1),
+    )
+    settings = Settings(_env_file=None, API_URL="https://api.example.test")
+    with AdminApiClient(
+        settings,
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, json={"unexpected": "private-payload"})
+        ),
+    ) as client:
+        worker = AdminAlertsListWorker(AdminAlertsService(client), session)
+        failure = QSignalSpy(worker.failed)
+        worker.start()
+        assert worker.wait(2_000)
+        qapp.processEvents()
+
+    assert failure.count() == 1
+    message, expired = failure.at(0)
+    assert "incompatív" in message
+    assert "conexão" not in message
+    assert "private-payload" not in message
+    assert expired is False

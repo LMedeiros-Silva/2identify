@@ -96,7 +96,7 @@ class OperationsController(QObject):
         self._pending_camera = camera_value
         self._pending_area = area
         self._view.show_loading("Abrindo uma imagem atual da câmera...")
-        worker = CameraFrameWorker(camera_value.stream_source)
+        worker = CameraFrameWorker(camera_value.stream_source, camera_id=camera_value.id)
         self._camera_worker = worker
         worker.succeeded.connect(self._camera_loaded)
         worker.failed.connect(self._failed)

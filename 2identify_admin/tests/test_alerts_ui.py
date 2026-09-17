@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from PySide6.QtTest import QSignalSpy
 
 from app.controllers.alerts_controller import AlertsController
@@ -172,3 +173,32 @@ def test_alert_controller_loads_confirms_closes_and_refreshes(qapp) -> None:
     assert provider.alert.status == "encerrado"
     assert controller.shutdown()
     page.close()
+
+
+@pytest.mark.parametrize("with_alerts", [False, True])
+def test_alert_page_clears_loading_and_old_error_after_success(qapp, with_alerts) -> None:
+    page = AlertsPage()
+    page.show_loading()
+    page.show_error("Não foi possível carregar os alertas. Verifique a conexão.")
+    page.show_loading()
+    items = (sample_alert(),) if with_alerts else ()
+
+    page.set_alerts(AdminAlertPage(items, len(items), 100, 0))
+
+    assert page.feedback_label.isHidden()
+    assert "Carregando" not in page.count_label.text()
+    assert page.refresh_button.isEnabled()
+    assert page.alert_list.count() == len(items)
+    assert page.empty_label.isHidden() == with_alerts
+
+
+def test_alert_page_failure_stops_loading_without_claiming_empty_history(qapp) -> None:
+    page = AlertsPage()
+    page.show_loading()
+
+    page.show_error("Falha na API.")
+
+    assert "Carregando" not in page.count_label.text()
+    assert "indisponível" in page.count_label.text().casefold()
+    assert page.refresh_button.isEnabled()
+    assert not page.feedback_label.isHidden()

@@ -44,6 +44,19 @@ e uma área de risco associada a uma câmera. Ao configurar a área, o Admin cap
 uma imagem atual da origem cadastrada (`arquivo`, `vídeo`, `RTSP` ou índice local),
 e o administrador desenha e fecha um polígono com no mínimo três pontos.
 
+Para câmeras IP com autenticação, mantenha a fonte do cadastro sem credenciais
+e configure a URL completa em `CAMERA_SOURCE_<id>`, usando o ID real da câmera.
+Ao abrir **Configurar área de risco**, o Admin procura essa variável, nesta ordem:
+ambiente do processo, `2identify_admin/.env` e `2identify_operador/.env` na pasta
+vizinha. Assim, o vínculo já feito no Operator também atende à calibração no Admin
+quando os dois projetos estão na mesma máquina e lado a lado. Se o Admin estiver
+em outra máquina, configure a fonte privada no `.env` local dele.
+
+O mesmo vínculo permite definir o índice USB desta estação. Sem uma configuração
+específica para o ID, o Admin usa a fonte do catálogo; a variável global
+`CAMERA_SOURCE` não substitui os vínculos por câmera. As fontes privadas são usadas
+somente na captura local e não são enviadas à API nem inseridas no cadastro.
+
 O editor desconsidera o letterbox, mantém os vértices alinhados ao redimensionar
 e envia somente coordenadas normalizadas entre `0.0` e `1.0`. Áreas existentes
 podem ser selecionadas e reabertas para edição. Todo cadastro passa pela FastAPI;

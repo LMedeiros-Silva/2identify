@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 
 import httpx
+import pytest
 from openpyxl import load_workbook
 
 from app.api import AdminApiClient
@@ -59,6 +60,7 @@ def alert_payload(status: str = "nao_lido") -> dict[str, object]:
             "event_id": "4d36a6ee-6e78-4e22-95b5-176276f2d21d",
             "work_session_id": "d9badffe-415b-4e29-b0af-129bf44437ef",
             "operation_id": 12,
+            "operation_name": "Soldagem",
             "risk_area_id": 7,
             "violation_type": "ergonomic_risk",
             "subject_key": "ergonomics:trunk_inclination",
@@ -126,3 +128,22 @@ def test_report_export_reads_every_authenticated_api_page() -> None:
     assert offsets == [0, 1]
     sheet = load_workbook(BytesIO(content))["Alertas"]
     assert [sheet.cell(row, 10).value for row in (2, 3)] == [5, 6]
+
+
+@pytest.mark.parametrize("include_name", [False, True])
+def test_alert_client_accepts_missing_or_null_operation_name(include_name) -> None:
+    payload = alert_payload()
+    if include_name:
+        payload["operational_context"]["operation_name"] = None
+    else:
+        payload["operational_context"].pop("operation_name")
+
+    with AdminApiClient(
+        settings(),
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=payload)),
+    ) as client:
+        alert = client.get_alert(TOKEN, 20)
+
+    assert alert.id == 20
+    assert alert.operational_context is not None
+    assert alert.operational_context.operation_id == 12

@@ -284,6 +284,7 @@ class _AlertOperationalContextDto(BaseModel):
     event_id: UUID
     work_session_id: UUID
     operation_id: PositiveInt
+    operation_name: str | None = Field(default=None, max_length=150)
     risk_area_id: PositiveInt | None
     violation_type: str
     subject_key: str
