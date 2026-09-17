@@ -6,6 +6,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PositiveInt
 
 from app.domain import (
     CameraOption,
+    ManagedCamera,
     NormalizedPoint,
     OperationCatalog,
     OperationConfiguration,
@@ -36,6 +37,16 @@ class _CameraDto(BaseModel):
 
     def to_domain(self) -> CameraOption:
         return CameraOption(self.id, self.name, self.stream_source, self.description)
+
+
+class _ManagedCameraDto(_CameraDto):
+    sector_id: PositiveInt
+    active: bool
+
+    def to_domain(self) -> ManagedCamera:
+        return ManagedCamera(
+            self.id, self.name, self.stream_source, self.description, self.sector_id, self.active
+        )
 
 
 class _SectorDto(BaseModel):
@@ -128,6 +139,14 @@ def parse_camera(payload: object) -> CameraOption:
     return _CameraDto.model_validate(payload).to_domain()
 
 
+def parse_managed_camera(payload: object) -> ManagedCamera:
+    return _ManagedCameraDto.model_validate(payload).to_domain()
+
+
+def parse_managed_cameras(payload: object) -> tuple[ManagedCamera, ...]:
+    return tuple(_ManagedCameraDto.model_validate(item).to_domain() for item in _as_list(payload))
+
+
 def parse_risk_area(payload: object) -> RiskArea:
     return _RiskAreaDto.model_validate(payload).to_domain()
 
@@ -153,6 +172,8 @@ def _as_list(payload: object) -> list[object]:
 __all__ = [
     "parse_catalog",
     "parse_camera",
+    "parse_managed_camera",
+    "parse_managed_cameras",
     "parse_operation",
     "parse_operations",
     "parse_risk_area",

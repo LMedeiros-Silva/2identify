@@ -12,14 +12,14 @@ from app.domain import (
     WorkSession,
     WorkSessionStatus,
 )
+from app.engine import PpeRequirementSafetyState, PpeSafetyAssessment, PpeSafetyStatus
+from app.engine.ppe_safety import PpeRequirementAssessment
 from app.services.safety_state_service import (
     PpeLiveState,
     SafetyStateLevel,
     SafetyStateReason,
     SafetyStateSnapshot,
 )
-from app.engine import PpeRequirementSafetyState, PpeSafetyAssessment, PpeSafetyStatus
-from app.engine.ppe_safety import PpeRequirementAssessment
 
 _OBSERVED_AT = datetime(2026, 8, 24, 15, 0, tzinfo=UTC)
 

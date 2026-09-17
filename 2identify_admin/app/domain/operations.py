@@ -61,6 +61,12 @@ class CameraOption:
 
 
 @dataclass(frozen=True, slots=True)
+class ManagedCamera(CameraOption):
+    sector_id: int = 0
+    active: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class SectorOption:
     id: int
     name: str
@@ -75,6 +81,8 @@ class CameraDraft:
     active: bool = True
 
     def __post_init__(self) -> None:
+        from app.domain.camera_source import parse_camera_source
+
         name = self.name.strip()
         source = self.stream_source.strip()
         description = self.description.strip() or None if self.description is not None else None
@@ -82,6 +90,7 @@ class CameraDraft:
             raise ValueError("informe o nome da câmera")
         if not source:
             raise ValueError("informe a fonte da câmera")
+        parse_camera_source(source)
         if self.sector_id <= 0:
             raise ValueError("selecione o setor da câmera")
         object.__setattr__(self, "name", name)
@@ -193,6 +202,7 @@ def _within(point: NormalizedPoint, start: NormalizedPoint, end: NormalizedPoint
 
 __all__ = [
     "CameraOption",
+    "ManagedCamera",
     "CameraDraft",
     "NormalizedPoint",
     "OperationCatalog",

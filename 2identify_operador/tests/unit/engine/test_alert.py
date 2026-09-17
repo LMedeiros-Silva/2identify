@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -68,6 +69,51 @@ def _engine(
         critical_after_seconds=critical_after_seconds,
         alert_id_factory=lambda: next(identifiers),
     )
+
+
+def test_same_violation_on_two_cameras_keeps_separate_alert_identity() -> None:
+    engine = _engine(minimum_observations=1, persistence_seconds=0)
+    first = replace(_violation(), camera_id=1)
+    second = replace(_violation(), camera_id=2)
+    update = engine.observe(_work_session(), (first, second), _STARTED_AT)
+    assert len(update.raised_alerts) == 2
+    assert {alert.camera_id for alert in update.raised_alerts} == {1, 2}
+    assert all(alert.risk_area_id is None for alert in update.raised_alerts)
+    assert first.deduplication_key != second.deduplication_key
+
+
+def test_observations_and_recovery_only_advance_the_observed_camera() -> None:
+    engine = _engine(
+        minimum_observations=2,
+        persistence_seconds=0,
+        resolution_observations=2,
+    )
+    session = _work_session()
+    first = replace(_violation(), camera_id=1)
+    second = replace(_violation(), camera_id=2)
+
+    engine.observe(session, (first,), _STARTED_AT, camera_id=1)
+    other = engine.observe(
+        session, (first, second), _STARTED_AT + timedelta(seconds=1), camera_id=2
+    )
+    assert other.raised_alerts == ()
+    assert engine.observe(
+        session, (first, second), _STARTED_AT + timedelta(seconds=2), camera_id=1
+    ).raised_alerts[0].camera_id == 1
+    assert engine.observe(
+        session, (first, second), _STARTED_AT + timedelta(seconds=3), camera_id=2
+    ).raised_alerts[0].camera_id == 2
+
+    engine.observe(session, (second,), _STARTED_AT + timedelta(seconds=4), camera_id=1)
+    untouched = engine.observe(
+        session, (second,), _STARTED_AT + timedelta(seconds=5), camera_id=2
+    )
+    assert {alert.camera_id for alert in untouched.active_alerts} == {1, 2}
+    resolved = engine.observe(
+        session, (second,), _STARTED_AT + timedelta(seconds=6), camera_id=1
+    )
+    assert [alert.camera_id for alert in resolved.resolved_alerts] == [1]
+    assert [alert.camera_id for alert in resolved.active_alerts] == [2]
 
 
 def test_alert_engine_debounces_and_deduplicates_persistent_violation() -> None:

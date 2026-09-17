@@ -101,3 +101,29 @@ def test_risk_area_snapshot_controller_keeps_polygon_when_camera_is_unavailable(
     preview = page.findChild(CameraFrameView, "operationRiskAreaPreview")
     assert not preview.has_frame
     assert preview.risk_zone_count == 1
+
+
+def test_risk_snapshot_uses_its_camera_specific_local_source(monkeypatch, qtbot) -> None:
+    page, risk_area = _configured_page(qtbot)
+    monkeypatch.setattr(
+        "app.controllers.risk_area_snapshot_controller.local_camera_source",
+        lambda camera_id: "1" if camera_id == 3 else None,
+    )
+    controller = RiskAreaSnapshotController(AppSettings(_env_file=None, camera_source="0"), page)
+    worker = controller._new_worker(risk_area)
+    assert worker._camera_factory.keywords["source"] == 1
+    worker.deleteLater()
+
+
+def test_risk_snapshot_refuses_global_source_when_camera_mapping_missing(
+    monkeypatch, qtbot
+) -> None:
+    page, risk_area = _configured_page(qtbot)
+    monkeypatch.setattr(
+        "app.controllers.risk_area_snapshot_controller.local_camera_source",
+        lambda _camera_id: None,
+    )
+    controller = RiskAreaSnapshotController(AppSettings(_env_file=None, camera_source="0"), page)
+    controller.capture(risk_area)
+    assert not controller.is_running
+    assert "não configurada" in page.findChild(QLabel, "operationRiskAreaNotice").text()

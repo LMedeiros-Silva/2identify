@@ -9,13 +9,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.config import Settings
 from app.domain import Administrator, RealtimeAlert
+from app.domain.ppe_management import ActiveOperationSnapshot
 from app.ui.alerts import AlertsPage
 from app.ui.dashboard.dashboard_page import (
     DashboardPage,
 )
+from app.ui.employees import EmployeesPage
 from app.ui.main.sidebar import Sidebar
 from app.ui.operations import OperationsPage
+from app.ui.ppe import PpeManagementPage
+from app.ui.reports import ReportsPage
 
 
 class MainWindow(QMainWindow):
@@ -31,12 +36,15 @@ class MainWindow(QMainWindow):
 
     logout_requested = Signal()
     realtime_alert_received = Signal(int)
+    ppe_snapshot_requested = Signal()
+    ppe_session_updated = Signal(object)
 
-    def __init__(self, administrator: Administrator) -> None:
+    def __init__(self, administrator: Administrator, settings: Settings | None = None) -> None:
 
         super().__init__()
 
         self.administrator = administrator
+        self._settings = settings or Settings(_env_file=None)
 
         self.setWindowTitle("2Identify - Sistema de Segurança Industrial")
 
@@ -152,12 +160,18 @@ class MainWindow(QMainWindow):
 
         self.alerts = AlertsPage()
         self.operations = OperationsPage()
+        self.ppe_management = PpeManagementPage()
+        self.reports = ReportsPage()
+        self.employees = EmployeesPage(self._settings)
 
         self.stack.addWidget(self.dashboard)
 
         self.stack.addWidget(self.alerts)
 
         self.stack.addWidget(self.operations)
+        self.stack.addWidget(self.ppe_management)
+        self.stack.addWidget(self.reports)
+        self.stack.addWidget(self.employees)
 
         layout_direita.addWidget(self.stack)
 
@@ -176,7 +190,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.dashboard)
 
         elif pagina == "epis":
-            self.mostrar_placeholder("Gestão de EPIs")
+            self.stack.setCurrentWidget(self.ppe_management)
 
         elif pagina == "alertas":
             self.stack.setCurrentWidget(self.alerts)
@@ -185,7 +199,10 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.operations)
 
         elif pagina == "relatorios":
-            self.mostrar_placeholder("Relatórios")
+            self.stack.setCurrentWidget(self.reports)
+
+        elif pagina == "funcionarios":
+            self.stack.setCurrentWidget(self.employees)
 
         elif pagina == "configuracoes":
             self.mostrar_placeholder("Configurações")
@@ -221,6 +238,11 @@ class MainWindow(QMainWindow):
     def set_realtime_status(self, message: str, *, state: str) -> None:
         self.dashboard.set_realtime_status(message, state=state)
         self.alerts.set_connection_status(message, state=state)
+        self.ppe_management.set_connection_status(message, state=state)
+
+    def show_ppe_update(self, snapshot: ActiveOperationSnapshot) -> None:
+        self.ppe_management.apply_update(snapshot)
+        self.ppe_session_updated.emit(snapshot)
 
     def show_realtime_alert(self, alert: RealtimeAlert) -> None:
         self.dashboard.show_realtime_alert(alert)

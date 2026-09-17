@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from app.domain.ppe_management import ActiveOperationSnapshot
+
 RealtimeAlertLevel = Literal["warning", "critical"]
 RealtimeAlertStatus = Literal["nao_lido", "lido", "encerrado"]
 RealtimeAlertCategory = Literal[
@@ -43,12 +45,20 @@ class RealtimeAlert:
     category: RealtimeAlertCategory = "safety"
 
 
-RealtimeEvent = ConnectionReadyEvent | HeartbeatEvent | RealtimeAlert
+@dataclass(frozen=True, slots=True)
+class PpeSessionUpdatedEvent:
+    event_id: UUID
+    occurred_at: datetime
+    snapshot: ActiveOperationSnapshot
+
+
+RealtimeEvent = ConnectionReadyEvent | HeartbeatEvent | RealtimeAlert | PpeSessionUpdatedEvent
 
 
 __all__ = [
     "ConnectionReadyEvent",
     "HeartbeatEvent",
+    "PpeSessionUpdatedEvent",
     "RealtimeAlert",
     "RealtimeAlertCategory",
     "RealtimeAlertLevel",

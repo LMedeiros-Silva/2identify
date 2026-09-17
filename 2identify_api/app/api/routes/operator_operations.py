@@ -16,7 +16,9 @@ from app.api.dependencies import (
     get_runtime_settings,
 )
 from app.core.config import Settings
+from app.repositories.operation_repository import OperationConfigurationNotFoundError
 from app.schemas import OperationDetail
+from app.schemas.operations import OperatorCameraItem
 from app.services import OperationsService, OperatorPrincipal
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,37 @@ def list_operator_operations_for_trusted_workstation(
 ) -> tuple[OperationDetail, ...]:
     """Read the catalog without minting or impersonating an operator identity."""
 
+    _require_catalog_token(credentials, settings)
+    return _list_active_operations(response, service)
+
+
+@router.get("/{operation_id}/cameras", response_model=tuple[OperatorCameraItem, ...])
+def list_operation_cameras(
+    operation_id: int,
+    response: Response,
+    _operator: Annotated[OperatorPrincipal, Depends(get_current_operator)],
+    service: Annotated[OperationsService, Depends(get_operations_service)],
+) -> tuple[OperatorCameraItem, ...]:
+    return _list_cameras(operation_id, response, service)
+
+
+@router.get("/catalog/{operation_id}/cameras", response_model=tuple[OperatorCameraItem, ...])
+def list_operation_cameras_for_trusted_workstation(
+    operation_id: int,
+    response: Response,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_CATALOG_BEARER)
+    ],
+    settings: Annotated[Settings, Depends(get_runtime_settings)],
+    service: Annotated[OperationsService, Depends(get_operations_service)],
+) -> tuple[OperatorCameraItem, ...]:
+    _require_catalog_token(credentials, settings)
+    return _list_cameras(operation_id, response, service)
+
+
+def _require_catalog_token(
+    credentials: HTTPAuthorizationCredentials | None, settings: Settings
+) -> None:
     configured_token = settings.operator_catalog_token
     submitted_token = credentials.credentials if credentials is not None else None
     if configured_token is None:
@@ -75,7 +108,19 @@ def list_operator_operations_for_trusted_workstation(
             headers={"WWW-Authenticate": "Bearer", **_NO_STORE_HEADERS},
         )
 
-    return _list_active_operations(response, service)
+
+
+def _list_cameras(
+    operation_id: int, response: Response, service: OperationsService
+) -> tuple[OperatorCameraItem, ...]:
+    response.headers.update(_NO_STORE_HEADERS)
+    try:
+        return service.list_operator_cameras(operation_id)
+    except OperationConfigurationNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Operação ativa não encontrada") from error
+    except (SQLAlchemyError, ValueError) as error:
+        logger.error("operator_cameras_unavailable", extra={"error_type": type(error).__name__})
+        raise HTTPException(status_code=503, detail="Câmeras indisponíveis") from error
 
 
 def _list_active_operations(

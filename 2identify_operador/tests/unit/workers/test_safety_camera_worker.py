@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from app.workers.safety_camera_worker import SafetyCameraWorker
@@ -94,3 +96,22 @@ def test_safety_camera_worker_publishes_owned_analysis_frames(qtbot) -> None:
     assert analysis_frame.shape == camera.frame.shape
     with qtbot.waitSignal(worker.finished, timeout=2_000):
         worker.request_stop()
+
+
+def test_capture_failure_does_not_log_private_locator(qtbot, caplog) -> None:
+    class FailingCamera(CameraStub):
+        def open(self) -> bool:
+            raise RuntimeError("private-source-marker")
+
+    camera = FailingCamera()
+    worker = _worker(camera)
+    with caplog.at_level(logging.ERROR, logger="app.workers.safety_camera_worker"):
+        with qtbot.waitSignal(worker.camera_failed, timeout=2_000):
+            worker.start()
+        worker.wait(2_000)
+    assert camera.closed
+    assert "private-source-marker" not in caplog.text
+    assert any(
+        getattr(record, "error_type", None) == "RuntimeError"
+        for record in caplog.records
+    )

@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, Slot
 from PySide6.QtGui import QImage
 
 from app.core.config import AppSettings
+from app.domain.camera_source import CameraType, local_camera_source, parse_source_value
 from app.domain.operation import RiskAreaReference
 from app.ui.operations import OperationsPage
 from app.vision.camera import OpenCVCameraSession
@@ -31,7 +32,9 @@ class RiskAreaSnapshotController(QObject):
     ) -> None:
         super().__init__(page)
         self._page = page
-        self._worker_factory = worker_factory or partial(
+        self._settings = settings
+        self._worker_factory = worker_factory
+        self._legacy_worker_factory = partial(
             SafetyCameraWorker,
             camera_factory=partial(
                 OpenCVCameraSession,
@@ -88,7 +91,17 @@ class RiskAreaSnapshotController(QObject):
         self._dispose_finished_worker()
 
     def _start_capture(self, risk_area: RiskAreaReference) -> None:
-        worker = self._worker_factory()
+        try:
+            worker = (
+                self._worker_factory() if self._worker_factory is not None
+                else self._new_worker(risk_area)
+            )
+        except ValueError:
+            self._page.show_risk_area_snapshot_failure(
+                risk_area.risk_area_id,
+                "Fonte local da câmera desta área não configurada.",
+            )
+            return
         risk_area_id = risk_area.risk_area_id
         worker.frame_ready.connect(partial(self._handle_frame, worker, risk_area_id))
         worker.camera_failed.connect(partial(self._handle_failure, worker, risk_area_id))
@@ -101,6 +114,28 @@ class RiskAreaSnapshotController(QObject):
             extra={"risk_area_id": risk_area_id},
         )
         worker.start()
+
+    def _new_worker(self, risk_area: RiskAreaReference) -> SafetyCameraWorker:
+        if risk_area.camera_id is None:
+            return self._legacy_worker_factory()
+        value = local_camera_source(risk_area.camera_id)
+        if value is None:
+            raise ValueError("fonte de câmera ausente")
+        source_type = CameraType.USB if value.strip().isdecimal() else CameraType.IP
+        source = parse_source_value(source_type, value)
+        settings = self._settings
+        return SafetyCameraWorker(
+            camera_factory=partial(
+                OpenCVCameraSession,
+                source=source,
+                width=settings.camera_width,
+                height=settings.camera_height,
+                open_timeout_ms=settings.camera_open_timeout_ms,
+                read_timeout_ms=settings.camera_read_timeout_ms,
+            ),
+            preview_fps=settings.camera_preview_fps,
+            maximum_failed_reads=settings.camera_max_failed_reads,
+        )
 
     def _handle_frame(
         self,

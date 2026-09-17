@@ -58,6 +58,7 @@ class WorkSession:
     started_at: datetime
     finished_at: datetime | None
     status: WorkSessionStatus
+    selected_camera_ids: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.session_id, UUID):
@@ -66,6 +67,12 @@ class WorkSession:
             raise ValueError("operador e operação devem possuir identificadores positivos")
         if self.camera_id is not None and self.camera_id <= 0:
             raise ValueError("camera_id deve ser positivo quando informado")
+        selected_camera_ids = tuple(self.selected_camera_ids)
+        if any(item <= 0 for item in selected_camera_ids) or len(
+            set(selected_camera_ids)
+        ) != len(selected_camera_ids):
+            raise ValueError("selected_camera_ids deve conter IDs positivos e únicos")
+        object.__setattr__(self, "selected_camera_ids", selected_camera_ids)
         if self.risk_area_id is not None and self.risk_area_id <= 0:
             raise ValueError("risk_area_id deve ser positivo quando informado")
         verified_ppe_ids = tuple(self.verified_ppe_ids)

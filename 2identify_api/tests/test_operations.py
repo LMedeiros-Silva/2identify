@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from secrets import token_urlsafe
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +18,7 @@ from sqlalchemy import (
     String,
     Table,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -232,6 +234,50 @@ def test_admin_creates_area_and_operation_operator_reads_same_polygon(operations
     assert face_id_view.json() == operator_view.json()
 
 
+def test_operator_camera_catalog_lists_active_sector_sources_without_usb_index(
+    operations_api,
+) -> None:
+    client, _sessions = operations_api
+    area = client.post(
+        "/admin/risk-areas",
+        json={
+            "camera_id": 5,
+            "name": "Linha multi",
+            "geometry": {
+                "type": "polygon",
+                "points": [[0.1, 0.1], [0.8, 0.1], [0.5, 0.8]],
+            },
+        },
+    ).json()
+    operation = client.post(
+        "/admin/operations",
+        json={"name": "Monitoramento multi", "epi_ids": [1], "risk_area_id": area["id"]},
+    ).json()
+    for name, source in (
+        ("Rede B", "rtsp://camera-b.local/live"),
+        ("Rede C", "https://camera-c.local/mjpeg"),
+        ("USB A", "0"),
+        ("USB B", "1"),
+    ):
+        created = client.post(
+            "/admin/cameras",
+            json={"name": name, "stream_source": source, "sector_id": 1},
+        )
+        assert created.status_code == 201
+    path = f"/operator/operations/{operation['id']}/cameras"
+    response = client.get(path)
+    assert response.status_code == 200
+    cameras = response.json()
+    assert len(cameras) == 5
+    assert {item["sector_id"] for item in cameras} == {1}
+    assert {item["source_type"] for item in cameras} == {"ip", "usb"}
+    assert all(item["source_hint"] is None for item in cameras if item["source_type"] == "usb")
+    assert client.get(
+        f"/operator/operations/catalog/{operation['id']}/cameras",
+        headers={"Authorization": f"Bearer {_CATALOG_TOKEN}"},
+    ).json() == cameras
+
+
 def test_operator_publishes_active_ppe_snapshot_for_admin(operations_api) -> None:
     client, _sessions = operations_api
     area = client.post(
@@ -330,6 +376,100 @@ def test_admin_registers_camera_through_api_and_catalog_lists_it(operations_api)
         },
     )
     assert duplicate.status_code == 409
+
+
+def test_admin_can_list_edit_deactivate_and_move_sector_cameras(operations_api) -> None:
+    client, sessions = operations_api
+    with sessions.begin() as session:
+        session.execute(
+            text("INSERT INTO setores (id, nome, ativo) VALUES (3, 'Manutenção', true)")
+        )
+
+    listed = client.get("/admin/cameras")
+    assert listed.status_code == 200
+    assert {item["id"] for item in listed.json()} == {5, 6}
+    assert next(item for item in listed.json() if item["id"] == 6)["active"] is False
+
+    updated = client.put(
+        "/admin/cameras/5",
+        json={
+            "name": "Fresa revisada",
+            "description": "Câmera deslocada",
+            "stream_source": "rtsp://camera.local/stream",
+            "sector_id": 3,
+            "active": False,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["sector_id"] == 3
+    assert updated.json()["active"] is False
+    assert updated.json()["name"] == "Fresa revisada"
+    assert client.get("/admin/operations/catalog").json()["cameras"] == []
+    assert client.get("/admin/cameras?sector_id=3").json() == [updated.json()]
+
+    reactivated = client.put(
+        "/admin/cameras/5",
+        json={
+            "name": "Fresa revisada",
+            "description": "Câmera deslocada",
+            "stream_source": "rtsp://camera.local/stream",
+            "sector_id": 3,
+            "active": True,
+        },
+    )
+    assert reactivated.status_code == 200
+    assert [item["id"] for item in client.get("/admin/operations/catalog").json()["cameras"]] == [5]
+
+
+def test_admin_camera_update_rejects_inactive_sector_and_duplicate_name(operations_api) -> None:
+    client, _sessions = operations_api
+    assert client.put(
+        "/admin/cameras/5",
+        json={"name": "Linha", "stream_source": "0", "sector_id": 2},
+    ).status_code == 404
+    assert client.put(
+        "/admin/cameras/5",
+        json={"name": "Desativada", "stream_source": "0", "sector_id": 1},
+    ).status_code == 409
+    assert client.put(
+        "/admin/cameras/999",
+        json={"name": "Ausente", "stream_source": "0", "sector_id": 1},
+    ).status_code == 404
+
+
+def test_admin_camera_edit_does_not_erase_hidden_legacy_credentials(operations_api) -> None:
+    client, sessions = operations_api
+    legacy_source = "rtsp://" + "test-user:" + token_urlsafe(12) + "@camera.local/stream?channel=1"
+    with sessions.begin() as session:
+        session.execute(
+            text("UPDATE cameras SET endereco=:source WHERE id=5"),
+            {"source": legacy_source},
+        )
+    camera = next(item for item in client.get("/admin/cameras").json() if item["id"] == 5)
+    assert camera["stream_source"] == "rtsp://camera.local/stream"
+    updated = client.put(
+        "/admin/cameras/5",
+        json={
+            "name": "Renomeada", "stream_source": camera["stream_source"],
+            "sector_id": 1, "active": False,
+        },
+    )
+    assert updated.status_code == 200
+    with sessions() as session:
+        assert session.scalar(text("SELECT endereco FROM cameras WHERE id=5")) == legacy_source
+
+
+def test_camera_registration_rejects_source_query_configuration(operations_api) -> None:
+    client, _sessions = operations_api
+    response = client.post(
+        "/admin/cameras",
+        json={
+            "name": "Câmera IP",
+            "stream_source": "rtsp://camera.local/live?option",
+            "sector_id": 1,
+        },
+    )
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize(

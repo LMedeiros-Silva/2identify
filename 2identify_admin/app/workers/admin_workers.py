@@ -300,18 +300,24 @@ class CameraSaveWorker(QThread):
         service: AdminOperationsService,
         session: AdminSession,
         draft: CameraDraft,
+        camera_id: int | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._session: AdminSession | None = session
         self._draft = draft
+        self._camera_id = camera_id
 
     def run(self) -> None:
         try:
             session = self._session
             if session is None or session.is_expired():
                 raise SessionExpiredError("Sua sessão expirou.")
-            value = self._service.create_camera(session.access_token, self._draft)
+            value = (
+                self._service.create_camera(session.access_token, self._draft)
+                if self._camera_id is None
+                else self._service.save_camera(session.access_token, self._draft, self._camera_id)
+            )
             if not self.isInterruptionRequested():
                 self.succeeded.emit(value)
         except SessionExpiredError:
@@ -321,13 +327,13 @@ class CameraSaveWorker(QThread):
         except ConfigurationConflictError as error:
             self._fail(str(error), False)
         except AdminServiceError:
-            self._fail("Não foi possível cadastrar a câmera.", False)
+            self._fail("Não foi possível salvar a câmera.", False)
         except Exception as error:
             logger.error(
-                "Falha ao cadastrar câmera",
+                "Falha ao salvar câmera",
                 extra={"error_type": type(error).__name__},
             )
-            self._fail("Não foi possível cadastrar a câmera.", False)
+            self._fail("Não foi possível salvar a câmera.", False)
         finally:
             self._session = None
 

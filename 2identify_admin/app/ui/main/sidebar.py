@@ -73,6 +73,8 @@ class Sidebar(QFrame):
             "Gestão de EPIs",
         )
 
+        self.adicionar_botao(layout, "funcionarios", "Funcionários")
+
         self.adicionar_botao(
             layout,
             "operacoes",

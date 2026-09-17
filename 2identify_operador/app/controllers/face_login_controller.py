@@ -80,14 +80,16 @@ class FaceLoginController(QObject):
         if worker is not None and worker.isRunning():
             worker.request_stop()
 
-    def shutdown(self, wait_timeout_ms: int = 5_000) -> None:
+    def shutdown(self, wait_timeout_ms: int = 5_000) -> bool:
         worker = self._worker
         if worker is None:
-            return
+            return True
         worker.request_stop()
         if worker.isRunning() and not worker.wait(wait_timeout_ms):
             logger.error("face_auth_worker_shutdown_timeout")
+            return False
         self._dispose_finished_worker()
+        return True
 
     @Slot(str, str)
     def _handle_pipeline_status(self, _status: str, message: str) -> None:
@@ -109,6 +111,11 @@ class FaceLoginController(QObject):
                 "authorization_mode": "local_development",
             },
         )
+        # Recognition is emitted before the worker's finally block closes VideoCapture.
+        # Release the login device before a selected monitoring source can reuse it.
+        if not self.shutdown():
+            self._window.show_face_authentication_error("A câmera de Face ID não foi liberada.")
+            return
         self.operator_authenticated.emit(result)
 
     @Slot(str, bool)

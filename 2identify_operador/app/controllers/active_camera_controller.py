@@ -8,7 +8,9 @@ from functools import partial
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
+from app.controllers.camera_manager import CameraManager
 from app.core.config import AppSettings
+from app.domain.camera_source import CameraStatus
 from app.ui.active import ActiveOperationPage
 from app.vision.camera import OpenCVCameraSession
 from app.workers.safety_camera_worker import SafetyCameraWorker
@@ -22,15 +24,22 @@ class ActiveCameraController(QObject):
     """Capture continuous operational frames without blocking the UI thread."""
 
     analysis_frame_ready = Signal(object)
+    status_changed = Signal(int, object)
 
     def __init__(
         self,
         settings: AppSettings,
         page: ActiveOperationPage,
         worker_factory: ActiveCameraWorkerFactory | None = None,
+        manager: CameraManager | None = None,
     ) -> None:
         super().__init__(page)
         self._page = page
+        self._manager = manager or CameraManager(settings, parent=page)
+        self._manager.preview_ready.connect(page.update_camera_tile)
+        self._manager.status_changed.connect(page.set_camera_tile_status)
+        self._manager.status_changed.connect(self.status_changed.emit)
+        self._manager.analysis_frame_ready.connect(self.analysis_frame_ready.emit)
         analysis_fps = max(
             settings.ppe_inference_fps,
             settings.pose_inference_fps if settings.pose_estimation_enabled else 0.0,
@@ -57,12 +66,26 @@ class ActiveCameraController(QObject):
 
     @property
     def is_running(self) -> bool:
+        if self._manager.selected_camera_ids:
+            return True
         worker = self._worker
         return worker is not None and worker.isRunning()
+
+    @property
+    def generation(self) -> int:
+        return self._manager.generation
 
     @Slot()
     def start(self) -> None:
         if not self._page.is_monitoring_active:
+            return
+        if self._page.selected_cameras:
+            try:
+                self._manager.start(self._page.selected_cameras)
+            except RuntimeError:
+                logger.error("active_monitoring_previous_cameras_not_released")
+                for camera in self._page.selected_cameras:
+                    self._page.set_camera_tile_status(camera.camera_id, CameraStatus.OFFLINE)
             return
         worker = self._worker
         if worker is not None and worker.isRunning():
@@ -82,6 +105,15 @@ class ActiveCameraController(QObject):
 
     @Slot()
     def stop(self) -> None:
+        if self._manager.selected_camera_ids:
+            logger.info(
+                "active_camera_metrics",
+                extra={
+                    "cameras": self._manager.metrics(),
+                    "system": self._manager.system_metrics(),
+                },
+            )
+        self._manager.stop()
         self._restart_after_finish = False
         self._automatic_retries_remaining = 3
         worker = self._worker
@@ -89,6 +121,7 @@ class ActiveCameraController(QObject):
             worker.request_stop()
 
     def shutdown(self, wait_timeout_ms: int = 5_000) -> None:
+        self._manager.stop(wait_timeout_ms)
         self._restart_after_finish = False
         worker = self._worker
         if worker is None:

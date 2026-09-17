@@ -39,7 +39,7 @@ def test_engine_collects_minimum_samples_before_confirming() -> None:
     assert snapshot.all_confirmed_present
 
 
-def test_engine_rejects_an_isolated_positive_as_absent() -> None:
+def test_engine_keeps_an_isolated_positive_unknown_without_negative_evidence() -> None:
     engine = _engine()
 
     engine.observe(("capacete",))
@@ -49,7 +49,7 @@ def test_engine_rejects_an_isolated_positive_as_absent() -> None:
 
     decision = snapshot.decision_for("capacete")
     assert decision is not None
-    assert decision.state is PpeStabilityState.CONFIRMED_ABSENT
+    assert decision.state is PpeStabilityState.UNSTABLE
     assert decision.presence_ratio == 0.25
 
 
@@ -82,9 +82,7 @@ def test_engine_ages_old_evidence_out_of_the_rolling_window() -> None:
     assert snapshot.decision_for("capacete").state is PpeStabilityState.UNSTABLE
     engine.observe(())
     snapshot = engine.observe(())
-    assert snapshot.decision_for("capacete").state is (
-        PpeStabilityState.CONFIRMED_ABSENT
-    )
+    assert snapshot.decision_for("capacete").state is PpeStabilityState.UNSTABLE
 
 
 def test_engine_reset_discards_previous_operation_evidence() -> None:

@@ -39,11 +39,24 @@ export function createAlertsApi(baseUrl, fetchFn = globalThis.fetch) {
     },
 
     async list(accessToken) {
-      const payload = await request("/admin/alerts?limit=100&offset=0", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      return Array.isArray(payload.items) ? payload.items : [];
+      const items = [];
+      const limit = 100;
+      for (let offset = 0; ; offset += limit) {
+        const payload = await request(`/admin/alerts?limit=${limit}&offset=${offset}`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!Array.isArray(payload.items) || !Number.isInteger(payload.total) || payload.total < 0) {
+          throw new ApiRequestError(502, "A API retornou uma lista de alertas inválida.");
+        }
+        items.push(...payload.items);
+        if (items.length >= payload.total) {
+          return items;
+        }
+        if (payload.items.length !== limit) {
+          throw new ApiRequestError(502, "A API interrompeu a paginação dos alertas.");
+        }
+      }
     },
   });
 }
@@ -108,6 +121,7 @@ export function alertCardModel(alert) {
     employee: employee?.name ?? "Não identificado",
     operation: operation?.operation_name ?? "Não informada",
     sector,
+    camera: occurrence.camera?.name ?? "Não informada",
     occurredAt: formattedDate(alert.created_at),
     hasEvidence: Boolean(occurrence.image_reference || occurrence.video_reference),
   });

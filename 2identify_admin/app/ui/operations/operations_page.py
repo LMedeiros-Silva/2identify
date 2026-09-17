@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app.domain import (
     CameraOption,
+    ManagedCamera,
     OperationCatalog,
     OperationConfiguration,
     OperationDraft,
@@ -35,6 +36,7 @@ from app.ui.operations.camera_registration_dialog import CameraRegistrationDialo
 class OperationsPage(QWidget):
     refresh_requested = Signal()
     camera_save_requested = Signal(object)
+    camera_update_requested = Signal(object, int)
     risk_area_configuration_requested = Signal(object, object)
     operation_save_requested = Signal(object, object)
 
@@ -42,6 +44,7 @@ class OperationsPage(QWidget):
         super().__init__()
         self.setObjectName("operations_page")
         self._catalog = OperationCatalog((), ())
+        self._managed_cameras: dict[int, ManagedCamera] = {}
         self._risk_areas: dict[int, RiskArea] = {}
         self._operations: dict[int, OperationConfiguration] = {}
         self._ppe_checks: dict[int, QCheckBox] = {}
@@ -126,6 +129,19 @@ class OperationsPage(QWidget):
         self.create_camera_button.clicked.connect(self._register_camera)
         camera_selector_layout.addWidget(self.create_camera_button)
         camera_form.addRow("Câmera*", camera_selector)
+        self.camera_sector_filter = QComboBox()
+        self.camera_sector_filter.currentIndexChanged.connect(self._rebuild_managed_cameras)
+        camera_form.addRow("Setor das câmeras", self.camera_sector_filter)
+        managed_selector = QWidget()
+        managed_layout = QHBoxLayout(managed_selector)
+        managed_layout.setContentsMargins(0, 0, 0, 0)
+        self.managed_camera_combo = QComboBox()
+        self.managed_camera_combo.currentIndexChanged.connect(self._managed_camera_changed)
+        managed_layout.addWidget(self.managed_camera_combo, 1)
+        self.edit_camera_button = QPushButton("Editar câmera")
+        self.edit_camera_button.clicked.connect(self._edit_camera)
+        managed_layout.addWidget(self.edit_camera_button)
+        camera_form.addRow("Câmeras do setor", managed_selector)
         self.risk_area_combo = QComboBox()
         camera_form.addRow("Área de risco*", self.risk_area_combo)
         form_layout.addLayout(camera_form)
@@ -151,11 +167,15 @@ class OperationsPage(QWidget):
         catalog: OperationCatalog,
         risk_areas: tuple[RiskArea, ...],
         operations: tuple[OperationConfiguration, ...],
+        managed_cameras: tuple[ManagedCamera, ...] = (),
     ) -> None:
         self._catalog = catalog
+        self._managed_cameras = {item.id: item for item in managed_cameras}
         self._risk_areas = {item.id: item for item in risk_areas}
         self._operations = {item.id: item for item in operations}
+        self._rebuild_camera_sector_filter()
         self._rebuild_cameras()
+        self._rebuild_managed_cameras()
         self._rebuild_ppe()
         self.operation_list.clear()
         for operation in operations:
@@ -206,7 +226,12 @@ class OperationsPage(QWidget):
     def upsert_operation(self, operation: OperationConfiguration) -> None:
         self._operations[operation.id] = operation
         items = tuple(sorted(self._operations.values(), key=lambda item: item.name.casefold()))
-        self.set_data(self._catalog, tuple(self._risk_areas.values()), items)
+        self.set_data(
+            self._catalog,
+            tuple(self._risk_areas.values()),
+            items,
+            tuple(self._managed_cameras.values()),
+        )
         self._set_feedback("Operação salva com sucesso.", "success")
 
     def show_loading(self, message: str = "Carregando configurações...") -> None:
@@ -214,6 +239,7 @@ class OperationsPage(QWidget):
         self.save_button.setEnabled(False)
         self.configure_area_button.setEnabled(False)
         self.create_camera_button.setEnabled(False)
+        self.edit_camera_button.setEnabled(False)
         self._set_feedback(message, "loading")
 
     def show_ready(self) -> None:
@@ -221,6 +247,7 @@ class OperationsPage(QWidget):
         self.save_button.setEnabled(True)
         self.configure_area_button.setEnabled(bool(self._catalog.cameras))
         self.create_camera_button.setEnabled(bool(self._catalog.sectors))
+        self.edit_camera_button.setEnabled(self.managed_camera_combo.currentData() is not None)
 
     def show_error(self, message: str) -> None:
         self.show_ready()
@@ -249,6 +276,37 @@ class OperationsPage(QWidget):
             self.camera_combo.addItem(camera.name, camera.id)
         self.camera_combo.blockSignals(False)
         self._rebuild_risk_areas()
+
+    def _rebuild_managed_cameras(self) -> None:
+        sectors = {item.id: item.name for item in self._catalog.sectors}
+        selected_sector = self.camera_sector_filter.currentData()
+        self.managed_camera_combo.blockSignals(True)
+        self.managed_camera_combo.clear()
+        for camera in sorted(
+            self._managed_cameras.values(),
+            key=lambda item: (sectors.get(item.sector_id, "").casefold(), item.name.casefold()),
+        ):
+            if selected_sector is not None and camera.sector_id != selected_sector:
+                continue
+            sector = sectors.get(camera.sector_id, f"Setor {camera.sector_id}")
+            status = "Ativa" if camera.active else "Inativa"
+            self.managed_camera_combo.addItem(f"{sector} · {camera.name} · {status}", camera.id)
+        self.managed_camera_combo.blockSignals(False)
+        self._managed_camera_changed()
+
+    def _rebuild_camera_sector_filter(self) -> None:
+        selected = self.camera_sector_filter.currentData()
+        self.camera_sector_filter.blockSignals(True)
+        self.camera_sector_filter.clear()
+        self.camera_sector_filter.addItem("Todos os setores", None)
+        for sector in self._catalog.sectors:
+            self.camera_sector_filter.addItem(sector.name, sector.id)
+        index = self.camera_sector_filter.findData(selected)
+        self.camera_sector_filter.setCurrentIndex(max(index, 0))
+        self.camera_sector_filter.blockSignals(False)
+
+    def _managed_camera_changed(self) -> None:
+        self.edit_camera_button.setEnabled(self.managed_camera_combo.currentData() is not None)
 
     def _rebuild_ppe(self) -> None:
         while self.ppe_layout.count() > 1:
@@ -283,6 +341,14 @@ class OperationsPage(QWidget):
         dialog = CameraRegistrationDialog(self._catalog.sectors, self)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_draft is not None:
             self.camera_save_requested.emit(dialog.result_draft)
+
+    def _edit_camera(self) -> None:
+        camera = self._managed_cameras.get(self.managed_camera_combo.currentData())
+        if camera is None:
+            return
+        dialog = CameraRegistrationDialog(self._catalog.sectors, self, existing=camera)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_draft is not None:
+            self.camera_update_requested.emit(dialog.result_draft, camera.id)
 
     def _operation_selected(self, current: QListWidgetItem | None) -> None:
         if current is None:

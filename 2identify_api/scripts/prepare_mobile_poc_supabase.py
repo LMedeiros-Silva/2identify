@@ -69,7 +69,7 @@ class SqlAlchemyBootstrapInfrastructure(BootstrapInfrastructure):
         if (action, revision) not in {
             ("upgrade", "42d54200970a"),
             ("stamp", "441c04c14c57"),
-            ("upgrade", "head"),
+            ("upgrade", "e4a7b8c9d0e1"),
         }:
             raise BootstrapExecutionError("ação Alembic fora do fluxo aprovado")
         child_environment = dict(os.environ)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 from app.domain import (
@@ -85,6 +86,8 @@ class RiskAreaAssessment:
     evaluated_people: int
     people_inside: int
     inference_milliseconds: float
+    camera_id: int | None = None
+    captured_at: datetime | None = None
 
     @property
     def is_clear(self) -> bool:

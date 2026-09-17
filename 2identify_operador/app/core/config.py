@@ -41,7 +41,7 @@ class AppSettings(BaseSettings):
 
     ppe_model_path: Path = Path("models/ppe/best.pt")
     ppe_model_sha256: str = (
-        "73A87F86E68F7C5091857F48B55BB756A70B88D0217CC35C58EED3969C7EBA20"
+        "2EBD001C8AB294D27C184BD78C48236C019BB684D9774455DF0868B4E39F011F"
     )
     ppe_confidence_threshold: Annotated[float, Field(gt=0, le=1)] = 0.50
     ppe_iou_threshold: Annotated[float, Field(gt=0, le=1)] = 0.45
@@ -122,6 +122,7 @@ class AppSettings(BaseSettings):
     camera_read_timeout_ms: Annotated[int, Field(ge=100, le=60_000)] = 2_000
     camera_max_failed_reads: Annotated[int, Field(ge=1, le=300)] = 30
     camera_preview_fps: Annotated[float, Field(gt=0, le=60)] = 20.0
+    pose_camera_ids: str = ""
     login_camera_source: str = "0"
     face_auth_enabled: bool = True
     face_auth_timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 15.0
@@ -286,6 +287,17 @@ class AppSettings(BaseSettings):
         if self.login_camera_source.lstrip("-").isdigit():
             return int(self.login_camera_source)
         return self.login_camera_source
+
+    @property
+    def parsed_pose_camera_ids(self) -> frozenset[int] | None:
+        """Optional local allowlist; empty means every selected camera may run Pose."""
+
+        if not self.pose_camera_ids.strip():
+            return None
+        parts = tuple(part.strip() for part in self.pose_camera_ids.split(","))
+        if any(not part.isdecimal() or int(part) <= 0 for part in parts):
+            raise ValueError("POSE_CAMERA_IDS deve conter IDs positivos separados por vírgula")
+        return frozenset(int(part) for part in parts)
 
 
 @lru_cache(maxsize=1)

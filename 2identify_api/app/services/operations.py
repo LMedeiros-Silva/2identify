@@ -11,16 +11,23 @@ from app.repositories.operation_repository import (
     SectorRecord,
 )
 from app.schemas.operations import (
+    AdminCameraItem,
     CameraCatalogItem,
     CameraWrite,
     EpiReference,
     OperationCatalog,
     OperationDetail,
     OperationWrite,
+    OperatorCameraItem,
     PolygonGeometry,
     RiskAreaDetail,
     RiskAreaWrite,
     SectorCatalogItem,
+)
+from app.services.camera_sources import (
+    classify_camera_source,
+    public_camera_source,
+    sanitized_admin_source,
 )
 
 
@@ -80,6 +87,39 @@ class OperationsService:
     def get_operation(self, operation_id: int) -> OperationDetail:
         return self._operation(self._repository.get_operation(operation_id))
 
+    def list_operator_cameras(self, operation_id: int) -> tuple[OperatorCameraItem, ...]:
+        return tuple(
+            OperatorCameraItem(
+                id=item.id,
+                name=item.name,
+                sector_id=item.sector_id,
+                source_type=classify_camera_source(item.stream_source).value,
+                source_hint=public_camera_source(item.stream_source),
+            )
+            for item in self._repository.list_active_cameras_for_operation(operation_id)
+        )
+
+    def list_cameras(self, sector_id: int | None = None) -> tuple[AdminCameraItem, ...]:
+        return tuple(self._admin_camera(item) for item in self._repository.list_cameras(sector_id))
+
+    def update_camera(self, camera_id: int, payload: CameraWrite) -> AdminCameraItem:
+        existing = self._repository.get_camera(camera_id)
+        source = (
+            existing.stream_source
+            if payload.stream_source == sanitized_admin_source(existing.stream_source)
+            else payload.stream_source
+        )
+        return self._admin_camera(
+            self._repository.update_camera(
+                camera_id,
+                name=payload.name,
+                description=payload.description,
+                stream_source=source,
+                sector_id=payload.sector_id,
+                active=payload.active,
+            )
+        )
+
     def create_operation(self, payload: OperationWrite) -> OperationDetail:
         return self._operation(
             self._repository.create_operation(
@@ -118,7 +158,13 @@ class OperationsService:
             id=item.id,
             name=item.name,
             description=item.description,
-            stream_source=item.stream_source,
+            stream_source=sanitized_admin_source(item.stream_source),
+        )
+
+    @classmethod
+    def _admin_camera(cls, item: CameraRecord) -> AdminCameraItem:
+        return AdminCameraItem(
+            **cls._camera(item).model_dump(), sector_id=item.sector_id, active=item.active
         )
 
     @staticmethod

@@ -15,6 +15,7 @@ from app.domain import (
     SafetyViolation,
     SafetyViolationType,
 )
+from app.domain.camera_source import CameraType
 from app.services.alert_delivery_service import (
     AlertDeliveryRejectedError,
     AlertDeliveryUnavailableError,
@@ -45,6 +46,25 @@ def _client(handler: Callable[[httpx.Request], httpx.Response]) -> OperatorApiCl
         read_timeout_seconds=2.0,
         transport=httpx.MockTransport(handler),
     )
+
+
+def test_operator_camera_catalog_preserves_type_and_station_local_usb_resolution() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/operator/operations/41/cameras"
+        return httpx.Response(
+            200,
+            json=[
+                {"id": 1, "name": "Rede", "sector_id": 7, "source_type": "ip", "source_hint": "rtsp://camera.local/live"},
+                {"id": 2, "name": "USB", "sector_id": 7, "source_type": "usb", "source_hint": None},
+            ],
+        )
+
+    client = _client(handler)
+    cameras = client.list_operation_cameras(41, "operator-token")
+    assert tuple(item.source_type for item in cameras) == (CameraType.IP, CameraType.USB)
+    assert cameras[0].resolve() == "rtsp://camera.local/live"
+    assert cameras[1].source_hint is None
+    client.close()
 
 
 def _ergonomic_alert() -> SafetyAlert:

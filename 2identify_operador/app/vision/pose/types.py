@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import IntEnum
 from math import isfinite
 from typing import Protocol
@@ -77,8 +78,13 @@ class PoseDetectionBatch:
     frame_width: int
     frame_height: int
     inference_milliseconds: float
+    camera_id: int | None = None
+    generation: int = 0
+    captured_at: datetime | None = None
 
     def __post_init__(self) -> None:
+        if self.camera_id is not None and self.camera_id <= 0:
+            raise ValueError("camera_id deve ser positivo")
         if self.frame_width <= 0 or self.frame_height <= 0:
             raise ValueError("dimensões do frame devem ser positivas")
         if not isfinite(self.inference_milliseconds) or self.inference_milliseconds < 0:

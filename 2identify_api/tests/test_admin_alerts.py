@@ -244,6 +244,58 @@ def test_alert_list_exposes_complete_ergonomic_occurrence() -> None:
         fixture.close()
 
 
+def test_synthetic_mobile_alert_flows_through_operator_and_admin_api() -> None:
+    """Exercise the real HTTP contracts without writing to the restored database."""
+    fixture = _alert_api()
+    application, _sessions, _alerts = next(fixture)
+    try:
+        with TestClient(application) as client:
+            operator_login = client.post(
+                "/auth/login",
+                json={"username": "operador", "password": "senha-segura"},
+            )
+            assert operator_login.status_code == 200
+            now = datetime.now(UTC).isoformat()
+            created = client.post(
+                "/operator/alerts",
+                headers={
+                    "Authorization": f"Bearer {operator_login.json()['access_token']}"
+                },
+                json={
+                    "event_id": str(uuid4()),
+                    "work_session_id": str(uuid4()),
+                    "operation_id": 12,
+                    "camera_id": 5,
+                    "risk_area_id": None,
+                    "violation_type": "monitoring_interrupted",
+                    "subject_key": "test:mobile_integration",
+                    "summary": "TESTE DE INTEGRAÇÃO MOBILE 2IDENTIFY",
+                    "severity": "warning",
+                    "first_observed_at": now,
+                    "raised_at": now,
+                },
+            )
+            assert created.status_code == 201
+            listed = client.get(
+                "/admin/alerts?limit=100&offset=0",
+                headers={"Authorization": f"Bearer {_token(client)}"},
+            )
+        assert listed.status_code == 200
+        alert = next(
+            item
+            for item in listed.json()["items"]
+            if item["id"] == created.json()["alert_id"]
+        )
+        assert alert["summary"] == "TESTE DE INTEGRAÇÃO MOBILE 2IDENTIFY"
+        assert alert["level"] == "warning"
+        assert alert["status"] == "nao_lido"
+        assert alert["occurrence"]["camera"]["id"] == 5
+        assert alert["occurrence"]["camera"]["name"] == "Câmera Posto 5"
+        assert alert["created_at"]
+    finally:
+        fixture.close()
+
+
 def test_unknown_logical_operation_keeps_alert_with_null_operation_name() -> None:
     fixture = _alert_api(operation_id=999, seed_operation=False)
     application, _sessions, _alerts = next(fixture)

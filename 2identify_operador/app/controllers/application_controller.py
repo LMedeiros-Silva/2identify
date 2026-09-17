@@ -35,6 +35,7 @@ from app.services.work_session_service import WorkSessionError, WorkSessionServi
 from app.ui.login import LoginWindow
 from app.ui.main import MainWindow
 from app.workers.alert_delivery_worker import AlertDeliveryWorker
+from app.workers.camera_catalog_load_worker import CameraCatalogLoadWorker
 from app.workers.safety_state_delivery_worker import SafetyStateDeliveryWorker
 
 from .active_camera_controller import ActiveCameraController
@@ -91,6 +92,7 @@ class ApplicationController(QObject):
         ) = None
         self._active_ppe_monitoring_controller: ActivePpeMonitoringController | None = None
         self._main_window: MainWindow | None = None
+        self._camera_catalog_workers: set[CameraCatalogLoadWorker] = set()
         self._alert_delivery_workers: dict[str, AlertDeliveryWorker] = {}
         self._pending_alert_deliveries: dict[str, SafetyAlert] = {}
         self._safety_state_delivery_worker: SafetyStateDeliveryWorker | None = None
@@ -165,6 +167,9 @@ class ApplicationController(QObject):
     def _show_main_window(self, session: OperatorSession) -> None:
         main_window = MainWindow(session=session, app_version=self._app_version)
         main_window.logout_requested.connect(self.handle_logout)
+        if self._operation_service is not None and self._operation_service.supports_camera_catalog:
+            main_window.safety_verification_page.enable_multicamera_catalog()
+            main_window.safety_verification_page.catalog_requested.connect(self._load_camera_catalog)
         if self._settings is not None:
             self._safety_camera_controller = SafetyCameraController(
                 settings=self._settings,
@@ -194,6 +199,9 @@ class ApplicationController(QObject):
             )
             self._active_ergonomics_monitoring_controller.assessment_ready.connect(
                 self._active_ppe_monitoring_controller.handle_ergonomic_assessment
+            )
+            self._active_ergonomics_monitoring_controller.pose_batch_ready.connect(
+                self._active_ppe_monitoring_controller.handle_pose_batch
             )
             self._active_ergonomics_monitoring_controller.risk_area_assessment_ready.connect(
                 self._active_ppe_monitoring_controller.handle_risk_area_assessment
@@ -237,6 +245,46 @@ class ApplicationController(QObject):
             },
         )
 
+    @Slot(int)
+    def _load_camera_catalog(self, operation_id: int) -> None:
+        service = self._operation_service
+        if service is None:
+            return
+        worker = CameraCatalogLoadWorker(service, operation_id)
+        worker.loaded.connect(self._camera_catalog_loaded)
+        worker.failed.connect(self._camera_catalog_failed)
+        worker.finished.connect(partial(self._dispose_camera_catalog_worker, worker))
+        self._camera_catalog_workers.add(worker)
+        worker.start()
+
+    @Slot(int, object)
+    def _camera_catalog_loaded(self, operation_id: int, value: object) -> None:
+        if self._main_window is not None and isinstance(value, tuple):
+            self._main_window.safety_verification_page.set_cameras(operation_id, value)
+
+    @Slot(int, str)
+    def _camera_catalog_failed(self, operation_id: int, message: str) -> None:
+        if self._main_window is not None:
+            self._main_window.safety_verification_page.show_camera_catalog_failure(
+                operation_id, message
+            )
+
+    def _dispose_camera_catalog_worker(self, worker: CameraCatalogLoadWorker) -> None:
+        self._camera_catalog_workers.discard(worker)
+        worker.deleteLater()
+
+    def _shutdown_camera_catalog_workers(self) -> None:
+        workers = tuple(self._camera_catalog_workers)
+        self._camera_catalog_workers.clear()
+        for worker in workers:
+            worker.requestInterruption()
+        for worker in workers:
+            if worker.isRunning() and not worker.wait(15_000):
+                logger.error("camera_catalog_worker_shutdown_timeout")
+                worker.finished.connect(worker.deleteLater)
+            else:
+                worker.deleteLater()
+
     @Slot()
     def handle_logout(self) -> None:
         """Close the authenticated context and restore a clean login window."""
@@ -247,6 +295,7 @@ class ApplicationController(QObject):
             return
 
         session = self._session_context.require_current()
+        self._shutdown_camera_catalog_workers()
         self._shutdown_alert_delivery_workers()
         if self._risk_area_snapshot_controller is not None:
             self._risk_area_snapshot_controller.shutdown()
@@ -284,6 +333,7 @@ class ApplicationController(QObject):
     def shutdown(self) -> None:
         """Stop authenticated camera resources during process teardown."""
 
+        self._shutdown_camera_catalog_workers()
         self._shutdown_alert_delivery_workers()
         if self._risk_area_snapshot_controller is not None:
             self._risk_area_snapshot_controller.shutdown()
@@ -525,8 +575,28 @@ class ApplicationController(QObject):
                 self._session_context.require_current(),
                 operation,
                 value,
+                selected_camera_ids=tuple(
+                    camera.camera_id
+                    for camera in main_window.safety_verification_page.selected_cameras
+                ),
             )
-            main_window.show_active_operation(work_session, operation)
+            # The pre-operation verification source may be selected for active capture.
+            # Wait for release before the active manager opens the same device.
+            camera_released = (
+                self._safety_camera_controller.shutdown()
+                if self._safety_camera_controller is not None else True
+            )
+            model_released = (
+                self._ppe_inference_controller.shutdown()
+                if self._ppe_inference_controller is not None else True
+            )
+            if not camera_released or not model_released:
+                self._work_session_service.interrupt_active()
+                main_window.safety_verification_page.show_operation_start_rejected()
+                return
+            main_window.show_active_operation(
+                work_session, operation, main_window.safety_verification_page.selected_cameras
+            )
         except WorkSessionError as error:
             logger.warning(
                 "local_work_session_start_rejected",

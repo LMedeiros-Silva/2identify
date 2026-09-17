@@ -20,11 +20,14 @@ from pydantic import (
 from app.api.operation_contracts import (
     parse_camera,
     parse_catalog,
+    parse_managed_camera,
+    parse_managed_cameras,
     parse_operation,
     parse_operations,
     parse_risk_area,
     parse_risk_areas,
 )
+from app.api.ppe_contracts import parse_active_operations
 from app.core.config import Settings
 from app.domain import (
     AdminAlert,
@@ -44,12 +47,19 @@ from app.domain import (
     DashboardAlertStatus,
     DashboardAlertTrendPoint,
     DashboardSummary,
+    EmployeeDraft,
+    EmployeePage,
+    EmployeeRecord,
+    FaceTemplateDraft,
+    FaceTemplateStatus,
+    ManagedCamera,
     OperationCatalog,
     OperationConfiguration,
     OperationDraft,
     RiskArea,
     RiskAreaDraft,
 )
+from app.domain.ppe_management import ActiveOperationSnapshot
 from app.services.errors import (
     AlertNotFoundError,
     AlertStateConflictError,
@@ -349,6 +359,50 @@ class _AdminAlertPageDto(BaseModel):
         )
 
 
+class _EmployeeDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: PositiveInt
+    name: str
+    registration: str
+    role: str | None
+    shift: str | None
+    sector_id: PositiveInt
+    sector_name: str
+    active: bool
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+    def to_domain(self) -> EmployeeRecord:
+        return EmployeeRecord(**self.model_dump())
+
+
+class _EmployeePageDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: tuple[_EmployeeDto, ...]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+
+    def to_domain(self) -> EmployeePage:
+        return EmployeePage(
+            tuple(item.to_domain() for item in self.items),
+            self.total, self.limit, self.offset,
+        )
+
+
+class _FaceTemplateStatusDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    employee_id: PositiveInt
+    model_id: str
+    enrolled_at: AwareDatetime
+
+    def to_domain(self) -> FaceTemplateStatus:
+        return FaceTemplateStatus(**self.model_dump())
+
+
 class AdminApiClient:
     """Cliente HTTP síncrono executado exclusivamente nos workers Qt."""
 
@@ -440,12 +494,14 @@ class AdminApiClient:
                 "A API retornou indicadores inválidos para o dashboard."
             ) from error
 
-    def get_alerts(self, access_token: str) -> AdminAlertPage:
+    def get_alerts(
+        self, access_token: str, *, limit: int = 100, offset: int = 0
+    ) -> AdminAlertPage:
         response = self._authorized_request(
             "GET",
             "/admin/alerts",
             access_token=access_token,
-            params={"limit": 100, "offset": 0},
+            params={"limit": limit, "offset": offset},
         )
         self._ensure_protected_success(response, operation="admin_alerts")
         try:
@@ -454,6 +510,71 @@ class AdminApiClient:
             raise InvalidApiResponseError(
                 "A API retornou uma lista de alertas inválida."
             ) from error
+
+    def get_employees(
+        self, access_token: str, *, limit: int = 100, offset: int = 0
+    ) -> EmployeePage:
+        response = self._authorized_request(
+            "GET", "/admin/employees", access_token=access_token,
+            params={"limit": limit, "offset": offset},
+        )
+        self._ensure_protected_success(response, operation="admin_employees")
+        try:
+            return _EmployeePageDto.model_validate(response.json()).to_domain()
+        except (ValueError, ValidationError) as error:
+            raise InvalidApiResponseError(
+                "A API retornou funcionários inválidos."
+            ) from error
+
+    def save_employee(
+        self, access_token: str, draft: EmployeeDraft, employee_id: int | None = None
+    ) -> EmployeeRecord:
+        response = self._authorized_request(
+            "POST" if employee_id is None else "PUT",
+            "/admin/employees" if employee_id is None else f"/admin/employees/{employee_id}",
+            access_token=access_token,
+            json={
+                "name": draft.name,
+                "registration": draft.registration,
+                "role": draft.role,
+                "shift": draft.shift,
+                "sector_id": draft.sector_id,
+                "active": draft.active,
+            },
+        )
+        self._ensure_configuration_success(response, operation="employee_save")
+        try:
+            return _EmployeeDto.model_validate(response.json()).to_domain()
+        except (ValueError, ValidationError) as error:
+            raise InvalidApiResponseError("A API retornou um funcionário inválido.") from error
+
+    def get_face_template_status(
+        self, access_token: str, employee_id: int
+    ) -> FaceTemplateStatus | None:
+        response = self._authorized_request(
+            "GET", f"/admin/employees/{employee_id}/face-template", access_token=access_token
+        )
+        if response.status_code == 404:
+            return None
+        self._ensure_protected_success(response, operation="employee_face_status")
+        try:
+            return _FaceTemplateStatusDto.model_validate(response.json()).to_domain()
+        except (ValueError, ValidationError) as error:
+            raise InvalidApiResponseError("A API retornou um Face ID inválido.") from error
+
+    def save_face_template(
+        self, access_token: str, employee_id: int, draft: FaceTemplateDraft
+    ) -> FaceTemplateStatus:
+        response = self._authorized_request(
+            "PUT", f"/admin/employees/{employee_id}/face-template",
+            access_token=access_token,
+            json={"model_id": draft.model_id, "embedding": list(draft.embedding)},
+        )
+        self._ensure_configuration_success(response, operation="employee_face_save")
+        try:
+            return _FaceTemplateStatusDto.model_validate(response.json()).to_domain()
+        except (ValueError, ValidationError) as error:
+            raise InvalidApiResponseError("A API retornou um Face ID inválido.") from error
 
     def get_alert(self, access_token: str, alert_id: int) -> AdminAlert:
         response = self._authorized_request(
@@ -481,6 +602,18 @@ class AdminApiClient:
         )
         return self._alert_from_response(response, operation="admin_alert_close")
 
+    def get_active_operations(self, access_token: str) -> tuple[ActiveOperationSnapshot, ...]:
+        response = self._authorized_request(
+            "GET", "/admin/active-operations", access_token=access_token
+        )
+        self._ensure_protected_success(response, operation="active_operations")
+        try:
+            return parse_active_operations(response.content)
+        except ValueError as error:
+            raise InvalidApiResponseError(
+                "A API retornou dados inválidos para as operações ativas."
+            ) from error
+
     def get_operation_catalog(self, access_token: str) -> OperationCatalog:
         response = self._authorized_request(
             "GET", "/admin/operations/catalog", access_token=access_token
@@ -503,6 +636,29 @@ class AdminApiClient:
         )
         self._ensure_configuration_success(response, operation="camera_create")
         return self._parse_operation_response(response, parse_camera, "câmera")
+
+    def get_cameras(self, access_token: str) -> tuple[ManagedCamera, ...]:
+        response = self._authorized_request("GET", "/admin/cameras", access_token=access_token)
+        self._ensure_protected_success(response, operation="camera_list")
+        return self._parse_operation_response(response, parse_managed_cameras, "lista de câmeras")
+
+    def save_camera(
+        self, access_token: str, draft: CameraDraft, camera_id: int
+    ) -> ManagedCamera:
+        response = self._authorized_request(
+            "PUT",
+            f"/admin/cameras/{camera_id}",
+            access_token=access_token,
+            json={
+                "name": draft.name,
+                "description": draft.description,
+                "stream_source": draft.stream_source,
+                "sector_id": draft.sector_id,
+                "active": draft.active,
+            },
+        )
+        self._ensure_configuration_success(response, operation="camera_update")
+        return self._parse_operation_response(response, parse_managed_camera, "câmera")
 
     def get_risk_areas(self, access_token: str) -> tuple[RiskArea, ...]:
         response = self._authorized_request("GET", "/admin/risk-areas", access_token=access_token)

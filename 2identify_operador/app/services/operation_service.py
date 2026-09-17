@@ -6,6 +6,7 @@ import logging
 from collections.abc import Sequence
 from typing import Protocol
 
+from app.domain.camera_source import CameraSource
 from app.domain.operation import Operation
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,10 @@ class OperationService:
 
     def __init__(self, provider: OperationProvider) -> None:
         self._provider = provider
+
+    @property
+    def supports_camera_catalog(self) -> bool:
+        return callable(getattr(self._provider, "list_cameras_for_operation", None))
 
     def list_available_operations(self) -> tuple[Operation, ...]:
         """Return active operations in provider order with unique identifiers."""
@@ -65,3 +70,17 @@ class OperationService:
 
         logger.info("operation_list_load_succeeded", extra={"operation_count": len(available)})
         return tuple(available)
+
+    def list_cameras_for_operation(self, operation_id: int) -> tuple[CameraSource, ...]:
+        fetch = getattr(self._provider, "list_cameras_for_operation", None)
+        if fetch is None:
+            raise OperationsUnavailableError("A fonte atual não oferece catálogo de câmeras.")
+        try:
+            cameras = tuple(fetch(operation_id))
+        except OperationServiceError:
+            raise
+        except Exception as error:
+            raise OperationsUnavailableError("Falha ao carregar câmeras do setor.") from error
+        if len({item.camera_id for item in cameras}) != len(cameras):
+            raise InvalidOperationDataError("Catálogo de câmeras contém IDs duplicados.")
+        return cameras

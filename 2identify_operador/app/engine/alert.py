@@ -111,11 +111,15 @@ class AlertEngine:
         work_session: WorkSession,
         violations: Iterable[SafetyViolation],
         observed_at: datetime,
+        *,
+        camera_id: int | None = None,
     ) -> AlertEngineUpdate:
-        """Process the complete current violation set for one WorkSession."""
+        """Advance only the observed camera, or every condition in legacy mode."""
 
         if not isinstance(work_session, WorkSession) or not work_session.is_active:
             raise ValueError("AlertEngine exige uma WorkSession ativa")
+        if camera_id is not None and camera_id <= 0:
+            raise ValueError("camera_id deve ser positivo")
         observed_at = _as_utc(observed_at)
         if observed_at < work_session.started_at:
             raise ValueError("observed_at não pode anteceder a WorkSession")
@@ -128,6 +132,12 @@ class AlertEngine:
         self._last_observed_at = observed_at
 
         current = self._normalize_violations(violations)
+        if camera_id is not None:
+            current = {
+                key: violation
+                for key, violation in current.items()
+                if violation.camera_id == camera_id
+            }
         raised: list[SafetyAlert] = []
         resolved: list[SafetyAlert] = []
         escalated: list[SafetyAlert] = []
@@ -163,6 +173,8 @@ class AlertEngine:
                     escalated.append(escalated_alert)
 
         for key, state in self._states.items():
+            if camera_id is not None and state.violation.camera_id != camera_id:
+                continue
             if key in current:
                 continue
             state.consecutive_observations = 0
@@ -238,8 +250,18 @@ class AlertEngine:
             work_session_id=work_session.session_id,
             operator_id=work_session.operator_id,
             operation_id=work_session.operation_id,
-            camera_id=work_session.camera_id,
-            risk_area_id=work_session.risk_area_id,
+            camera_id=(
+                violation.camera_id
+                if violation.camera_id is not None
+                else work_session.camera_id
+            ),
+            risk_area_id=(
+                violation.risk_area_id
+                if violation.risk_area_id is not None
+                else work_session.risk_area_id
+                if violation.camera_id is None or violation.camera_id == work_session.camera_id
+                else None
+            ),
             violation=violation,
             first_observed_at=first_observed_at,
             raised_at=raised_at,

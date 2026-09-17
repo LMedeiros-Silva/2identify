@@ -31,7 +31,9 @@ class SafetyCameraController(QObject):
     ) -> None:
         super().__init__(page)
         self._page = page
-        self._worker_factory = worker_factory or partial(
+        self._settings = settings
+        self._worker_factory = worker_factory or self._new_worker
+        self._legacy_worker_factory = partial(
             SafetyCameraWorker,
             camera_factory=partial(
                 OpenCVCameraSession,
@@ -67,7 +69,11 @@ class SafetyCameraController(QObject):
             return
 
         self._dispose_finished_worker()
-        worker = self._worker_factory()
+        try:
+            worker = self._worker_factory()
+        except ValueError:
+            self._page.show_camera_failure("Fonte local da câmera não configurada.", True)
+            return
         worker.camera_ready.connect(self._page.show_camera_ready)
         worker.frame_ready.connect(self._page.update_camera_frame)
         worker.analysis_frame_ready.connect(self.analysis_frame_ready.emit)
@@ -77,6 +83,26 @@ class SafetyCameraController(QObject):
         logger.info("safety_camera_attempt_started")
         worker.start()
 
+    def _new_worker(self) -> SafetyCameraWorker:
+        camera = self._page.verification_camera
+        if camera is None:
+            return self._legacy_worker_factory()
+        source = camera.resolve()
+        settings = self._settings
+        return SafetyCameraWorker(
+            camera_factory=partial(
+                OpenCVCameraSession,
+                source=source,
+                width=settings.camera_width,
+                height=settings.camera_height,
+                open_timeout_ms=settings.camera_open_timeout_ms,
+                read_timeout_ms=settings.camera_read_timeout_ms,
+            ),
+            preview_fps=settings.camera_preview_fps,
+            maximum_failed_reads=settings.camera_max_failed_reads,
+            analysis_fps=settings.ppe_inference_fps,
+        )
+
     @Slot()
     def stop(self) -> None:
         """Request non-blocking camera shutdown when leaving the safety route."""
@@ -85,17 +111,18 @@ class SafetyCameraController(QObject):
         if worker is not None and worker.isRunning():
             worker.request_stop()
 
-    def shutdown(self, wait_timeout_ms: int = 5_000) -> None:
+    def shutdown(self, wait_timeout_ms: int = 5_000) -> bool:
         """Release the camera before application or authenticated-session teardown."""
 
         worker = self._worker
         if worker is None:
-            return
+            return True
         worker.request_stop()
         if worker.isRunning() and not worker.wait(wait_timeout_ms):
             logger.error("safety_camera_worker_shutdown_timeout")
-            return
+            return False
         self._dispose_finished_worker()
+        return True
 
     @Slot()
     def _handle_finished(self) -> None:

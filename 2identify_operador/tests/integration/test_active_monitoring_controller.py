@@ -73,6 +73,23 @@ class MissingDetectorStub:
         return ()
 
 
+class HeadPoseEstimatorStub:
+    def estimate(self, frame):
+        del frame
+        points = [PoseKeypoint(0, 0, 0) for _ in range(COCO_KEYPOINT_COUNT)]
+        for name, (x, y) in {
+            CocoKeypoint.NOSE: (45, 63),
+            CocoKeypoint.LEFT_EYE: (35, 58),
+            CocoKeypoint.RIGHT_EYE: (55, 58),
+            CocoKeypoint.LEFT_EAR: (28, 63),
+            CocoKeypoint.RIGHT_EAR: (62, 63),
+            CocoKeypoint.LEFT_SHOULDER: (15, 95),
+            CocoKeypoint.RIGHT_SHOULDER: (75, 95),
+        }.items():
+            points[int(name)] = PoseKeypoint(x, y, 0.95)
+        return (PersonPose(0.95, tuple(points)),)
+
+
 class CriticalPoseEstimatorStub:
     def estimate(self, frame):
         del frame
@@ -199,6 +216,11 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
         camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
     )
+    pose_controller = ActiveErgonomicsMonitoringController(
+        settings, page, camera_controller,
+        worker_factory=lambda: PoseInferenceWorker(estimator_factory=HeadPoseEstimatorStub),
+    )
+    pose_controller.pose_batch_ready.connect(inference_controller.handle_pose_batch)
     snapshots = []
     inference_controller.safety_state_snapshot_ready.connect(snapshots.append)
 
@@ -207,7 +229,7 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
     state = page.findChild(QLabel, "activePpeState")
     preview = page.findChild(CameraFrameView, "activeCameraPreview")
     qtbot.waitUntil(
-        lambda: state.text() == "CONFIRMADO" and preview.has_frame,
+        lambda: state.text() == "NA CABEÇA" and preview.has_frame,
         timeout=2_000,
     )
     assert preview.overlay_box_count == 1
@@ -238,10 +260,11 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
     assert not preview.has_frame
     assert snapshots[-1].session_status.value == "ended"
     inference_controller.shutdown()
+    pose_controller.shutdown()
     camera_controller.shutdown()
 
 
-def test_active_monitoring_raises_one_local_alert_for_persistent_absence(
+def test_active_monitoring_keeps_nondetection_unknown_without_absence_alert(
     qtbot,
 ) -> None:
     page = _page()
@@ -279,13 +302,15 @@ def test_active_monitoring_raises_one_local_alert_for_persistent_absence(
 
     page.activate_monitoring()
 
-    qtbot.waitUntil(lambda: page.active_alert_count == 1, timeout=2_000)
-    assert page.findChild(QLabel, "activePpeState").text() == "AUSENTE"
-    assert page.findChild(QLabel, "activeAlertBadge").text() == ("1 ALERTA LOCAL ATIVO")
-    assert len(emitted_updates) == 1
+    qtbot.waitUntil(
+        lambda: page.findChild(QLabel, "activePpeState").text() == "VERIFICANDO",
+        timeout=2_000,
+    )
+    assert page.active_alert_count == 0
+    assert len(emitted_updates) == 0
 
     qtbot.wait(150)
-    assert len(emitted_updates) == 1
+    assert len(emitted_updates) == 0
     page.deactivate_monitoring()
     inference_controller.shutdown()
     camera_controller.shutdown()

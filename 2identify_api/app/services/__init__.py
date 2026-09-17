@@ -1,10 +1,10 @@
 """Application use cases."""
 
-from app.services.admin_alerts import AdminAlertsService
 from app.services.active_operations import (
     ActiveOperationRegistry,
     ActiveOperationSnapshotConflictError,
 )
+from app.services.admin_alerts import AdminAlertsService
 from app.services.admin_authorization import (
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,

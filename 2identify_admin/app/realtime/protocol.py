@@ -19,9 +19,11 @@ from pydantic import (
     model_validator,
 )
 
+from app.api.ppe_contracts import ActiveOperationSnapshotDto
 from app.domain.realtime import (
     ConnectionReadyEvent,
     HeartbeatEvent,
+    PpeSessionUpdatedEvent,
     RealtimeAlert,
     RealtimeEvent,
 )
@@ -143,8 +145,13 @@ class _AlertEnvelope(_EnvelopeBase):
         return self
 
 
+class _PpeEnvelope(_EnvelopeBase):
+    event_type: Literal["ppe.session.updated"]
+    payload: ActiveOperationSnapshotDto
+
+
 _Envelope = Annotated[
-    _ReadyEnvelope | _HeartbeatEnvelope | _AlertEnvelope,
+    _ReadyEnvelope | _HeartbeatEnvelope | _AlertEnvelope | _PpeEnvelope,
     Field(discriminator="event_type"),
 ]
 _ENVELOPE_ADAPTER: TypeAdapter[_Envelope] = TypeAdapter(_Envelope)
@@ -179,6 +186,13 @@ def parse_realtime_event(raw_message: str) -> RealtimeEvent:
         return HeartbeatEvent(
             event_id=envelope.event_id,
             occurred_at=occurred_at,
+        )
+
+    if isinstance(envelope, _PpeEnvelope):
+        return PpeSessionUpdatedEvent(
+            event_id=envelope.event_id,
+            occurred_at=occurred_at,
+            snapshot=envelope.payload.to_domain(),
         )
 
     return RealtimeAlert(

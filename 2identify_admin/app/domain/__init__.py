@@ -19,9 +19,17 @@ from app.domain.alerts import (
     AlertOperationalContext,
     AlertSector,
 )
+from app.domain.employees import (
+    EmployeeDraft,
+    EmployeePage,
+    EmployeeRecord,
+    FaceTemplateDraft,
+    FaceTemplateStatus,
+)
 from app.domain.operations import (
     CameraDraft,
     CameraOption,
+    ManagedCamera,
     NormalizedPoint,
     OperationCatalog,
     OperationConfiguration,
@@ -35,6 +43,7 @@ from app.domain.operations import (
 from app.domain.realtime import (
     ConnectionReadyEvent,
     HeartbeatEvent,
+    PpeSessionUpdatedEvent,
     RealtimeAlert,
     RealtimeEvent,
 )
@@ -52,7 +61,9 @@ __all__ = [
     "ConnectionReadyEvent",
     "CameraDraft",
     "CameraOption",
+    "ManagedCamera",
     "HeartbeatEvent",
+    "PpeSessionUpdatedEvent",
     "NormalizedPoint",
     "OperationCatalog",
     "OperationConfiguration",
@@ -68,6 +79,11 @@ __all__ = [
     "AlertCamera",
     "AlertEmployee",
     "AlertOccurrence",
+    "EmployeeDraft",
+    "EmployeePage",
+    "EmployeeRecord",
+    "FaceTemplateDraft",
+    "FaceTemplateStatus",
     "AlertOperationalContext",
     "AlertSector",
 ]

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable
+from datetime import UTC, datetime
 from time import monotonic
 
 from PySide6.QtCore import QThread, Signal
 
+from app.domain.camera_source import CameraFrame
+from app.vision.frame_scheduler import LatestFrameScheduler
 from app.vision.pose import (
     PoseDetectionBatch,
     PoseEstimator,
@@ -33,22 +35,15 @@ class PoseInferenceWorker(QThread):
         super().__init__()
         self.setObjectName("PoseInferenceWorker")
         self._estimator_factory = estimator_factory
-        self._condition = threading.Condition()
-        self._latest_frame: Frame | None = None
+        self._scheduler: LatestFrameScheduler[Frame | CameraFrame] = LatestFrameScheduler()
         self._stop_requested = False
 
-    def submit_frame(self, frame: Frame) -> None:
-        with self._condition:
-            if self._stop_requested:
-                return
-            self._latest_frame = frame
-            self._condition.notify()
+    def submit_frame(self, frame: Frame | CameraFrame) -> None:
+        self._scheduler.submit(frame.camera_id if isinstance(frame, CameraFrame) else 0, frame)
 
     def request_stop(self) -> None:
-        with self._condition:
-            self._stop_requested = True
-            self._latest_frame = None
-            self._condition.notify_all()
+        self._stop_requested = True
+        self._scheduler.stop()
         self.requestInterruption()
 
     def run(self) -> None:
@@ -59,8 +54,18 @@ class PoseInferenceWorker(QThread):
             self.model_ready.emit()
             logger.info("pose_model_loaded")
             while not self._should_stop():
-                frame = self._take_latest_frame()
-                if frame is None:
+                item = self._take_latest_frame()
+                if item is None:
+                    continue
+                if isinstance(item, CameraFrame):
+                    envelope = item
+                    frame = item.frame
+                else:
+                    envelope = None
+                    frame = item
+                if envelope is not None and (
+                    datetime.now(UTC) - envelope.captured_at
+                ).total_seconds() > 2.0:
                     continue
                 if frame.ndim != 3 or frame.shape[2] != 3:
                     raise PoseVisionError(
@@ -76,6 +81,9 @@ class PoseInferenceWorker(QThread):
                         frame_width=int(width),
                         frame_height=int(height),
                         inference_milliseconds=elapsed_ms,
+                        camera_id=envelope.camera_id if envelope else None,
+                        generation=envelope.generation if envelope else 0,
+                        captured_at=envelope.captured_at if envelope else None,
                     )
                 )
         except PoseVisionError as error:
@@ -92,18 +100,10 @@ class PoseInferenceWorker(QThread):
                 False,
             )
         finally:
-            with self._condition:
-                self._latest_frame = None
+            self._scheduler.stop()
 
-    def _take_latest_frame(self) -> Frame | None:
-        with self._condition:
-            while self._latest_frame is None and not self._stop_requested:
-                self._condition.wait(timeout=0.25)
-            if self._stop_requested:
-                return None
-            frame = self._latest_frame
-            self._latest_frame = None
-            return frame
+    def _take_latest_frame(self) -> Frame | CameraFrame | None:
+        return self._scheduler.take()
 
     def _should_stop(self) -> bool:
         return self._stop_requested or self.isInterruptionRequested()

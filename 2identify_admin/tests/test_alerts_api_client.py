@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 import httpx
+from openpyxl import load_workbook
 
 from app.api import AdminApiClient
 from app.core.config import Settings
+from app.services.admin_reports_service import AdminReportsService, ReportFilters
 
 TOKEN = "header.payload.signature"
 
@@ -97,3 +101,28 @@ def test_alert_client_lists_confirms_and_closes_with_admin_bearer() -> None:
         ("PATCH", "/admin/alerts/20/confirm"),
         ("PATCH", "/admin/alerts/20/close"),
     ]
+
+
+def test_report_export_reads_every_authenticated_api_page() -> None:
+    offsets: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == f"Bearer {TOKEN}"
+        assert request.url.path == "/admin/alerts"
+        assert request.url.params["limit"] == "1"
+        offset = int(request.url.params["offset"])
+        offsets.append(offset)
+        payload = alert_payload()
+        payload["id"] = offset + 1
+        payload["occurrence"]["camera"]["id"] = offset + 5
+        return httpx.Response(
+            200,
+            json={"items": [payload], "total": 2, "limit": 1, "offset": offset},
+        )
+
+    with AdminApiClient(settings(), transport=httpx.MockTransport(handler)) as client:
+        content = AdminReportsService(client, page_size=1).export_xlsx(TOKEN, ReportFilters())
+
+    assert offsets == [0, 1]
+    sheet = load_workbook(BytesIO(content))["Alertas"]
+    assert [sheet.cell(row, 10).value for row in (2, 3)] == [5, 6]

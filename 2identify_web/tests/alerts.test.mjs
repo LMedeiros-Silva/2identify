@@ -20,6 +20,7 @@ const alerts = [
     created_at: "2026-09-10T10:00:00Z",
     occurrence: {
       employee: { name: "Ana", sector: { name: "Montagem" } },
+      camera: { id: 8, name: "Fresa 2", sector: { name: "Montagem" } },
       image_reference: "C:\\evidencias\\alerta.jpg",
       video_reference: null,
     },
@@ -58,6 +59,7 @@ test("card model indicates local evidence without exposing a broken link", () =>
   assert.equal(card.operation, "Soldagem");
   assert.equal(card.employee, "Ana");
   assert.equal(card.sector, "Montagem");
+  assert.equal(card.camera, "Fresa 2");
   assert.equal(card.hasEvidence, true);
   assert.equal("evidenceUrl" in card, false);
   assert.equal(JSON.stringify(card).includes("C:\\evidencias"), false);
@@ -113,6 +115,39 @@ test("401 is classified so the controller can expire the session", async () => {
   await assert.rejects(() => api.list("expired"), (error) => {
     assert.equal(error instanceof ApiRequestError, true);
     assert.equal(error.status, 401);
+    return true;
+  });
+});
+
+test("API client follows pagination without losing camera identities", async () => {
+  const offsets = [];
+  const fetchFn = async (url) => {
+    const offset = Number(new URL(url).searchParams.get("offset"));
+    offsets.push(offset);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: offset === 0 ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1 })) : [alerts[0]],
+        total: 101,
+      }),
+    };
+  };
+  const result = await createAlertsApi("http://localhost:8000", fetchFn).list("jwt");
+  assert.deepEqual(offsets, [0, 100]);
+  assert.equal(result.length, 101);
+  assert.equal(alertCardModel(result.at(-1)).camera, "Fresa 2");
+});
+
+test("API client rejects an incomplete alert page", async () => {
+  const api = createAlertsApi("http://localhost:8000", async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ items: [alerts[0]], total: 2 }),
+  }));
+  await assert.rejects(() => api.list("jwt"), (error) => {
+    assert.equal(error instanceof ApiRequestError, true);
+    assert.equal(error.status, 502);
     return true;
   });
 });

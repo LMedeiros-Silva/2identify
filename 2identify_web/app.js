@@ -51,6 +51,7 @@ function alertCard(alert) {
     detail("Funcionário", item.employee),
     detail("Operação", item.operation),
     detail("Setor", item.sector),
+    detail("Câmera", item.camera),
     detail("Status", item.statusLabel),
   );
   card.append(header, title, details);

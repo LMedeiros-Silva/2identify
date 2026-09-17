@@ -15,6 +15,7 @@ from app.repositories import (
     OperationConfigurationNotFoundError,
 )
 from app.schemas import (
+    AdminCameraItem,
     CameraCatalogItem,
     CameraWrite,
     OperationCatalog,
@@ -53,6 +54,29 @@ def create_camera(
 ) -> CameraCatalogItem:
     response.headers.update(_NO_STORE_HEADERS)
     return _execute(lambda: service.create_camera(payload))
+
+
+@router.get("/admin/cameras", response_model=tuple[AdminCameraItem, ...])
+def list_cameras(
+    response: Response,
+    _administrator: Annotated[AdministratorPrincipal, Depends(get_current_admin)],
+    service: Annotated[OperationsService, Depends(get_operations_service)],
+    sector_id: Annotated[int | None, Query(gt=0)] = None,
+) -> tuple[AdminCameraItem, ...]:
+    response.headers.update(_NO_STORE_HEADERS)
+    return _execute(lambda: service.list_cameras(sector_id))
+
+
+@router.put("/admin/cameras/{camera_id}", response_model=AdminCameraItem)
+def update_camera(
+    camera_id: int,
+    payload: CameraWrite,
+    response: Response,
+    _administrator: Annotated[AdministratorPrincipal, Depends(get_current_admin)],
+    service: Annotated[OperationsService, Depends(get_operations_service)],
+) -> AdminCameraItem:
+    response.headers.update(_NO_STORE_HEADERS)
+    return _execute(lambda: service.update_camera(camera_id, payload))
 
 
 @router.get("/admin/risk-areas", response_model=tuple[RiskAreaDetail, ...])

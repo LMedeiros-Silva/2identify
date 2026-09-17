@@ -22,6 +22,7 @@ from app.domain import (
     SafetyAlert,
 )
 from app.domain.auth import CredentialAuthenticationResult, LoginCredentials
+from app.domain.camera_source import CameraSource, CameraType
 from app.services.alert_delivery_service import (
     AlertDeliveryReceipt,
     AlertDeliveryRejectedError,
@@ -125,7 +126,18 @@ class _OperationPayload(BaseModel):
     updated_at: datetime
 
 
+class _CameraPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(gt=0)
+    name: str = Field(min_length=1)
+    sector_id: int = Field(gt=0)
+    source_type: str
+    source_hint: str | None = None
+
+
 _OPERATION_LIST_ADAPTER = TypeAdapter(tuple[_OperationPayload, ...])
+_CAMERA_LIST_ADAPTER = TypeAdapter(tuple[_CameraPayload, ...])
 _PPE_DETECTION_CLASS_BY_CODE = {
     "CAP": "capacete",
     "LUV": "luva",
@@ -302,6 +314,39 @@ class OperatorApiClient:
             )
             raise InvalidOperationDataError(
                 "A API retornou uma configuração de operação inválida."
+            ) from error
+
+    def list_operation_cameras(
+        self, operation_id: int, token: str, *, catalog_token: bool = False
+    ) -> tuple[CameraSource, ...]:
+        """Read active cameras in the operation's sector without stream secrets."""
+
+        if operation_id <= 0 or not token.strip():
+            raise OperationsUnavailableError("Operação ou autenticação inválida.")
+        prefix = "operator/operations/catalog" if catalog_token else "operator/operations"
+        try:
+            response = self._client.get(
+                f"{prefix}/{operation_id}/cameras",
+                headers={"Authorization": f"Bearer {token.strip()}"},
+            )
+            response.raise_for_status()
+            payload = _CAMERA_LIST_ADAPTER.validate_python(response.json())
+            return tuple(
+                CameraSource(
+                    camera_id=item.id,
+                    name=item.name,
+                    sector_id=item.sector_id,
+                    source_type=CameraType(item.source_type),
+                    source_hint=item.source_hint,
+                )
+                for item in payload
+            )
+        except (httpx.HTTPError, ValidationError, ValueError) as error:
+            logger.warning(
+                "camera_catalog_unavailable", extra={"error_type": type(error).__name__}
+            )
+            raise OperationsUnavailableError(
+                "Não foi possível carregar as câmeras do setor."
             ) from error
 
     def send_alert(

@@ -12,7 +12,9 @@ from app.domain import OperationStartAuthorization
 from app.domain.operation import Operation, PpeRequirement
 from app.ui.components import CameraFrameView
 from app.ui.safety import PpeInferenceState, SafetyCameraState, SafetyVerificationPage
+from app.vision.pose import COCO_KEYPOINT_COUNT, CocoKeypoint, PersonPose, PoseKeypoint
 from app.vision.ppe import DetectionBox, PpeDetection
+from app.workers.pose_inference_worker import PoseInferenceWorker
 from app.workers.ppe_inference_worker import PpeInferenceWorker
 from app.workers.safety_camera_worker import SafetyCameraWorker
 
@@ -136,6 +138,24 @@ class DetectorStub:
         )
 
 
+class HeadPoseEstimatorStub:
+    def estimate(self, frame):
+        del frame
+        points = [PoseKeypoint(0, 0, 0) for _ in range(COCO_KEYPOINT_COUNT)]
+        positions = {
+            CocoKeypoint.NOSE: (45, 63),
+            CocoKeypoint.LEFT_EYE: (35, 58),
+            CocoKeypoint.RIGHT_EYE: (55, 58),
+            CocoKeypoint.LEFT_EAR: (28, 63),
+            CocoKeypoint.RIGHT_EAR: (62, 63),
+            CocoKeypoint.LEFT_SHOULDER: (15, 95),
+            CocoKeypoint.RIGHT_SHOULDER: (75, 95),
+        }
+        for name, (x, y) in positions.items():
+            points[int(name)] = PoseKeypoint(x, y, 0.95)
+        return (PersonPose(0.95, tuple(points)),)
+
+
 def test_ppe_controller_rejects_start_without_current_compliant_evidence(qtbot) -> None:
     page = _page()
     qtbot.addWidget(page)
@@ -145,6 +165,7 @@ def test_ppe_controller_rejects_start_without_current_compliant_evidence(qtbot) 
         page=page,
         camera_controller=camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
+        pose_worker_factory=lambda: PoseInferenceWorker(estimator_factory=HeadPoseEstimatorStub),
     )
     authorized_operations = []
     inference_controller.operation_start_authorized.connect(
@@ -173,6 +194,7 @@ def test_camera_and_ppe_controllers_authorize_only_stable_confirmation(qtbot) ->
         page=page,
         camera_controller=camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
+        pose_worker_factory=lambda: PoseInferenceWorker(estimator_factory=HeadPoseEstimatorStub),
     )
 
     page.activate()
@@ -180,7 +202,7 @@ def test_camera_and_ppe_controllers_authorize_only_stable_confirmation(qtbot) ->
     ppe_state = page.findChild(QLabel, "safetyPpeState")
     qtbot.waitUntil(
         lambda: page.inference_state is PpeInferenceState.ACTIVE
-        and ppe_state.text() == "CONFIRMADO",
+        and ppe_state.text() == "NA CABEÇA",
         timeout=2_000,
     )
     preview = page.findChild(CameraFrameView, "safetyCameraPreview")
@@ -229,6 +251,7 @@ def test_compliant_release_gate_expires_when_analysis_stops(qtbot) -> None:
         page=page,
         camera_controller=camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
+        pose_worker_factory=lambda: PoseInferenceWorker(estimator_factory=HeadPoseEstimatorStub),
     )
 
     page.activate()

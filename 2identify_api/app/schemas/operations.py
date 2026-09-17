@@ -58,6 +58,23 @@ class CameraCatalogItem(BaseModel):
     stream_source: str
 
 
+class AdminCameraItem(CameraCatalogItem):
+    sector_id: PositiveInt
+    active: bool
+
+
+class OperatorCameraItem(BaseModel):
+    """Camera metadata without station-specific USB indices or RTSP credentials."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: PositiveInt
+    name: str
+    sector_id: PositiveInt
+    source_type: str
+    source_hint: str | None = None
+
+
 class SectorCatalogItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -88,6 +105,24 @@ class CameraWrite(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("o valor não pode ser vazio")
+        return value
+
+    @field_validator("stream_source")
+    @classmethod
+    def validate_camera_source(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        from app.services.camera_sources import classify_camera_source
+
+        classify_camera_source(value)
+        parsed = urlsplit(value)
+        if (
+            parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("credenciais de câmera devem ficar na estação Operator")
         return value
 
     @field_validator("description")
@@ -227,6 +262,7 @@ def _within(point: NormalizedPoint, start: NormalizedPoint, end: NormalizedPoint
 
 
 __all__ = [
+    "AdminCameraItem",
     "CameraCatalogItem",
     "CameraWrite",
     "EpiReference",

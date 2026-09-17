@@ -54,6 +54,17 @@ class Settings(BaseSettings):
         default=PROJECT_ROOT / "logs",
         validation_alias="LOG_DIRECTORY",
     )
+    face_detector_model_path: Path = Field(
+        default=PROJECT_ROOT.parent / "2identify_operador/models/face_detection_yunet_2023mar.onnx",
+        validation_alias="FACE_DETECTOR_MODEL_PATH",
+    )
+    face_recognition_model_path: Path = Field(
+        default=(
+            PROJECT_ROOT.parent
+            / "2identify_operador/models/face_recognition_sface_2021dec.onnx"
+        ),
+        validation_alias="FACE_RECOGNITION_MODEL_PATH",
+    )
 
     @field_validator("log_level")
     @classmethod

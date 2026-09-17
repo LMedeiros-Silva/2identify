@@ -98,7 +98,7 @@ def test_empty_cloud_runs_only_approved_sequence_after_every_guard() -> None:
     assert infrastructure.commands == [
         ("upgrade", "42d54200970a"),
         ("stamp", "441c04c14c57"),
-        ("upgrade", "head"),
+        ("upgrade", "e4a7b8c9d0e1"),
     ]
     assert report == BootstrapReport(
         masked_cloud_target="db.pr***.supabase.co:5432/postgres",
@@ -129,7 +129,7 @@ def test_revision_42_resumes_at_stamp_without_repeating_upgrade() -> None:
 
     assert infrastructure.commands == [
         ("stamp", "441c04c14c57"),
-        ("upgrade", "head"),
+        ("upgrade", "e4a7b8c9d0e1"),
     ]
 
 

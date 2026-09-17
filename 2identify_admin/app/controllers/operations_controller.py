@@ -10,6 +10,7 @@ from app.core.session import AdminSessionContext
 from app.domain import (
     CameraDraft,
     CameraOption,
+    ManagedCamera,
     OperationCatalog,
     OperationConfiguration,
     OperationDraft,
@@ -50,12 +51,14 @@ class OperationsController(QObject):
         self._pending_camera: CameraOption | None = None
         self._pending_area: RiskArea | None = None
         self._shutdown_requested = False
+        self._refresh_after_save = False
         self._load_timer = QTimer(self)
         self._load_timer.setSingleShot(True)
         self._load_timer.setInterval(0)
         self._load_timer.timeout.connect(self.request_refresh)
         view.refresh_requested.connect(self.request_refresh)
         view.camera_save_requested.connect(self.save_camera)
+        view.camera_update_requested.connect(self.update_camera)
         view.risk_area_configuration_requested.connect(self.configure_risk_area)
         view.operation_save_requested.connect(self.save_operation)
 
@@ -102,6 +105,13 @@ class OperationsController(QObject):
 
     @Slot(object)
     def save_camera(self, draft_value: object) -> None:
+        self._start_camera_save(draft_value, None)
+
+    @Slot(object, int)
+    def update_camera(self, draft_value: object, camera_id: int) -> None:
+        self._start_camera_save(draft_value, camera_id)
+
+    def _start_camera_save(self, draft_value: object, camera_id: int | None) -> None:
         if self._shutdown_requested or self._save_worker is not None:
             return
         if not isinstance(draft_value, CameraDraft):
@@ -111,8 +121,8 @@ class OperationsController(QObject):
         if session is None:
             self.session_expired.emit("Sua sessão expirou. Entre novamente.")
             return
-        self._view.show_loading("Cadastrando câmera pela API...")
-        worker = CameraSaveWorker(self._service, session, draft_value)
+        self._view.show_loading("Salvando câmera pela API...")
+        worker = CameraSaveWorker(self._service, session, draft_value, camera_id)
         self._save_worker = worker
         worker.succeeded.connect(self._camera_saved)
         worker.failed.connect(self._failed)
@@ -141,20 +151,22 @@ class OperationsController(QObject):
 
     @Slot(object)
     def _loaded(self, value: object) -> None:
-        if not isinstance(value, tuple) or len(value) != 3:
+        if not isinstance(value, tuple) or len(value) != 4:
             self._view.show_error("A API retornou configurações inválidas.")
             return
-        catalog, areas, operations = value
+        catalog, areas, operations, cameras = value
         if (
             not isinstance(catalog, OperationCatalog)
             or not isinstance(areas, tuple)
             or not isinstance(operations, tuple)
+            or not isinstance(cameras, tuple)
             or not all(isinstance(area, RiskArea) for area in areas)
             or not all(isinstance(item, OperationConfiguration) for item in operations)
+            or not all(isinstance(item, ManagedCamera) for item in cameras)
         ):
             self._view.show_error("A API retornou configurações inválidas.")
             return
-        self._view.set_data(catalog, areas, operations)
+        self._view.set_data(catalog, areas, operations, cameras)
 
     @Slot(object)
     def _camera_loaded(self, value: object) -> None:
@@ -193,7 +205,7 @@ class OperationsController(QObject):
     @Slot(object)
     def _camera_saved(self, value: object) -> None:
         if isinstance(value, CameraOption):
-            self._view.upsert_camera(value)
+            self._refresh_after_save = True
         else:
             self._view.show_error("A API retornou uma câmera inválida.")
 
@@ -224,6 +236,9 @@ class OperationsController(QObject):
     @Slot()
     def _save_finished(self) -> None:
         self._dispose_worker("_save_worker")
+        if self._refresh_after_save and not self._shutdown_requested:
+            self._refresh_after_save = False
+            self.request_refresh()
 
     def _dispose_worker(self, attribute: str) -> None:
         worker = getattr(self, attribute)

@@ -12,7 +12,7 @@ from PySide6.QtWebSockets import QWebSocket
 
 from app.core.config import Settings
 from app.core.session import AdminSessionContext
-from app.domain import ConnectionReadyEvent, HeartbeatEvent
+from app.domain import ConnectionReadyEvent, HeartbeatEvent, PpeSessionUpdatedEvent
 from app.realtime import (
     AdminWebSocketClient,
     InvalidRealtimeEventError,
@@ -238,6 +238,7 @@ class RealtimeController(QObject):
                 else "Conectado — aguardando integração de alertas."
             )
             self._set_status(message, state="connected")
+            self._view.ppe_snapshot_requested.emit()
             return
         if isinstance(event, HeartbeatEvent):
             if self._ready_received:
@@ -251,6 +252,9 @@ class RealtimeController(QObject):
             return
 
         self._watchdog_timer.start()
+        if isinstance(event, PpeSessionUpdatedEvent):
+            self._view.show_ppe_update(event.snapshot)
+            return
         self._view.show_realtime_alert(event)
         self._refresh_timer.start()
 

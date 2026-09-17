@@ -146,7 +146,14 @@ class SafetyStateSnapshot:
         observed_at: datetime,
         *,
         ppe_assessment: PpeSafetyAssessment | None = None,
+        operation: Operation | None = None,
     ) -> SafetyStateSnapshot:
+        if (
+            ppe_assessment is not None
+            and ppe_assessment.camera_id is not None
+            and ppe_assessment.camera_id != work_session.camera_id
+        ):
+            raise ValueError("evidência PPE não pertence à câmera primária")
         conditions: list[SafetyConditionState] = []
         for alert in alerts:
             if alert.status is not SafetyAlertStatus.ACTIVE:
@@ -167,13 +174,29 @@ class SafetyStateSnapshot:
                     first_observed_at=alert.first_observed_at,
                 )
             )
+        if operation is not None and operation.operation_id != work_session.operation_id:
+            raise ValueError("operação não corresponde à WorkSession")
+        fallback_ppe = (
+            tuple(
+                PpeLiveStateSnapshot(
+                    item.ppe_id,
+                    PpeLiveState.COLLECTING
+                    if item.detection_class is not None else PpeLiveState.UNMAPPED,
+                )
+                for item in operation.required_ppe
+            )
+            if operation is not None and ppe_assessment is None else ()
+        )
         return cls(
             work_session_id=work_session.session_id,
             operation_id=work_session.operation_id,
             camera_id=work_session.camera_id,
             observed_at=observed_at,
             conditions=tuple(sorted(conditions, key=lambda item: item.condition_id)),
-            started_at=work_session.started_at if ppe_assessment is not None else None,
+            started_at=(
+                work_session.started_at
+                if ppe_assessment is not None or operation is not None else None
+            ),
             ppe=(
                 tuple(
                     PpeLiveStateSnapshot(
@@ -183,7 +206,7 @@ class SafetyStateSnapshot:
                     for item in ppe_assessment.requirements
                 )
                 if ppe_assessment is not None
-                else ()
+                else fallback_ppe
             ),
         )
 

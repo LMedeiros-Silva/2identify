@@ -41,6 +41,8 @@ class CameraRecord:
     name: str
     description: str | None
     stream_source: str
+    sector_id: int
+    active: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +88,8 @@ class OperationRepository:
                 CATALOG_CAMERAS.c.nome,
                 CATALOG_CAMERAS.c.descricao,
                 CATALOG_CAMERAS.c.endereco,
+                CATALOG_CAMERAS.c.setor_id,
+                CATALOG_CAMERAS.c.ativa,
             )
             .where(CATALOG_CAMERAS.c.ativa.is_(True))
             .order_by(CATALOG_CAMERAS.c.nome, CATALOG_CAMERAS.c.id)
@@ -112,6 +116,8 @@ class OperationRepository:
                     name=str(row.nome),
                     description=_text(row.descricao),
                     stream_source=str(row.endereco),
+                    sector_id=int(row.setor_id),
+                    active=bool(row.ativa),
                 )
                 for row in camera_rows
             ),
@@ -163,6 +169,8 @@ class OperationRepository:
                 CATALOG_CAMERAS.c.nome,
                 CATALOG_CAMERAS.c.descricao,
                 CATALOG_CAMERAS.c.endereco,
+                CATALOG_CAMERAS.c.setor_id,
+                CATALOG_CAMERAS.c.ativa,
             ).where(CATALOG_CAMERAS.c.id == camera_id)
         ).one_or_none()
         if row is None:
@@ -172,6 +180,83 @@ class OperationRepository:
             name=str(row.nome),
             description=_text(row.descricao),
             stream_source=str(row.endereco),
+            sector_id=int(row.setor_id),
+            active=bool(row.ativa),
+        )
+
+    def list_cameras(self, sector_id: int | None = None) -> tuple[CameraRecord, ...]:
+        statement = select(CATALOG_CAMERAS.c.id).order_by(
+            CATALOG_CAMERAS.c.setor_id, CATALOG_CAMERAS.c.nome, CATALOG_CAMERAS.c.id
+        )
+        if sector_id is not None:
+            statement = statement.where(CATALOG_CAMERAS.c.setor_id == sector_id)
+        return tuple(
+            self.get_camera(int(camera_id)) for camera_id in self._session.scalars(statement)
+        )
+
+    def update_camera(
+        self,
+        camera_id: int,
+        *,
+        name: str,
+        description: str | None,
+        stream_source: str,
+        sector_id: int,
+        active: bool,
+    ) -> CameraRecord:
+        self.get_camera(camera_id)
+        self._require_active_sector(sector_id)
+        self._ensure_camera_name_available(name, excluded_id=camera_id)
+        self._session.execute(
+            update(CATALOG_CAMERAS)
+            .where(CATALOG_CAMERAS.c.id == camera_id)
+            .values(
+                nome=name,
+                descricao=description,
+                endereco=stream_source,
+                setor_id=sector_id,
+                ativa=active,
+            )
+        )
+        self._session.commit()
+        return self.get_camera(camera_id)
+
+    def list_active_cameras_for_operation(self, operation_id: int) -> tuple[CameraRecord, ...]:
+        """Find the operation's sector through its existing primary risk camera."""
+
+        sector_id = self._session.scalar(
+            select(CATALOG_CAMERAS.c.setor_id)
+            .join(RISK_AREAS, RISK_AREAS.c.camera_id == CATALOG_CAMERAS.c.id)
+            .join(OPERATIONS, OPERATIONS.c.area_risco_id == RISK_AREAS.c.id)
+            .where(OPERATIONS.c.id == operation_id, OPERATIONS.c.ativa.is_(True))
+        )
+        if sector_id is None:
+            raise OperationConfigurationNotFoundError("operação ativa não encontrada")
+        rows = self._session.execute(
+            select(
+                CATALOG_CAMERAS.c.id,
+                CATALOG_CAMERAS.c.nome,
+                CATALOG_CAMERAS.c.descricao,
+                CATALOG_CAMERAS.c.endereco,
+                CATALOG_CAMERAS.c.setor_id,
+                CATALOG_CAMERAS.c.ativa,
+            )
+            .where(
+                CATALOG_CAMERAS.c.setor_id == sector_id,
+                CATALOG_CAMERAS.c.ativa.is_(True),
+            )
+            .order_by(CATALOG_CAMERAS.c.nome, CATALOG_CAMERAS.c.id)
+        ).all()
+        return tuple(
+            CameraRecord(
+                id=int(row.id),
+                name=str(row.nome),
+                description=_text(row.descricao),
+                stream_source=str(row.endereco),
+                sector_id=int(row.setor_id),
+                active=bool(row.ativa),
+            )
+            for row in rows
         )
 
     def list_risk_areas(self, camera_id: int | None = None) -> tuple[RiskAreaRecord, ...]:
@@ -442,12 +527,13 @@ class OperationRepository:
         if self._session.scalar(statement) is not None:
             raise OperationConfigurationConflictError("já existe uma operação com esse nome")
 
-    def _ensure_camera_name_available(self, name: str) -> None:
-        value = self._session.scalar(
-            select(CATALOG_CAMERAS.c.id).where(
-                func.lower(CATALOG_CAMERAS.c.nome) == name.casefold()
-            )
+    def _ensure_camera_name_available(self, name: str, excluded_id: int | None = None) -> None:
+        statement = select(CATALOG_CAMERAS.c.id).where(
+            func.lower(CATALOG_CAMERAS.c.nome) == name.casefold()
         )
+        if excluded_id is not None:
+            statement = statement.where(CATALOG_CAMERAS.c.id != excluded_id)
+        value = self._session.scalar(statement)
         if value is not None:
             raise OperationConfigurationConflictError("já existe uma câmera com esse nome")
 

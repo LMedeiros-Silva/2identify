@@ -6,9 +6,12 @@ import pytest
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QDialog
 
 from app.domain import (
+    CameraDraft,
     CameraOption,
+    ManagedCamera,
     NormalizedPoint,
     OperationCatalog,
     OperationConfiguration,
@@ -156,3 +159,112 @@ def test_camera_registration_dialog_builds_local_camera_draft(qapp) -> None:
     assert dialog.result_draft.name == "Webcam USB"
     assert dialog.result_draft.stream_source == "0"
     assert dialog.result_draft.sector_id == 1
+
+
+def test_camera_registration_dialog_distinguishes_ip_and_usb(qapp) -> None:
+    dialog = CameraRegistrationDialog((SectorOption(1, "Produção"),))
+    dialog.name_edit.setText("Fresa IP")
+    dialog.source_edit.setText("rtsp://camera.local/live")
+    dialog._validate_and_accept()
+    assert dialog.result_draft is None
+    assert not dialog.feedback.isHidden()
+
+    dialog.type_combo.setCurrentIndex(1)
+    dialog._validate_and_accept()
+    assert dialog.result_draft is not None
+    assert dialog.result_draft.stream_source == "rtsp://camera.local/live"
+
+
+def test_camera_edit_dialog_prefills_sector_source_and_active_status(qapp) -> None:
+    camera = ManagedCamera(7, "Fresa", "rtsp://camera.local/live", None, 2, False)
+    dialog = CameraRegistrationDialog(
+        (SectorOption(1, "Produção"), SectorOption(2, "Manutenção")), existing=camera
+    )
+    assert dialog.name_edit.text() == "Fresa"
+    assert dialog.source_edit.text() == "rtsp://camera.local/live"
+    assert dialog.sector_combo.currentData() == 2
+    assert dialog.active_check.isChecked() is False
+    dialog.active_check.setChecked(True)
+    dialog._validate_and_accept()
+    assert dialog.result_draft is not None
+    assert dialog.result_draft.active is True
+
+
+def test_operations_page_lists_inactive_cameras_for_management(qapp) -> None:
+    managed = (
+        ManagedCamera(7, "Fresa", "rtsp://camera.local/live", None, 1, True),
+        ManagedCamera(8, "USB", "0", None, 1, False),
+    )
+    page = OperationsPage()
+    page.set_data(
+        OperationCatalog((CameraOption(7, "Fresa", "rtsp://camera.local/live"),), (),
+                         (SectorOption(1, "Produção"),)),
+        (),
+        (),
+        managed,
+    )
+    assert page.managed_camera_combo.count() == 2
+    assert "Inativa" in page.managed_camera_combo.itemText(1)
+    page.managed_camera_combo.setCurrentIndex(1)
+    assert page.edit_camera_button.isEnabled()
+
+
+def test_operations_page_filters_managed_cameras_by_sector(qapp) -> None:
+    managed = (
+        ManagedCamera(7, "Fresa", "rtsp://camera.local/live", None, 1, True),
+        ManagedCamera(8, "USB", "0", None, 1, False),
+        ManagedCamera(9, "SICK", "rtsp://sick.local/live", None, 2, True),
+    )
+    page = OperationsPage()
+    page.set_data(
+        OperationCatalog((), (), (
+            SectorOption(1, "Produção"), SectorOption(2, "Manutenção")
+        )), (), (), managed,
+    )
+    assert page.managed_camera_combo.count() == 3
+    page.camera_sector_filter.setCurrentIndex(page.camera_sector_filter.findData(1))
+    assert {page.managed_camera_combo.itemData(index) for index in range(2)} == {7, 8}
+    page.camera_sector_filter.setCurrentIndex(page.camera_sector_filter.findData(2))
+    assert page.managed_camera_combo.count() == 1
+    assert page.managed_camera_combo.currentData() == 9
+
+
+def test_operations_page_routes_camera_edit_with_selected_id(qapp, monkeypatch) -> None:
+    camera = ManagedCamera(8, "USB", "0", None, 1, False)
+    page = OperationsPage()
+    page.set_data(
+        OperationCatalog((), (), (SectorOption(1, "Produção"),)), (), (), (camera,)
+    )
+    emitted: list[tuple[CameraDraft, int]] = []
+    page.camera_update_requested.connect(
+        lambda draft, camera_id: emitted.append((draft, camera_id))
+    )
+
+    def accept_edit(dialog: CameraRegistrationDialog) -> QDialog.DialogCode:
+        dialog.active_check.setChecked(True)
+        dialog._validate_and_accept()
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(CameraRegistrationDialog, "exec", accept_edit)
+    page.edit_camera_button.click()
+
+    assert len(emitted) == 1
+    assert emitted[0][1] == 8
+    assert emitted[0][0].active is True
+
+
+def test_saving_operation_keeps_inactive_camera_visible_for_management(qapp) -> None:
+    camera = ManagedCamera(8, "USB", "0", None, 1, False)
+    page = OperationsPage()
+    page.set_data(
+        OperationCatalog((), (), (SectorOption(1, "Produção"),)), (), (), (camera,)
+    )
+    now = datetime.now(UTC)
+    area = RiskArea(
+        10, 8, "USB", "Área", PolygonGeometry((
+            NormalizedPoint(0.1, 0.1), NormalizedPoint(0.8, 0.1), NormalizedPoint(0.5, 0.8)
+        )), True, now, now,
+    )
+    page.upsert_operation(OperationConfiguration(20, "Soldagem", None, (), area, True, now, now))
+    assert page.managed_camera_combo.count() == 1
+    assert page.managed_camera_combo.currentData() == 8

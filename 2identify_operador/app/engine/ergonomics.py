@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from math import acos, atan2, degrees, hypot
 
 from app.domain import SafetyAlertSeverity, SafetyViolation, SafetyViolationType
@@ -17,6 +18,8 @@ class ErgonomicAssessment:
     detected_people: int
     evaluated_people: int
     inference_milliseconds: float
+    camera_id: int | None = None
+    captured_at: datetime | None = None
 
     @property
     def is_compliant(self) -> bool:

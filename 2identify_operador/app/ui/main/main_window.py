@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from app.core.session import AuthenticationMethod, OperatorSession
 from app.domain import Operation, WorkSession
+from app.domain.camera_source import CameraSource
 from app.ui.active import ActiveOperationPage
 from app.ui.components.sidebar import WORKS_ROUTE, Sidebar
 from app.ui.operations import OperationsPage
@@ -175,12 +176,14 @@ class MainWindow(QMainWindow):
         self,
         work_session: WorkSession,
         operation: Operation,
+        cameras: tuple[CameraSource, ...] = (),
     ) -> None:
         """Transition from verified preparation to the active local session."""
 
         if self._page_stack.currentWidget() is self._safety_verification_page:
             self._safety_verification_page.deactivate()
         self._active_operation_page.set_work_session(work_session, operation)
+        self._active_operation_page.set_cameras(cameras)
         self._page_stack.setCurrentWidget(self._active_operation_page)
         self._page_title.setText("Operação ativa")
         self._page_context.setText(operation.name)

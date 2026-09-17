@@ -7,6 +7,7 @@ from enum import StrEnum
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.session import OperatorSession
+from app.domain.camera_source import CameraSource
 from app.domain.operation import Operation
 from app.engine import (
     PpeRequirementSafetyState,
@@ -57,6 +59,7 @@ class SafetyVerificationPage(QWidget):
     camera_start_requested = Signal()
     camera_stop_requested = Signal()
     operation_start_requested = Signal(int)
+    catalog_requested = Signal(int)
 
     def __init__(self, session: OperatorSession) -> None:
         super().__init__()
@@ -69,6 +72,10 @@ class SafetyVerificationPage(QWidget):
         self._model_classes: frozenset[str] = frozenset()
         self._detection_overlay_maximum_age_ms = 2_000
         self._camera_active = False
+        self._catalog_mode = False
+        self._available_cameras: tuple[CameraSource, ...] = ()
+        self._camera_checks: dict[int, QCheckBox] = {}
+        self._selected_cameras: tuple[CameraSource, ...] = ()
         self.setObjectName("safetyVerificationPage")
         self._build_ui()
 
@@ -77,6 +84,27 @@ class SafetyVerificationPage(QWidget):
         """Return the operation currently prepared for verification."""
 
         return self._operation
+
+    @property
+    def selected_cameras(self) -> tuple[CameraSource, ...]:
+        return self._selected_cameras
+
+    @property
+    def verification_camera(self) -> CameraSource | None:
+        primary_id = (
+            self._operation.risk_area.camera_id
+            if self._operation and self._operation.risk_area
+            else None
+        )
+        return next(
+            (item for item in self._selected_cameras if item.camera_id == primary_id),
+            self._selected_cameras[0] if self._selected_cameras else None,
+        )
+
+    def enable_multicamera_catalog(self) -> None:
+        self._catalog_mode = True
+        self._catalog_container.show()
+        self._catalog_start_button.show()
 
     @property
     def camera_state(self) -> SafetyCameraState:
@@ -101,6 +129,9 @@ class SafetyVerificationPage(QWidget):
         """Prepare a fresh, non-started verification context."""
 
         self._operation = operation
+        self._available_cameras = ()
+        self._selected_cameras = ()
+        self._clear_camera_checks()
         self._operation_name.setText(operation.name)
         self._operation_code.setText(f"OPERAÇÃO #{operation.operation_id}")
         self._operator_name.setText(self._session.operator_name)
@@ -124,10 +155,70 @@ class SafetyVerificationPage(QWidget):
     def activate(self) -> None:
         """Request camera capture when the page becomes the active route."""
 
+        if self._catalog_mode:
+            self._catalog_notice.setText("Carregando câmeras ativas do setor…")
+            self._catalog_start_button.setEnabled(False)
+            if self._operation is not None:
+                self.catalog_requested.emit(self._operation.operation_id)
+            return
         self._camera_active = True
         self.set_camera_state(
             SafetyCameraState.STARTING,
             "Conectando à câmera configurada para esta estação.",
+        )
+        self.camera_start_requested.emit()
+
+    def set_cameras(self, operation_id: int, cameras: tuple[CameraSource, ...]) -> None:
+        if self._operation is None or self._operation.operation_id != operation_id:
+            return
+        self._clear_camera_checks()
+        self._available_cameras = cameras
+        primary_id = self._operation.risk_area.camera_id if self._operation.risk_area else None
+        for camera in cameras:
+            check = QCheckBox(f"{camera.name} · {camera.source_type.value.upper()}")
+            check.setObjectName(f"safetyCameraChoice_{camera.camera_id}")
+            check.setChecked(camera.camera_id == primary_id)
+            check.stateChanged.connect(self._refresh_camera_selection)
+            self._camera_checks[camera.camera_id] = check
+            self._catalog_layout.addWidget(check)
+        if cameras and not any(check.isChecked() for check in self._camera_checks.values()):
+            self._camera_checks[cameras[0].camera_id].setChecked(True)
+        self._catalog_notice.setText(
+            f"{len(cameras)} câmera(s) disponível(is). Escolha as que participarão."
+            if cameras else "Nenhuma câmera ativa no setor desta operação."
+        )
+        self._refresh_camera_selection()
+
+    def show_camera_catalog_failure(self, operation_id: int, message: str) -> None:
+        if self._operation is not None and self._operation.operation_id == operation_id:
+            self._catalog_notice.setText(message)
+            self._catalog_start_button.setEnabled(False)
+
+    def _clear_camera_checks(self) -> None:
+        for check in self._camera_checks.values():
+            self._catalog_layout.removeWidget(check)
+            check.deleteLater()
+        self._camera_checks.clear()
+
+    def _refresh_camera_selection(self) -> None:
+        if not self._camera_active:
+            self._selected_cameras = tuple(
+                camera for camera in self._available_cameras
+                if self._camera_checks[camera.camera_id].isChecked()
+            )
+            self._catalog_start_button.setEnabled(bool(self._selected_cameras))
+
+    def _begin_selected_monitoring(self) -> None:
+        self._refresh_camera_selection()
+        if self._camera_active or not self._selected_cameras:
+            return
+        self._camera_active = True
+        for check in self._camera_checks.values():
+            check.setEnabled(False)
+        self._catalog_start_button.setEnabled(False)
+        self.set_camera_state(
+            SafetyCameraState.STARTING,
+            "Conectando à câmera de verificação selecionada.",
         )
         self.camera_start_requested.emit()
 
@@ -137,6 +228,8 @@ class SafetyVerificationPage(QWidget):
         if self._camera_active:
             self.camera_stop_requested.emit()
         self._camera_active = False
+        for check in self._camera_checks.values():
+            check.setEnabled(True)
         self._reset_camera()
         self._reset_inference()
 
@@ -307,6 +400,12 @@ class SafetyVerificationPage(QWidget):
                 PpeRequirementSafetyState.UNMAPPED: ("SEM MAPEAMENTO", "unmapped"),
             }
             text, state = labels[assessment.state]
+            if assessment.detection_class == "capacete" and value.helmet_placement is not None:
+                text = {
+                    "na_cabeca": "NA CABEÇA",
+                    "na_mao": "NA MÃO",
+                    "indeterminado": "VERIFICANDO",
+                }[value.helmet_placement.value]
             self._set_ppe_state(requirement.ppe_id, text, state)
 
         suffix = "AMOSTRA" if value.sample_count == 1 else "AMOSTRAS"
@@ -543,6 +642,23 @@ class SafetyVerificationPage(QWidget):
         self._risk_area_name.setWordWrap(True)
         layout.addWidget(self._risk_area_name)
         layout.addSpacing(18)
+
+        self._catalog_container = QWidget()
+        self._catalog_container.setObjectName("safetyCameraCatalog")
+        self._catalog_layout = QVBoxLayout(self._catalog_container)
+        self._catalog_layout.setContentsMargins(0, 0, 0, 0)
+        self._catalog_notice = self._label("", "safetyCameraCatalogNotice")
+        self._catalog_notice.setWordWrap(True)
+        layout.addWidget(self._catalog_notice)
+        layout.addWidget(self._catalog_container)
+        self._catalog_start_button = QPushButton("INICIAR MONITORAMENTO")
+        self._catalog_start_button.setObjectName("safetyBeginMonitoringButton")
+        self._catalog_start_button.clicked.connect(self._begin_selected_monitoring)
+        self._catalog_start_button.setEnabled(False)
+        layout.addWidget(self._catalog_start_button)
+        layout.addSpacing(18)
+        self._catalog_container.hide()
+        self._catalog_start_button.hide()
 
         ppe_header = QHBoxLayout()
         ppe_header.setSpacing(8)

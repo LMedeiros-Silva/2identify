@@ -155,7 +155,7 @@ def run_mobile_poc_bootstrap(
             raise SchemaConflictError("stamp não preservou o schema físico esperado")
 
     if current_state is CloudSchemaState.REVISION_441:
-        infrastructure.run_alembic("upgrade", "head")
+        infrastructure.run_alembic("upgrade", _HEAD)
         executed_after = post_stamp_revisions
         cloud = infrastructure.read_cloud_state()
         current_state = classify_cloud_schema(

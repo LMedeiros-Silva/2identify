@@ -15,14 +15,18 @@ from app.controllers.safety_camera_controller import SafetyCameraController
 from app.core.config import AppSettings
 from app.domain import OperationStartAuthorization
 from app.engine import PpeSafetyAssessment, PpeSafetyEngine, PpeStabilityEngine
+from app.engine.helmet_placement import HelmetPlacementEngine
 from app.ui.safety import SafetyCameraState, SafetyVerificationPage
+from app.vision.pose import PoseDetectionBatch, UltralyticsPoseEstimator
 from app.vision.ppe import PpeDetectionBatch, UltralyticsPpeDetector
 from app.vision.types import Frame
+from app.workers.pose_inference_worker import PoseInferenceWorker
 from app.workers.ppe_inference_worker import PpeInferenceWorker
 
 logger = logging.getLogger(__name__)
 
 PpeInferenceWorkerFactory = Callable[[], PpeInferenceWorker]
+PoseInferenceWorkerFactory = Callable[[], PoseInferenceWorker]
 
 
 class PpeInferenceController(QObject):
@@ -36,6 +40,7 @@ class PpeInferenceController(QObject):
         page: SafetyVerificationPage,
         camera_controller: SafetyCameraController,
         worker_factory: PpeInferenceWorkerFactory | None = None,
+        pose_worker_factory: PoseInferenceWorkerFactory | None = None,
     ) -> None:
         super().__init__(page)
         self._page = page
@@ -52,6 +57,24 @@ class PpeInferenceController(QObject):
                 config_directory=settings.ultralytics_config_directory,
             ),
         )
+        self._pose_enabled = settings.pose_estimation_enabled
+        self._pose_worker_factory = pose_worker_factory or partial(
+            PoseInferenceWorker,
+            estimator_factory=partial(
+                UltralyticsPoseEstimator,
+                model_path=settings.pose_model_path,
+                expected_sha256=settings.pose_model_sha256,
+                confidence_threshold=settings.pose_confidence_threshold,
+                image_size=settings.pose_inference_image_size,
+                device=settings.pose_inference_device,
+                config_directory=settings.ultralytics_config_directory,
+            ),
+        )
+        self._pose_worker: PoseInferenceWorker | None = None
+        self._latest_pose: tuple[PoseDetectionBatch, float] | None = None
+        self._helmet_engine = HelmetPlacementEngine(
+            stability_frames=settings.ppe_stability_minimum_frames
+        )
         self._stability_engine = PpeStabilityEngine(
             window_size=settings.ppe_stability_window_frames,
             minimum_samples=settings.ppe_stability_minimum_frames,
@@ -59,22 +82,16 @@ class PpeInferenceController(QObject):
             absent_ratio=settings.ppe_stability_absent_ratio,
         )
         self._safety_engine = PpeSafetyEngine()
-        self._assessment_max_age_seconds = (
-            settings.ppe_release_assessment_max_age_seconds
-        )
+        self._assessment_max_age_seconds = settings.ppe_release_assessment_max_age_seconds
         self._model_classes: frozenset[str] = frozenset()
         self._latest_assessment: PpeSafetyAssessment | None = None
         self._latest_assessment_at: float | None = None
         self._start_authorized = False
         self._assessment_expiry_timer = QTimer(self)
         self._assessment_expiry_timer.setSingleShot(True)
-        self._assessment_expiry_timer.setInterval(
-            round(self._assessment_max_age_seconds * 1_000)
-        )
+        self._assessment_expiry_timer.setInterval(round(self._assessment_max_age_seconds * 1_000))
         self._assessment_expiry_timer.timeout.connect(self._expire_assessment)
-        page.configure_detection_overlay(
-            round(self._assessment_max_age_seconds * 1_000)
-        )
+        page.configure_detection_overlay(round(self._assessment_max_age_seconds * 1_000))
         self._model_ready = False
         self._worker: PpeInferenceWorker | None = None
         camera_controller.analysis_frame_ready.connect(self.submit_frame)
@@ -94,8 +111,13 @@ class PpeInferenceController(QObject):
         worker = self._worker
         if worker is not None and worker.isRunning():
             return
+        pose_worker = self._pose_worker
+        if pose_worker is not None and pose_worker.isRunning():
+            logger.info("safety_pose_previous_session_still_stopping")
+            return
 
         self._dispose_finished_worker()
+        self._dispose_finished_pose_worker()
         self._model_ready = False
         self._model_classes = frozenset()
         self._latest_assessment = None
@@ -103,6 +125,8 @@ class PpeInferenceController(QObject):
         self._start_authorized = False
         self._assessment_expiry_timer.stop()
         self._stability_engine.reset()
+        self._helmet_engine.reset()
+        self._latest_pose = None
         self._page.show_inference_loading()
         worker = self._worker_factory()
         worker.model_ready.connect(self._handle_model_ready)
@@ -112,15 +136,54 @@ class PpeInferenceController(QObject):
         self._worker = worker
         logger.info("ppe_inference_attempt_started")
         worker.start()
+        operation = self._page.operation
+        if (
+            self._pose_enabled
+            and operation is not None
+            and any(item.detection_class == "capacete" for item in operation.required_ppe)
+        ):
+            pose_worker = self._pose_worker_factory()
+            pose_worker.poses_ready.connect(self._handle_poses)
+            pose_worker.inference_failed.connect(self._handle_pose_failure)
+            pose_worker.finished.connect(self._dispose_finished_pose_worker)
+            self._pose_worker = pose_worker
+            pose_worker.start()
 
     @Slot(object)
     def submit_frame(self, value: object) -> None:
         """Forward the latest owned camera frame through a non-queuing boundary."""
 
-        worker = self._worker
-        if worker is None or not worker.isRunning() or not hasattr(value, "shape"):
+        if not hasattr(value, "shape"):
             return
-        worker.submit_frame(cast(Frame, value))
+        frame = cast(Frame, value)
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.submit_frame(frame)
+        pose_worker = self._pose_worker
+        if pose_worker is not None and pose_worker.isRunning():
+            pose_worker.submit_frame(frame)
+
+    @Slot(object)
+    def _handle_poses(self, value: object) -> None:
+        sender = self.sender()
+        if sender is not None and sender is not self._pose_worker:
+            return
+        if isinstance(value, PoseDetectionBatch):
+            self._latest_pose = value, monotonic()
+
+    @Slot(str, bool)
+    def _handle_pose_failure(self, message: str, unavailable: bool) -> None:
+        logger.warning(
+            "helmet_pose_unavailable", extra={"reason": message, "unavailable": unavailable}
+        )
+        self._latest_pose = None
+        self._helmet_engine.reset()
+
+    def _recent_pose(self) -> PoseDetectionBatch | None:
+        entry = self._latest_pose
+        if entry is None or monotonic() - entry[1] > 1.0:
+            return None
+        return entry[0]
 
     @Slot()
     def stop(self) -> None:
@@ -131,11 +194,16 @@ class PpeInferenceController(QObject):
         self._start_authorized = False
         self._assessment_expiry_timer.stop()
         self._stability_engine.reset()
+        self._helmet_engine.reset()
+        self._latest_pose = None
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.request_stop()
+        pose_worker = self._pose_worker
+        if pose_worker is not None and pose_worker.isRunning():
+            pose_worker.request_stop()
 
-    def shutdown(self, wait_timeout_ms: int = 10_000) -> None:
+    def shutdown(self, wait_timeout_ms: int = 10_000) -> bool:
         self._model_ready = False
         self._model_classes = frozenset()
         self._latest_assessment = None
@@ -143,14 +211,24 @@ class PpeInferenceController(QObject):
         self._start_authorized = False
         self._assessment_expiry_timer.stop()
         self._stability_engine.reset()
+        self._helmet_engine.reset()
+        self._latest_pose = None
         worker = self._worker
-        if worker is None:
-            return
-        worker.request_stop()
-        if worker.isRunning() and not worker.wait(wait_timeout_ms):
-            logger.error("ppe_inference_worker_shutdown_timeout")
-            return
+        pose_worker = self._pose_worker
+        for active_worker in (worker, pose_worker):
+            if active_worker is not None:
+                active_worker.request_stop()
+        for active_worker in (worker, pose_worker):
+            if (
+                active_worker is not None
+                and active_worker.isRunning()
+                and not active_worker.wait(wait_timeout_ms)
+            ):
+                logger.error("safety_inference_worker_shutdown_timeout")
+                return False
         self._dispose_finished_worker()
+        self._dispose_finished_pose_worker()
+        return True
 
     @Slot(object)
     def _handle_model_ready(self, value: object) -> None:
@@ -193,10 +271,12 @@ class PpeInferenceController(QObject):
                 return
             self._page.update_ppe_detection_overlay(value)
             snapshot = self._stability_engine.observe(value.observed_classes)
+            helmet = self._helmet_engine.observe(value, self._recent_pose())
             assessment = self._safety_engine.evaluate(
                 operation,
                 self._model_classes,
                 snapshot,
+                helmet_placement=helmet.overall,
             )
             self._latest_assessment = assessment
             self._latest_assessment_at = monotonic()
@@ -232,9 +312,7 @@ class PpeInferenceController(QObject):
         self._start_authorized = True
         authorization = OperationStartAuthorization(
             operation_id=operation_id,
-            verified_ppe_ids=tuple(
-                item.ppe_id for item in assessment.requirements
-            ),
+            verified_ppe_ids=tuple(item.ppe_id for item in assessment.requirements),
             sample_count=assessment.sample_count,
             window_size=assessment.window_size,
             authorized_at=datetime.now(UTC),
@@ -271,6 +349,8 @@ class PpeInferenceController(QObject):
         self._start_authorized = False
         self._assessment_expiry_timer.stop()
         self._stability_engine.reset()
+        self._helmet_engine.reset()
+        self._latest_pose = None
         self._page.show_inference_failure(message, unavailable)
 
     @Slot()
@@ -284,3 +364,10 @@ class PpeInferenceController(QObject):
             return
         worker.deleteLater()
         self._worker = None
+
+    def _dispose_finished_pose_worker(self) -> None:
+        worker = self._pose_worker
+        if worker is None or worker.isRunning():
+            return
+        worker.deleteLater()
+        self._pose_worker = None

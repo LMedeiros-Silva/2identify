@@ -1,11 +1,11 @@
 """Public HTTP response contracts."""
 
-from app.schemas.admin import AdminDashboardSummary
 from app.schemas.active_operations import (
     ActiveOperationOverallStatus,
     ActiveOperationPpe,
     ActiveOperationSnapshot,
 )
+from app.schemas.admin import AdminDashboardSummary
 from app.schemas.admin_alerts import (
     AdminAlertActionRequest,
     AdminAlertDetail,
@@ -20,6 +20,7 @@ from app.schemas.authentication import (
 )
 from app.schemas.health import HealthResponse, RootResponse
 from app.schemas.operations import (
+    AdminCameraItem,
     CameraCatalogItem,
     CameraWrite,
     EpiReference,
@@ -49,6 +50,7 @@ from app.schemas.safety_state import (
 )
 
 __all__ = [
+    "AdminCameraItem",
     "AdminAlertActionRequest",
     "ActiveOperationOverallStatus",
     "ActiveOperationPpe",

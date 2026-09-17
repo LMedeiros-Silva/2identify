@@ -23,8 +23,8 @@ from app.repositories import (
     UserRepository,
 )
 from app.services import (
-    AdminAlertsService,
     ActiveOperationRegistry,
+    AdminAlertsService,
     AdminAuthorizationRejectedError,
     AdminAuthorizationService,
     AdminDashboardService,

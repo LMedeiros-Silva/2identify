@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.domain.operation import Operation, PpeRequirement
+from app.engine.helmet_placement import HelmetPlacement
 from app.engine.ppe_stability import PpeStabilitySnapshot, PpeStabilityState
 
 
@@ -18,6 +19,12 @@ class PpeRequirementSafetyState(StrEnum):
     ABSENT = "absent"
     UNSTABLE = "unstable"
     UNMAPPED = "unmapped"
+
+
+class PpeEvidenceState(StrEnum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
 
 
 class PpeSafetyStatus(StrEnum):
@@ -54,6 +61,14 @@ class PpeRequirementAssessment:
         object.__setattr__(self, "name", normalized_name)
         object.__setattr__(self, "detection_class", detection_class)
 
+    @property
+    def evidence(self) -> PpeEvidenceState:
+        if self.state is PpeRequirementSafetyState.CONFIRMED:
+            return PpeEvidenceState.PRESENT
+        if self.state is PpeRequirementSafetyState.ABSENT:
+            return PpeEvidenceState.ABSENT
+        return PpeEvidenceState.UNKNOWN
+
 
 @dataclass(frozen=True, slots=True)
 class PpeSafetyAssessment:
@@ -65,6 +80,8 @@ class PpeSafetyAssessment:
     requirements: tuple[PpeRequirementAssessment, ...]
     sample_count: int
     window_size: int
+    camera_id: int | None = None
+    helmet_placement: HelmetPlacement | None = None
 
     def __post_init__(self) -> None:
         if self.operation_id <= 0:
@@ -75,13 +92,8 @@ class PpeSafetyAssessment:
             raise ValueError("status deve ser um PpeSafetyStatus")
         if self.window_size < 1 or not 1 <= self.sample_count <= self.window_size:
             raise ValueError("a amostragem deve estar dentro da janela")
-        if any(
-            not isinstance(item, PpeRequirementAssessment)
-            for item in self.requirements
-        ):
-            raise ValueError(
-                "requirements deve conter somente PpeRequirementAssessment"
-            )
+        if any(not isinstance(item, PpeRequirementAssessment) for item in self.requirements):
+            raise ValueError("requirements deve conter somente PpeRequirementAssessment")
         ppe_ids = {item.ppe_id for item in self.requirements}
         if len(ppe_ids) != len(self.requirements):
             raise ValueError("requirements não pode repetir ppe_id")
@@ -138,19 +150,20 @@ class PpeSafetyEngine:
         operation: Operation,
         model_classes: Iterable[str],
         snapshot: PpeStabilitySnapshot,
+        *,
+        helmet_placement: HelmetPlacement | None = None,
     ) -> PpeSafetyAssessment:
         """Create a fail-closed assessment bound to the selected operation."""
 
         normalized_model_classes = frozenset(
-            normalized
-            for item in model_classes
-            if (normalized := item.strip().casefold())
+            normalized for item in model_classes if (normalized := item.strip().casefold())
         )
         requirements = tuple(
             self._evaluate_requirement(
                 requirement,
                 normalized_model_classes,
                 snapshot,
+                helmet_placement,
             )
             for requirement in operation.required_ppe
         )
@@ -162,6 +175,7 @@ class PpeSafetyEngine:
             requirements=requirements,
             sample_count=snapshot.sample_count,
             window_size=snapshot.window_size,
+            helmet_placement=helmet_placement,
         )
 
     @staticmethod
@@ -169,6 +183,7 @@ class PpeSafetyEngine:
         requirement: PpeRequirement,
         model_classes: frozenset[str],
         snapshot: PpeStabilitySnapshot,
+        helmet_placement: HelmetPlacement | None,
     ) -> PpeRequirementAssessment:
         detection_class = requirement.detection_class
         if detection_class is None or detection_class not in model_classes:
@@ -177,9 +192,7 @@ class PpeSafetyEngine:
             decision = snapshot.decision_for(detection_class)
             states = {
                 PpeStabilityState.COLLECTING: PpeRequirementSafetyState.COLLECTING,
-                PpeStabilityState.CONFIRMED_PRESENT: (
-                    PpeRequirementSafetyState.CONFIRMED
-                ),
+                PpeStabilityState.CONFIRMED_PRESENT: (PpeRequirementSafetyState.CONFIRMED),
                 PpeStabilityState.CONFIRMED_ABSENT: PpeRequirementSafetyState.ABSENT,
                 PpeStabilityState.UNSTABLE: PpeRequirementSafetyState.UNSTABLE,
             }
@@ -188,6 +201,12 @@ class PpeSafetyEngine:
                 if decision is not None
                 else PpeRequirementSafetyState.COLLECTING
             )
+            if detection_class == "capacete" and helmet_placement is not None:
+                state = {
+                    HelmetPlacement.NA_CABECA: PpeRequirementSafetyState.CONFIRMED,
+                    HelmetPlacement.NA_MAO: PpeRequirementSafetyState.ABSENT,
+                    HelmetPlacement.INDETERMINADO: PpeRequirementSafetyState.COLLECTING,
+                }[helmet_placement]
         return PpeRequirementAssessment(
             ppe_id=requirement.ppe_id,
             name=requirement.name,

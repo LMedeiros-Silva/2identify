@@ -72,6 +72,7 @@ class WorkSessionService:
         operator_session: OperatorSession,
         operation: Operation,
         authorization: OperationStartAuthorization,
+        selected_camera_ids: tuple[int, ...] = (),
     ) -> WorkSession:
         """Create an active local session from a fresh complete PPE authorization."""
 
@@ -103,6 +104,7 @@ class WorkSessionService:
                 started_at=started_at,
                 finished_at=None,
                 status=WorkSessionStatus.ACTIVE,
+                selected_camera_ids=selected_camera_ids,
             )
             self._current = work_session
 

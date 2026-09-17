@@ -42,6 +42,8 @@ class SafetyViolation:
     ppe_id: int | None = None
     ppe_name: str | None = None
     track_id: int | None = None
+    camera_id: int | None = None
+    risk_area_id: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.violation_type, SafetyViolationType):
@@ -61,6 +63,10 @@ class SafetyViolation:
                 raise ValueError("ppe_name não pode ser vazio")
         if self.track_id is not None and self.track_id <= 0:
             raise ValueError("track_id deve ser positivo quando informado")
+        if self.camera_id is not None and self.camera_id <= 0:
+            raise ValueError("camera_id deve ser positivo quando informado")
+        if self.risk_area_id is not None and self.risk_area_id <= 0:
+            raise ValueError("risk_area_id deve ser positivo quando informado")
         if self.violation_type is SafetyViolationType.PPE_ABSENT and (
             self.ppe_id is None or ppe_name is None
         ):
@@ -71,7 +77,8 @@ class SafetyViolation:
 
     @property
     def deduplication_key(self) -> str:
-        return f"{self.violation_type.value}:{self.subject_key}"
+        prefix = f"camera:{self.camera_id}:" if self.camera_id is not None else ""
+        return f"{prefix}{self.violation_type.value}:{self.subject_key}"
 
 
 @dataclass(frozen=True, slots=True)

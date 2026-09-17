@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from math import isfinite
 
 from app.vision.ppe.types import DetectionBox, PpeDetection, PpeDetectionBatch
@@ -47,6 +48,9 @@ class PpeTrackingBatch:
     frame_height: int
     inference_milliseconds: float
     sequence_number: int
+    camera_id: int | None = None
+    generation: int = 0
+    captured_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.frame_width <= 0 or self.frame_height <= 0:
@@ -163,6 +167,9 @@ class PpeDetectionTracker:
             frame_height=batch.frame_height,
             inference_milliseconds=batch.inference_milliseconds,
             sequence_number=self._sequence_number,
+            camera_id=batch.camera_id,
+            generation=batch.generation,
+            captured_at=batch.captured_at,
         )
 
     def _associate(

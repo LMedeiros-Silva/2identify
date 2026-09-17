@@ -143,6 +143,8 @@ def audit_post_stamp_migrations(versions_directory: Path) -> tuple[str, ...]:
     current = "441c04c14c57"
     ordered: list[str] = []
     while True:
+        if current == _EXPECTED_POST_STAMP[-1]:
+            break
         children = sorted(
             (
                 item

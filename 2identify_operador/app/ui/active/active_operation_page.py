@@ -6,12 +6,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from app.core.session import OperatorSession
 from app.domain import Operation, WorkSession
+from app.domain.camera_source import CameraSource, CameraStatus
 from app.engine import (
     AlertEngineUpdate,
     ErgonomicAssessment,
@@ -68,6 +71,11 @@ class ActiveOperationPage(QWidget):
         self._ppe_state_labels: dict[int, QLabel] = {}
         self._active_alert_count = 0
         self._expanded_camera_dialog: ExpandedCameraDialog | None = None
+        self._selected_cameras: tuple[CameraSource, ...] = ()
+        self._camera_tiles: dict[int, CameraFrameView] = {}
+        self._tile_statuses: dict[int, QLabel] = {}
+        self._tile_ppe_statuses: dict[int, QLabel] = {}
+        self._tile_containers: dict[int, QFrame] = {}
         self._elapsed_timer = QTimer(self)
         self._elapsed_timer.setInterval(1_000)
         self._elapsed_timer.timeout.connect(self._update_elapsed)
@@ -89,6 +97,125 @@ class ActiveOperationPage(QWidget):
     @property
     def is_monitoring_active(self) -> bool:
         return self._monitoring_active
+
+    @property
+    def selected_cameras(self) -> tuple[CameraSource, ...]:
+        return self._selected_cameras
+
+    def set_cameras(self, cameras: tuple[CameraSource, ...]) -> None:
+        for container in self._tile_containers.values():
+            self._camera_grid.removeWidget(container)
+            container.deleteLater()
+        self._camera_tiles.clear()
+        self._tile_statuses.clear()
+        self._tile_ppe_statuses.clear()
+        self._tile_containers.clear()
+        self._selected_cameras = tuple(cameras)
+        for camera in cameras:
+            tile = QFrame()
+            tile.setObjectName(f"activeCameraTile_{camera.camera_id}")
+            tile_layout = QVBoxLayout(tile)
+            tile_layout.setContentsMargins(5, 5, 5, 5)
+            header = QHBoxLayout()
+            name = self._label(camera.name, "activeCameraTileName")
+            status = self._label(CameraStatus.CONNECTING.value, "activeCameraTileStatus")
+            status.setObjectName(f"activeCameraTileStatus_{camera.camera_id}")
+            header.addWidget(name, 1)
+            header.addWidget(status)
+            tile_layout.addLayout(header)
+            ppe_status = self._label("PPE: UNKNOWN", "activeCameraTilePpe")
+            ppe_status.setObjectName(f"activeCameraTilePpe_{camera.camera_id}")
+            tile_layout.addWidget(ppe_status)
+            view = CameraFrameView(
+                f"activeCameraTilePreview_{camera.camera_id}",
+                aspect_ratio_mode=Qt.AspectRatioMode.KeepAspectRatio,
+            )
+            tile_layout.addWidget(view, 1)
+            self._camera_tiles[camera.camera_id] = view
+            self._tile_statuses[camera.camera_id] = status
+            self._tile_ppe_statuses[camera.camera_id] = ppe_status
+            self._tile_containers[camera.camera_id] = tile
+        self._arrange_camera_tiles()
+        self._camera_grid_scroll.setVisible(bool(cameras))
+        self._camera_stack.setVisible(not cameras)
+        self._camera_expand_button.setVisible(not cameras)
+        self._camera_retry_button.setVisible(False)
+        self._ppe_container.setVisible(not cameras or len(cameras) == 1)
+        self._ppe_multicamera_notice.setVisible(len(cameras) > 1)
+        if self._operation is not None:
+            self._configure_risk_zone(self._operation)
+
+    @Slot(int, object)
+    def update_camera_tile(self, camera_id: int, value: object) -> None:
+        view = self._camera_tiles.get(camera_id)
+        if self._monitoring_active and view is not None and isinstance(value, QImage):
+            view.set_frame(value)
+
+    @Slot(int, object)
+    def set_camera_tile_status(self, camera_id: int, value: object) -> None:
+        status = self._tile_statuses.get(camera_id)
+        if not self._monitoring_active or status is None or not isinstance(value, CameraStatus):
+            return
+        status.setText(value.value)
+        status.setProperty("state", value.value.casefold())
+        self._refresh_style(status)
+        if value is CameraStatus.OFFLINE:
+            view = self._camera_tiles[camera_id]
+            view.clear_frame()
+            view.clear_overlay()
+            view.clear_pose_overlay()
+            self._tile_ppe_statuses[camera_id].setText("PPE: UNKNOWN · OFFLINE")
+        states = tuple(item.text() for item in self._tile_statuses.values())
+        online = sum(item == CameraStatus.ONLINE.value for item in states)
+        self._camera_status.setText(f"{online}/{len(states)} ONLINE")
+        self._refresh_style(self._camera_status)
+
+    def update_camera_ppe_assessment(
+        self, camera_id: int, assessment: PpeSafetyAssessment, helmet_placement=None
+    ) -> None:
+        label = self._tile_ppe_statuses.get(camera_id)
+        if label is None:
+            return
+        helmet_labels = {
+            "na_cabeca": "NA CABEÇA",
+            "na_mao": "NA MÃO",
+            "indeterminado": "VERIFICANDO",
+        }
+        results = ", ".join(
+            f"{item.name}: "
+            + (
+                helmet_labels.get(helmet_placement.value, "VERIFICANDO")
+                if item.detection_class == "capacete" and helmet_placement is not None
+                else item.evidence.value.upper()
+            )
+            for item in assessment.requirements
+        )
+        label.setText(results or "PPE: UNKNOWN")
+        if len(self._selected_cameras) == 1:
+            self.update_monitoring_assessment(assessment)
+
+    def mark_camera_ppe_unknown(self, camera_id: int, reason: str) -> None:
+        label = self._tile_ppe_statuses.get(camera_id)
+        if label is not None:
+            label.setText(f"PPE: UNKNOWN · {reason}")
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._arrange_camera_tiles()
+
+    def _arrange_camera_tiles(self) -> None:
+        if not hasattr(self, "_camera_grid"):
+            return
+        while self._camera_grid.count():
+            self._camera_grid.takeAt(0)
+        width = self._camera_grid_host.width()
+        columns = 3 if width >= 900 else 2 if width >= 500 else 1
+        for index, camera in enumerate(self._selected_cameras):
+            self._camera_grid.addWidget(
+                self._tile_containers[camera.camera_id], index // columns, index % columns
+            )
+        for column in range(3):
+            self._camera_grid.setColumnStretch(column, 1 if column < columns else 0)
 
     @property
     def active_alert_count(self) -> int:
@@ -180,6 +307,7 @@ class ActiveOperationPage(QWidget):
         self._elapsed_timer.stop()
         self._work_session = None
         self._operation = None
+        self.set_cameras(())
         self._camera_preview.clear_risk_zones()
         self._elapsed.setText("00:00:00")
         self._finish_error.clear()
@@ -354,7 +482,7 @@ class ActiveOperationPage(QWidget):
             source_height=value.frame_height,
             minimum_keypoint_confidence=(self._pose_keypoint_confidence_threshold),
         )
-        for camera_view in self._camera_views():
+        for camera_view in self._views_for(value.camera_id):
             camera_view.set_pose_overlay(
                 overlay,
                 maximum_age_ms=self._pose_overlay_maximum_age_ms,
@@ -446,7 +574,7 @@ class ActiveOperationPage(QWidget):
             source_width=value.frame_width,
             source_height=value.frame_height,
         )
-        for camera_view in self._camera_views():
+        for camera_view in self._views_for(value.camera_id):
             camera_view.set_overlay(
                 overlay,
                 maximum_age_ms=self._detection_overlay_maximum_age_ms,
@@ -478,11 +606,17 @@ class ActiveOperationPage(QWidget):
             PpeRequirementSafetyState.COLLECTING: ("COLETANDO", "collecting"),
             PpeRequirementSafetyState.CONFIRMED: ("CONFIRMADO", "confirmed"),
             PpeRequirementSafetyState.ABSENT: ("AUSENTE", "absent"),
-            PpeRequirementSafetyState.UNSTABLE: ("INSTÁVEL", "unstable"),
+            PpeRequirementSafetyState.UNSTABLE: ("UNKNOWN", "unstable"),
             PpeRequirementSafetyState.UNMAPPED: ("SEM MAPEAMENTO", "unmapped"),
         }
         for requirement in value.requirements:
             text, state = labels[requirement.state]
+            if requirement.detection_class == "capacete" and value.helmet_placement is not None:
+                text = {
+                    "na_cabeca": "NA CABEÇA",
+                    "na_mao": "NA MÃO",
+                    "indeterminado": "VERIFICANDO",
+                }[value.helmet_placement.value]
             self._set_ppe_state(requirement.ppe_id, text, state)
         self._inference_status.setText(
             f"IA ATIVA · {value.sample_count}/{value.window_size} AMOSTRAS"
@@ -731,6 +865,18 @@ class ActiveOperationPage(QWidget):
         self._camera_stack.addWidget(self._camera_placeholder)
         self._camera_stack.addWidget(self._camera_preview)
         body.addWidget(self._camera_stack, 5)
+        self._camera_grid_scroll = QScrollArea()
+        self._camera_grid_scroll.setObjectName("activeCameraGridScroll")
+        self._camera_grid_scroll.setWidgetResizable(True)
+        self._camera_grid_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._camera_grid_host = QWidget()
+        self._camera_grid_host.setObjectName("activeCameraGrid")
+        self._camera_grid = QGridLayout(self._camera_grid_host)
+        self._camera_grid.setContentsMargins(0, 0, 0, 0)
+        self._camera_grid.setSpacing(8)
+        self._camera_grid_scroll.setWidget(self._camera_grid_host)
+        self._camera_grid_scroll.hide()
+        body.addWidget(self._camera_grid_scroll, 5)
 
         ppe_panel = QFrame()
         ppe_panel.setObjectName("activePpePanel")
@@ -745,6 +891,13 @@ class ActiveOperationPage(QWidget):
         self._ppe_layout.setContentsMargins(0, 0, 0, 0)
         self._ppe_layout.setSpacing(6)
         ppe_layout.addWidget(self._ppe_container)
+        self._ppe_multicamera_notice = self._label(
+            "Evidência PPE independente em cada câmera da grade.",
+            "activeMetadata",
+        )
+        self._ppe_multicamera_notice.setWordWrap(True)
+        self._ppe_multicamera_notice.hide()
+        ppe_layout.addWidget(self._ppe_multicamera_notice)
         ppe_layout.addSpacing(12)
         ergonomics_header = QHBoxLayout()
         ergonomics_header.setSpacing(8)
@@ -844,7 +997,7 @@ class ActiveOperationPage(QWidget):
     def _configure_risk_zone(self, operation: Operation) -> None:
         risk_area = operation.risk_area
         if risk_area is None or risk_area.geometry is None or not risk_area.geometry_calibrated:
-            for camera_view in self._camera_views():
+            for camera_view in (*self._camera_views(), *self._camera_tiles.values()):
                 camera_view.clear_risk_zones()
             return
         zones = (
@@ -853,8 +1006,14 @@ class ActiveOperationPage(QWidget):
                 vertices=tuple((point.x, point.y) for point in risk_area.geometry.vertices),
             ),
         )
-        for camera_view in self._camera_views():
-            camera_view.set_risk_zones(zones)
+        if not self._selected_cameras:
+            for camera_view in self._camera_views():
+                camera_view.set_risk_zones(zones)
+        for camera_id, camera_view in self._camera_tiles.items():
+            if camera_id == risk_area.camera_id:
+                camera_view.set_risk_zones(zones)
+            else:
+                camera_view.clear_risk_zones()
 
     def _has_calibrated_risk_area(self) -> bool:
         operation = self._operation
@@ -970,6 +1129,12 @@ class ActiveOperationPage(QWidget):
         if dialog is None:
             return (self._camera_preview,)
         return self._camera_preview, dialog.camera_view
+
+    def _views_for(self, camera_id: int | None) -> tuple[CameraFrameView, ...]:
+        if self._selected_cameras:
+            view = self._camera_tiles.get(camera_id) if camera_id is not None else None
+            return (view,) if view is not None else ()
+        return self._camera_views()
 
     @Slot()
     def _request_camera_retry(self) -> None:

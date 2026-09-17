@@ -168,9 +168,8 @@ class PpeStabilityEngine:
             state = PpeStabilityState.COLLECTING
         elif presence_ratio >= self._present_ratio:
             state = PpeStabilityState.CONFIRMED_PRESENT
-        elif presence_ratio <= self._absent_ratio:
-            state = PpeStabilityState.CONFIRMED_ABSENT
         else:
+            # A positive-only detector cannot prove absence from non-detection.
             state = PpeStabilityState.UNSTABLE
 
         return PpeStabilityDecision(
