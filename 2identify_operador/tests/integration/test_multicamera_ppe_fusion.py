@@ -237,6 +237,6 @@ def test_multicamera_status_line_follows_the_fused_assessment(qtbot) -> None:
 
     _cycle(controller, {1: None, 2: None, 3: _HEAD})
 
-    assert page._monitoring_status.text() == "EPIs CONFORMES NO MONITORAMENTO ATUAL"
+    assert page._monitoring_status.text() == "EPIs CONFIRMADOS"
     controller.shutdown()
     page.clear()

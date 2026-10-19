@@ -236,7 +236,7 @@ def test_active_controllers_monitor_ppe_until_work_session_stops(qtbot) -> None:
     assert preview.overlay_labels == ("#1 capacete",)
     assert page.findChild(QLabel, "activeOverlayStatus").text() == ("1 TRACK · CONFIRMADO")
     assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
-        "EPIs CONFORMES NO MONITORAMENTO ATUAL"
+        "EPIs CONFIRMADOS"
     )
     qtbot.waitUntil(
         lambda: any(

@@ -7,6 +7,7 @@ the page never derives safety decisions of its own.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -90,6 +91,15 @@ _TILE_HEADER_HEIGHT = 38
 _TILE_FOOTER_HEIGHT = 30
 _GRID_SPACING = 10
 _MAX_ALERT_ROWS = 4
+# Smallest tile width (px) that keeps a camera readable on a projector.
+_MIN_GRID_TILE_WIDTH = 400
+_ALERT_TYPE_TEXT = {
+    SafetyViolationType.PPE_ABSENT: "EPI AUSENTE",
+    SafetyViolationType.PERSON_IN_RISK_AREA: "ÁREA DE RISCO",
+    SafetyViolationType.MONITORING_INTERRUPTED: "MONITORAMENTO INTERROMPIDO",
+    SafetyViolationType.ERGONOMIC_RISK: "ERGONOMIA",
+    SafetyViolationType.FALL_DETECTED: "QUEDA",
+}
 
 
 class ActiveOperationPage(QWidget):
@@ -192,9 +202,8 @@ class ActiveOperationPage(QWidget):
         self._camera_expand_button.setVisible(not cameras)
         self._camera_back_button.hide()
         self._camera_retry_button.setVisible(False)
-        self._camera_count.setText(
-            "" if not cameras else f"{len(cameras)} selecionada(s)"
-        )
+        if not cameras:
+            self._camera_count.setText("")
         multi = len(cameras) > 1
         self._ppe_scope.setText(
             f"Estado consolidado das {len(cameras)} câmeras (fusão multicâmera)."
@@ -390,37 +399,61 @@ class ActiveOperationPage(QWidget):
             if not visible:
                 return
             scrollbar = self._camera_grid_scroll.verticalScrollBar().sizeHint().width()
-            margins = self._camera_grid.contentsMargins()
-            width = max(
-                240,
-                self._camera_grid_scroll.width() - scrollbar - margins.left() - margins.right(),
-            )
-            height = max(
-                200, self._camera_grid_scroll.height() - margins.top() - margins.bottom()
-            )
+            width = max(240, self._camera_grid_scroll.width() - scrollbar)
+            height = max(200, self._camera_grid_scroll.height())
             count = len(visible)
-            if count == 1:
-                columns = 1
-            elif count == 2:
-                columns = 2 if width >= 760 else 1
-            elif count <= 4:
-                columns = 2
-            else:
-                columns = 3 if width >= 1250 else 2
-            tile_width = (width - (columns - 1) * _GRID_SPACING) / columns
             chrome = _TILE_HEADER_HEIGHT + _TILE_FOOTER_HEIGHT
-            tile_height = int(tile_width * 9 / 16) + chrome
             if count == 1:
                 # One camera (or an expanded one) uses all the room it has.
-                tile_height = max(260, min(height, tile_height if columns > 1 else height))
+                columns, tile_width, tile_height = 1, width, max(260, height)
+            else:
+                columns, tile_width = self._grid_geometry(count, width, height)
+                tile_height = int(tile_width * 9 / 16) + chrome
+            used = columns * tile_width + (columns - 1) * _GRID_SPACING
+            side = max(0, (width - used) // 2)
+            self._camera_grid.setContentsMargins(side, 0, side, 0)
             for index, camera in enumerate(visible):
                 tile = self._tile_containers[camera.camera_id]
                 tile.setFixedHeight(tile_height)
                 self._camera_grid.addWidget(tile, index // columns, index % columns)
             for column in range(3):
                 self._camera_grid.setColumnStretch(column, 1 if column < columns else 0)
+            rows = math.ceil(count / columns)
+            needs_scroll = rows * tile_height + (rows - 1) * _GRID_SPACING > height
+            total = len(self._selected_cameras)
+            text = f"{total} selecionada(s)"
+            if focused is not None:
+                text += " · câmera expandida"
+            elif needs_scroll:
+                text += " · role para ver todas"
+            self._camera_count.setText(text)
         finally:
             self._arranging = False
+
+    @staticmethod
+    def _grid_geometry(count: int, width: int, height: int) -> tuple[int, int]:
+        """Columns and 16:9 tile width that show the most video in the viewport.
+
+        Each candidate sizes its rows to fill the visible height exactly; the
+        remaining rows scroll. Tiles never shrink below the legible minimum.
+        """
+
+        chrome = _TILE_HEADER_HEIGHT + _TILE_FOOTER_HEIGHT
+        best: tuple[float, int, int] | None = None
+        for columns in range(2, min(count, 3) + 1):
+            column_width = (width - (columns - 1) * _GRID_SPACING) / columns
+            for visible_rows in range(1, math.ceil(count / columns) + 1):
+                row_height = (height - (visible_rows - 1) * _GRID_SPACING) / visible_rows
+                tile_width = min(column_width, (row_height - chrome) * 16 / 9)
+                if tile_width < _MIN_GRID_TILE_WIDTH:
+                    continue
+                score = min(count, visible_rows * columns) * tile_width * tile_width
+                if best is None or score > best[0]:
+                    best = (score, columns, int(tile_width))
+        if best is not None:
+            return best[1], best[2]
+        columns = 2 if width >= 2 * 300 + _GRID_SPACING else 1
+        return columns, int((width - (columns - 1) * _GRID_SPACING) / columns)
 
     @property
     def active_alert_count(self) -> int:
@@ -876,7 +909,7 @@ class ActiveOperationPage(QWidget):
             f"IA ATIVA · {value.sample_count}/{value.window_size} AMOSTRAS"
         )
         if value.status is PpeSafetyStatus.COMPLIANT:
-            self._monitoring_status.setText("EPIs CONFORMES NO MONITORAMENTO ATUAL")
+            self._monitoring_status.setText("EPIs CONFIRMADOS")
             state = "compliant"
         elif value.status is PpeSafetyStatus.BLOCKED:
             absent = ", ".join(value.absent_requirement_names)
@@ -915,7 +948,12 @@ class ActiveOperationPage(QWidget):
             self._alert_badge.setText(f"{count} {suffix}")
             self._set_state(self._alert_badge, "active")
             self._alert_message.setText(f"{latest.violation.summary} · NÃO SINCRONIZADO")
-            state = "active"
+            critical = any(
+                alert.violation.severity is SafetyAlertSeverity.CRITICAL
+                for alert in value.active_alerts
+            )
+            state = "critical" if critical else "active"
+            self._set_state(self._alert_badge, state)
         elif value.resolved_alerts:
             latest = value.resolved_alerts[-1]
             self._alert_badge.setText("0 ALERTAS LOCAIS ATIVOS")
@@ -967,23 +1005,54 @@ class ActiveOperationPage(QWidget):
             ),
         )
         for alert in ordered[:_MAX_ALERT_ROWS]:
-            critical = alert.violation.severity is SafetyAlertSeverity.CRITICAL
-            row = QFrame()
-            row.setObjectName("activeAlertRow")
-            row.setProperty("state", "critical" if critical else "warning")
-            layout = QHBoxLayout(row)
-            layout.setContentsMargins(10, 6, 10, 6)
-            layout.setSpacing(8)
-            chip = self._label("CRÍTICO" if critical else "ATENÇÃO", "activeAlertSeverity")
-            chip.setProperty("state", "critical" if critical else "warning")
-            layout.addWidget(chip, 0, Qt.AlignmentFlag.AlignTop)
-            summary = self._label(alert.violation.summary, "activeAlertRowText")
-            summary.setWordWrap(True)
-            layout.addWidget(summary, 1)
-            self._alert_rows_layout.addWidget(row)
+            self._alert_rows_layout.addWidget(self._alert_row(alert))
         hidden = len(ordered) - _MAX_ALERT_ROWS
         self._alert_more.setText(f"+ {hidden} alerta(s) ativo(s)" if hidden > 0 else "")
         self._alert_more.setVisible(hidden > 0)
+
+    def _alert_row(self, alert) -> QFrame:
+        """One active alert: severity, risk type, origin and the engine's reason."""
+
+        violation = alert.violation
+        critical = violation.severity is SafetyAlertSeverity.CRITICAL
+        state = "critical" if critical else "warning"
+        row = QFrame()
+        row.setObjectName("activeAlertRow")
+        row.setProperty("state", state)
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(10, 8 if critical else 6, 10, 8 if critical else 6)
+        layout.setSpacing(3)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        chip = self._label("CRÍTICO" if critical else "ATENÇÃO", "activeAlertSeverity")
+        chip.setProperty("state", state)
+        top.addWidget(chip)
+        risk_type = _ALERT_TYPE_TEXT[violation.violation_type]
+        if violation.subject_key.startswith("ppe_inconclusive:"):
+            risk_type = "EPI INCONCLUSIVO"
+        kind = self._label(risk_type, "activeAlertType")
+        kind.setProperty("state", state)
+        top.addWidget(kind, 1)
+        layout.addLayout(top)
+        reason = self._label(violation.summary, "activeAlertRowText")
+        reason.setProperty("state", state)
+        reason.setWordWrap(True)
+        layout.addWidget(reason)
+        origin = []
+        camera_id = violation.camera_id or violation.evidence_camera_id
+        if camera_id is not None:
+            origin.append(self._camera_name(camera_id))
+        origin.append(f"desde {alert.raised_at.astimezone().strftime('%H:%M:%S')}")
+        meta = self._label(" · ".join(origin), "activeAlertMeta")
+        meta.setProperty("state", state)
+        layout.addWidget(meta)
+        return row
+
+    def _camera_name(self, camera_id: int) -> str:
+        for camera in self._selected_cameras:
+            if camera.camera_id == camera_id:
+                return camera.name
+        return f"Câmera {camera_id}"
 
     def _refresh_ppe_inconclusive_flags(self) -> None:
         inconclusive = {
@@ -1027,6 +1096,17 @@ class ActiveOperationPage(QWidget):
         self._overall_label.setText(_OVERALL_TEXT[state])
         self._set_state(self._overall_label, state)
         self._set_state(self._header_bar, state)
+        # EPI conformity never speaks for the whole operation: say so when
+        # another active risk keeps the overall state below SEGURO.
+        other_risk = (
+            self._ppe_status is PpeSafetyStatus.COMPLIANT
+            and state in {"critical", "attention", "inconclusive"}
+        )
+        if other_risk:
+            self._ppe_scope_note.setText(
+                f"Somente os EPIs. Estado geral {_OVERALL_TEXT[state]} por outro risco ativo."
+            )
+        self._ppe_scope_note.setVisible(other_risk)
 
     # ======================================================
     # CONSTRUÇÃO DA INTERFACE
@@ -1236,16 +1316,46 @@ class ActiveOperationPage(QWidget):
         layout.setSpacing(10)
         scroll.setWidget(host)
 
+        # Riscos ativos (alertas locais) ficam no topo: são o que exige ação.
+        self._alert_strip = QFrame()
+        self._alert_strip.setObjectName("activeAlertStrip")
+        self._alert_strip.setProperty("state", "idle")
+        alert_layout = QVBoxLayout(self._alert_strip)
+        alert_layout.setContentsMargins(14, 12, 14, 12)
+        alert_layout.setSpacing(6)
+        alert_layout.addWidget(self._label("RISCOS ATIVOS", "activeSectionLabel"))
+        self._alert_badge = self._label("0 ALERTAS LOCAIS ATIVOS", "activeAlertBadge")
+        self._alert_badge.setProperty("state", "idle")
+        alert_layout.addWidget(self._alert_badge)
+        self._alert_rows_layout = QVBoxLayout()
+        self._alert_rows_layout.setSpacing(6)
+        alert_layout.addLayout(self._alert_rows_layout)
+        self._alert_more = self._label("", "activeMetadata")
+        self._alert_more.hide()
+        alert_layout.addWidget(self._alert_more)
+        self._alert_message = self._label(
+            "Nenhuma ocorrência local · SEM ENVIO À API", "activeAlertMessage"
+        )
+        self._alert_message.setWordWrap(True)
+        alert_layout.addWidget(self._alert_message)
+        layout.addWidget(self._alert_strip)
+
+        # EPIs: conformidade dos EPIs, separada do estado geral da operação.
+        ppe_panel, ppe_layout = self._card("activePpePanel", "EPIs OBRIGATÓRIOS")
+        ppe_layout.addWidget(self._label("CONFORMIDADE DOS EPIs", "activeHeaderCaption"))
         self._monitoring_status = self._label(
             "MONITORAMENTO NÃO INICIADO", "activeMonitoringStatus"
         )
         self._monitoring_status.setProperty("state", "idle")
-        self._monitoring_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._monitoring_status.setWordWrap(True)
-        layout.addWidget(self._monitoring_status)
-
-        # EPIs
-        ppe_panel, ppe_layout = self._card("activePpePanel", "EPIs OBRIGATÓRIOS")
+        ppe_layout.addWidget(self._monitoring_status)
+        self._ppe_scope_note = self._label(
+            "",
+            "activePpeScopeNote",
+        )
+        self._ppe_scope_note.setWordWrap(True)
+        self._ppe_scope_note.hide()
+        ppe_layout.addWidget(self._ppe_scope_note)
         self._ppe_scope = self._label("Evidência da câmera de monitoramento.", "activeMetadata")
         self._ppe_scope.setWordWrap(True)
         ppe_layout.addWidget(self._ppe_scope)
@@ -1265,7 +1375,7 @@ class ActiveOperationPage(QWidget):
         ppe_layout.addWidget(self._ppe_multicamera_notice)
         layout.addWidget(ppe_panel)
 
-        # Riscos
+        # Riscos monitorados
         risk_panel, risk_layout = self._card("activeRiskPanel", "RISCOS MONITORADOS")
         self._ergonomics_status, self._ergonomics_detail = self._risk_row(
             risk_layout, "Ergonomia", "activeErgonomicsStatus", "activeErgonomicsDetail"
@@ -1277,29 +1387,6 @@ class ActiveOperationPage(QWidget):
             risk_layout, "Área de risco", "activeRiskAreaStatus", "activeRiskAreaDetail"
         )
         layout.addWidget(risk_panel)
-
-        # Alertas
-        self._alert_strip = QFrame()
-        self._alert_strip.setObjectName("activeAlertStrip")
-        self._alert_strip.setProperty("state", "idle")
-        alert_layout = QVBoxLayout(self._alert_strip)
-        alert_layout.setContentsMargins(14, 12, 14, 12)
-        alert_layout.setSpacing(6)
-        self._alert_badge = self._label("0 ALERTAS LOCAIS ATIVOS", "activeAlertBadge")
-        self._alert_badge.setProperty("state", "idle")
-        alert_layout.addWidget(self._alert_badge)
-        self._alert_rows_layout = QVBoxLayout()
-        self._alert_rows_layout.setSpacing(5)
-        alert_layout.addLayout(self._alert_rows_layout)
-        self._alert_more = self._label("", "activeMetadata")
-        self._alert_more.hide()
-        alert_layout.addWidget(self._alert_more)
-        self._alert_message = self._label(
-            "Nenhuma ocorrência local · SEM ENVIO À API", "activeAlertMessage"
-        )
-        self._alert_message.setWordWrap(True)
-        alert_layout.addWidget(self._alert_message)
-        layout.addWidget(self._alert_strip)
 
         # Detalhes da sessão (recolhível)
         self._details_toggle = QPushButton("DETALHES DA SESSÃO  ▸")

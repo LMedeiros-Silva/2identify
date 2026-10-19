@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QFrame, QLabel
 
 from app.domain.alert import SafetyAlertSeverity, SafetyViolation, SafetyViolationType
 from app.domain.camera_source import CameraStatus
@@ -129,7 +129,58 @@ def test_overall_state_follows_real_assessment_and_alerts(qtbot) -> None:
     )
     assert _overall(page) == "CRÍTICO"
     assert page.findChild(QLabel, "activeFallStatus").text() == "QUEDA DETECTADA"
+    # EPI conformity is worded as EPI-only and never reads as an all-clear.
+    assert page.findChild(QLabel, "activeMonitoringStatus").text() == "EPIs CONFIRMADOS"
+    note = page.findChild(QLabel, "activePpeScopeNote")
+    assert not note.isHidden()
+    assert "CRÍTICO" in note.text()
     page.clear()
+
+
+def test_critical_alert_leads_the_active_risks_with_type_and_reason(qtbot) -> None:
+    page = _page(qtbot, 1)
+    _alerts(
+        page,
+        SafetyViolation(
+            SafetyViolationType.MONITORING_INTERRUPTED,
+            "ppe_inconclusive:1",
+            "Monitoramento de EPI inconclusivo: Capacete",
+            SafetyAlertSeverity.WARNING,
+            ppe_id=1,
+            ppe_name="Capacete",
+            escalate=False,
+        ),
+        SafetyViolation(
+            SafetyViolationType.FALL_DETECTED,
+            "fall:1",
+            "Queda detectada",
+            SafetyAlertSeverity.CRITICAL,
+            camera_id=1,
+            escalate=False,
+        ),
+    )
+    rows = page.findChildren(QFrame, "activeAlertRow")
+    assert [row.property("state") for row in rows] == ["critical", "warning"]
+    assert rows[0].findChild(QLabel, "activeAlertType").text() == "QUEDA"
+    assert rows[0].findChild(QLabel, "activeAlertRowText").text() == "Queda detectada"
+    assert rows[1].findChild(QLabel, "activeAlertType").text() == "EPI INCONCLUSIVO"
+    assert rows[1].findChild(QLabel, "activeAlertSeverity").text() == "ATENÇÃO"
+    assert page._alert_strip.property("state") == "critical"
+    page.clear()
+
+
+def test_grid_fills_height_with_legible_tiles() -> None:
+    # 1920x1080 viewport: two large columns fill the height, the 5th camera scrolls.
+    columns, width = ActiveOperationPage._grid_geometry(5, 1370, 920)
+    assert columns == 2
+    rows_height = 2 * (int(width * 9 / 16) + 68) + 10
+    assert 880 <= rows_height <= 920
+    # 1366x768 viewport: still two columns and never below the legible minimum.
+    columns, width = ActiveOperationPage._grid_geometry(5, 890, 600)
+    assert columns == 2 and width >= 400
+    # Too small for a legible fit: falls back to full-width columns and scrolls.
+    columns, width = ActiveOperationPage._grid_geometry(5, 700, 300)
+    assert columns == 2 and width == 345
 
 
 def test_fall_card_reports_disabled_installation(qtbot) -> None:

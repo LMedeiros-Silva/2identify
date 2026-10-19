@@ -213,7 +213,7 @@ def test_active_operation_page_presents_continuous_ppe_monitoring(qtbot) -> None
     assert page.findChild(QLabel, "activeCameraStatus").text() == "ATIVA"
     assert page.findChild(QLabel, "activePpeState").text() == "CONFIRMADO"
     assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
-        "EPIs CONFORMES NO MONITORAMENTO ATUAL"
+        "EPIs CONFIRMADOS"
     )
 
     with qtbot.waitSignal(page.monitoring_stop_requested, timeout=1_000):

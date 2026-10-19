@@ -408,33 +408,44 @@ QScrollArea#activeSidePanelScroll > #qt_scrollarea_viewport > QWidget#activeSide
   background: transparent;
 }
 
+/* EPI conformity: a compact line inside the EPI card, never a page banner. */
 QLabel#activeMonitoringStatus {
   color: {{ink_600}};
   background-color: {{surface_3}};
   border: 1px solid {{line_200}};
-  border-radius: {{radius_md}};
-  padding: 9px 10px;
+  border-left: 4px solid {{line_300}};
+  border-radius: {{radius_sm}};
+  padding: 6px 10px;
   font-size: {{font_label}};
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 QLabel#activeMonitoringStatus[state="pending"] {
   color: {{brand_700}};
   background-color: {{brand_50}};
   border-color: {{brand_200}};
+  border-left-color: {{brand_500}};
 }
 
 QLabel#activeMonitoringStatus[state="compliant"] {
   color: {{safe_700}};
-  background-color: {{safe_100}};
+  background-color: {{surface_1}};
   border-color: {{safe_300}};
+  border-left-color: {{safe_600}};
 }
 
 QLabel#activeMonitoringStatus[state="blocked"] {
   color: {{crit_700}};
-  background-color: {{crit_100}};
+  background-color: {{crit_50}};
   border-color: {{crit_300}};
+  border-left-color: {{crit_600}};
+}
+
+QLabel#activePpeScopeNote {
+  color: {{warn_800}};
+  font-size: {{font_label}};
+  font-weight: 600;
 }
 
 QFrame[role="sideCard"],
@@ -558,9 +569,15 @@ QFrame#activeAlertStrip {
 }
 
 QFrame#activeAlertStrip[state="active"] {
+  background-color: {{warn_50}};
+  border: 1px solid {{warn_300}};
+  border-left: 4px solid {{warn_500}};
+}
+
+QFrame#activeAlertStrip[state="critical"] {
   background-color: {{crit_50}};
-  border: 1px solid {{crit_300}};
-  border-left: 4px solid {{crit_600}};
+  border: 2px solid {{crit_600}};
+  border-left: 6px solid {{crit_600}};
 }
 
 QFrame#activeAlertStrip[state="resolved"] {
@@ -576,6 +593,10 @@ QLabel#activeAlertBadge {
 }
 
 QLabel#activeAlertBadge[state="active"] {
+  color: {{warn_800}};
+}
+
+QLabel#activeAlertBadge[state="critical"] {
   color: {{crit_700}};
 }
 
@@ -591,8 +612,15 @@ QLabel#activeAlertMessage {
 
 QFrame#activeAlertRow {
   background-color: {{surface_1}};
-  border: 1px solid {{line_200}};
+  border: 1px solid {{warn_300}};
+  border-left: 4px solid {{warn_500}};
   border-radius: {{radius_sm}};
+}
+
+QFrame#activeAlertRow[state="critical"] {
+  background-color: {{crit_600}};
+  border: 1px solid {{crit_700}};
+  border-left: 4px solid {{crit_800}};
 }
 
 QLabel#activeAlertSeverity {
@@ -605,14 +633,40 @@ QLabel#activeAlertSeverity {
 }
 
 QLabel#activeAlertSeverity[state="critical"] {
+  color: {{crit_700}};
+  background-color: {{surface_1}};
+}
+
+QLabel#activeAlertType {
+  color: {{warn_800}};
+  font-size: {{font_label}};
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+QLabel#activeAlertType[state="critical"] {
   color: {{surface_1}};
-  background-color: {{crit_600}};
+  font-size: {{font_body}};
 }
 
 QLabel#activeAlertRowText {
   color: {{ink_800}};
   font-size: {{font_label}};
   font-weight: 600;
+}
+
+QLabel#activeAlertRowText[state="critical"] {
+  color: {{surface_1}};
+  font-size: {{font_body}};
+}
+
+QLabel#activeAlertMeta {
+  color: {{ink_500}};
+  font-size: {{font_label}};
+}
+
+QLabel#activeAlertMeta[state="critical"] {
+  color: {{crit_100}};
 }
 
 QPushButton#activeDetailsToggle {
