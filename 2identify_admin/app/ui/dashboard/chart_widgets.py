@@ -9,6 +9,10 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
+from app.ui.theme import TOKENS
+
+_LABEL_PIXEL_SIZE = 12
+
 
 @dataclass(frozen=True, slots=True)
 class ChartBar:
@@ -52,15 +56,15 @@ class AlertTrendChart(QWidget):
         maximum = max(values)
         scale_maximum = max(1, int(ceil(maximum / 4)) * 4)
         label_font = QFont(self.font())
-        label_font.setPixelSize(9)
+        label_font.setPixelSize(_LABEL_PIXEL_SIZE)
         painter.setFont(label_font)
 
         for index in range(5):
             ratio = index / 4
             y = plot.bottom() - ratio * plot.height()
-            painter.setPen(QPen(QColor("#E8EDF4"), 1))
+            painter.setPen(QPen(QColor(TOKENS["line_100"]), 1))
             painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
-            painter.setPen(QColor("#98A2B3"))
+            painter.setPen(QColor(TOKENS["ink_500"]))
             painter.drawText(
                 QRectF(0, y - 8, 32, 16),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -88,19 +92,19 @@ class AlertTrendChart(QWidget):
         area.lineTo(positions[0].x(), plot.bottom())
         area.closeSubpath()
         gradient = QLinearGradient(0, plot.top(), 0, plot.bottom())
-        gradient.setColorAt(0, QColor(37, 99, 235, 95))
-        gradient.setColorAt(1, QColor(37, 99, 235, 5))
+        gradient.setColorAt(0, QColor(22, 119, 210, 95))
+        gradient.setColorAt(1, QColor(22, 119, 210, 5))
         painter.fillPath(area, gradient)
-        painter.setPen(QPen(QColor("#2563EB"), 2.5))
+        painter.setPen(QPen(QColor(TOKENS["brand_600"]), 2.5))
         painter.drawPath(line)
 
         for index, ((label, value), point) in enumerate(
             zip(self._points, positions, strict=True)
         ):
-            painter.setBrush(QColor("#FFFFFF"))
-            painter.setPen(QPen(QColor("#2563EB"), 2))
+            painter.setBrush(QColor(TOKENS["surface_1"]))
+            painter.setPen(QPen(QColor(TOKENS["brand_600"]), 2))
             painter.drawEllipse(point, 4, 4)
-            painter.setPen(QColor("#667085"))
+            painter.setPen(QColor(TOKENS["ink_600"]))
             alignment = Qt.AlignmentFlag.AlignHCenter
             label_width = 46.0
             label_x = point.x() - label_width / 2
@@ -116,7 +120,7 @@ class AlertTrendChart(QWidget):
                 label,
             )
             if value:
-                painter.setPen(QColor("#172033"))
+                painter.setPen(QColor(TOKENS["ink_900"]))
                 painter.drawText(
                     QRectF(point.x() - 16, point.y() - 24, 32, 16),
                     Qt.AlignmentFlag.AlignCenter,
@@ -125,7 +129,7 @@ class AlertTrendChart(QWidget):
 
     @staticmethod
     def _draw_empty(painter: QPainter, plot: QRectF) -> None:
-        painter.setPen(QColor("#98A2B3"))
+        painter.setPen(QColor(TOKENS["ink_500"]))
         painter.drawText(plot, Qt.AlignmentFlag.AlignCenter, "Sem dados no período")
 
 
@@ -153,23 +157,23 @@ class AlertCategoryBarChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont(self.font())
-        font.setPixelSize(9)
+        font.setPixelSize(_LABEL_PIXEL_SIZE)
         painter.setFont(font)
         if not self._bars:
-            painter.setPen(QColor("#98A2B3"))
+            painter.setPen(QColor(TOKENS["ink_500"]))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Sem dados")
             return
         maximum = max(1, *(item.value for item in self._bars))
         row_height = self.height() / len(self._bars)
         for index, item in enumerate(self._bars):
             top = index * row_height + 4
-            painter.setPen(QColor("#475467"))
+            painter.setPen(QColor(TOKENS["ink_600"]))
             painter.drawText(
                 QRectF(0, top, max(1, self.width() - 32), 16),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 item.label,
             )
-            painter.setPen(QColor("#172033"))
+            painter.setPen(QColor(TOKENS["ink_900"]))
             painter.drawText(
                 QRectF(max(0, self.width() - 30), top, 30, 16),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -177,7 +181,7 @@ class AlertCategoryBarChart(QWidget):
             )
             track = QRectF(0, top + 20, self.width(), 8)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#EEF2F6"))
+            painter.setBrush(QColor(TOKENS["surface_3"]))
             painter.drawRoundedRect(track, 4, 4)
             if item.value:
                 fill = QRectF(
@@ -214,10 +218,10 @@ class AlertStatusDonutChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         total = sum(self.values)
-        diameter = min(118.0, self.height() - 26.0, self.width() * 0.48)
+        diameter = min(118.0, self.height() - 26.0, self.width() * 0.40)
         ring = QRectF(7, (self.height() - diameter) / 2, diameter, diameter)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#EEF2F6"), 14))
+        painter.setPen(QPen(QColor(TOKENS["surface_3"]), 14))
         painter.drawEllipse(ring)
         if total:
             start_angle = 90 * 16
@@ -233,11 +237,11 @@ class AlertStatusDonutChart(QWidget):
         value_font.setPixelSize(20)
         value_font.setBold(True)
         painter.setFont(value_font)
-        painter.setPen(QColor("#172033"))
+        painter.setPen(QColor(TOKENS["ink_900"]))
         painter.drawText(ring, Qt.AlignmentFlag.AlignCenter, str(total))
 
         legend_font = QFont(self.font())
-        legend_font.setPixelSize(9)
+        legend_font.setPixelSize(_LABEL_PIXEL_SIZE)
         painter.setFont(legend_font)
         legend_x = ring.right() + 20
         row_height = 28
@@ -247,7 +251,7 @@ class AlertStatusDonutChart(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(segment.color))
             painter.drawEllipse(QRectF(legend_x, y + 4, 8, 8))
-            painter.setPen(QColor("#475467"))
+            painter.setPen(QColor(TOKENS["ink_600"]))
             painter.drawText(
                 QRectF(legend_x + 14, y, max(1, self.width() - legend_x - 16), 16),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,

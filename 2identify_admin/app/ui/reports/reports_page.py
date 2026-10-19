@@ -106,16 +106,22 @@ class ReportsPage(QWidget):
 
     def show_loading(self) -> None:
         self.export_button.setEnabled(False)
-        self.status.setText("Preparando arquivo XLSX...")
+        self._set_status("Preparando arquivo XLSX...", "loading")
 
     def show_success(self, path: str) -> None:
         self.export_button.setEnabled(True)
-        self.status.setText(f"Relatório salvo em {path}")
+        self._set_status(f"Relatório salvo em {path}", "success")
 
     def show_error(self, message: str) -> None:
         self.export_button.setEnabled(True)
-        self.status.setText(message)
+        self._set_status(message, "error")
 
     def show_cancelled(self) -> None:
         self.export_button.setEnabled(True)
-        self.status.setText("Exportação cancelada.")
+        self._set_status("Exportação cancelada.")
+
+    def _set_status(self, message: str, state: str = "info") -> None:
+        self.status.setText(message)
+        self.status.setProperty("state", state)
+        self.status.style().unpolish(self.status)
+        self.status.style().polish(self.status)

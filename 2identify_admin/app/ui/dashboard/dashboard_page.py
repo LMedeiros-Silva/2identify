@@ -19,6 +19,7 @@ from app.ui.dashboard.chart_widgets import (
     ChartBar,
     ChartSegment,
 )
+from app.ui.theme import TOKENS
 
 
 class DashboardPage(QWidget):
@@ -231,7 +232,7 @@ class DashboardPage(QWidget):
         categories = summary.alert_categories
         self.alert_category_chart.set_bars(
             (
-                ChartBar("EPI", categories.ppe, "#2563EB"),
+                ChartBar("EPI", categories.ppe, TOKENS["brand_600"]),
                 ChartBar("Ergonomia", categories.ergonomics, "#7C3AED"),
                 ChartBar("Área de risco", categories.risk_area, "#F97316"),
                 ChartBar("Monitoramento", categories.monitoring, "#0891B2"),

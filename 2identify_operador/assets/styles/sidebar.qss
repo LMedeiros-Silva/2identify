@@ -1,81 +1,82 @@
 QFrame#mainSidebar {
-  background-color: #07182c;
+  background-color: {{nav_900}};
   border: none;
-  border-right: 1px solid #183450;
+  border-right: 1px solid {{nav_700}};
 }
 
 QLabel#sidebarBrandMark {
-  color: #ffffff;
-  background-color: #1687f8;
-  border-radius: 8px;
-  font-size: 13px;
+  color: {{surface_1}};
+  background-color: {{brand_500}};
+  border-radius: {{radius_md}};
+  font-size: {{font_body}};
   font-weight: 800;
 }
 
 QLabel#sidebarBrandName {
-  color: #ffffff;
-  font-size: 13px;
+  color: {{surface_1}};
+  font-size: {{font_panel}};
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 QLabel#sidebarProductName {
-  color: #63b3ff;
-  font-size: 8px;
+  color: {{brand_400}};
+  font-size: {{font_badge}};
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
 }
 
 QLabel#sidebarSectionLabel {
-  color: #617d9b;
-  font-size: 8px;
+  color: {{nav_muted}};
+  font-size: {{font_badge}};
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   padding-left: 12px;
 }
 
 QPushButton#sidebarNavigationButton,
 QPushButton#sidebarLogoutButton {
-  color: #a9bdd2;
+  color: {{nav_text}};
   background-color: transparent;
   border: none;
-  border-radius: 7px;
+  border-left: 3px solid transparent;
+  border-radius: {{radius_md}};
   min-height: 44px;
   padding: 0 14px;
   text-align: left;
-  font-size: 11px;
+  font-size: {{font_body}};
   font-weight: 600;
 }
 
 QPushButton#sidebarNavigationButton:hover,
 QPushButton#sidebarLogoutButton:hover {
-  color: #ffffff;
-  background-color: #102b47;
+  color: {{surface_1}};
+  background-color: {{nav_700}};
 }
 
 QPushButton#sidebarNavigationButton[selected="true"] {
-  color: #ffffff;
-  background-color: #126fc4;
-  border-left: 3px solid #68b8ff;
+  color: {{surface_1}};
+  background-color: {{brand_600}};
+  border-left: 3px solid {{brand_400}};
   font-weight: 700;
 }
 
 QPushButton#sidebarNavigationButton:pressed,
 QPushButton#sidebarLogoutButton:pressed {
-  background-color: #0e233a;
+  background-color: {{nav_850}};
 }
 
 QPushButton#sidebarLogoutButton:hover {
-  color: #ffb6bb;
-  background-color: #302033;
+  color: {{crit_300}};
+  background-color: {{nav_700}};
 }
 
 QFrame#sidebarSeparator {
-  color: #1c3855;
+  color: {{nav_700}};
   max-height: 1px;
 }
 
 QLabel#sidebarVersion {
-  color: #536d88;
-  font-size: 8px;
+  color: {{nav_muted}};
+  font-size: {{font_label}};
 }

@@ -1,49 +1,49 @@
 QMainWindow#mainWindow,
 QWidget#mainRoot,
 QWidget#mainWorkspace {
-  background-color: #f3f6fa;
+  background-color: {{surface_0}};
 }
 
 QFrame#mainHeader {
-  background-color: #ffffff;
+  background-color: {{surface_1}};
   border: none;
-  border-bottom: 1px solid #dce5ee;
+  border-bottom: 1px solid {{line_200}};
 }
 
 QLabel#mainSessionBadge {
-  color: #238056;
-  background-color: #e5f7ed;
-  border: 1px solid #9cd8b7;
+  color: {{safe_600}};
+  background-color: {{safe_100}};
+  border: 1px solid {{safe_300}};
   border-radius: 12px;
   padding: 5px 10px;
-  font-size: 9px;
+  font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QLabel#mainOperatorName {
-  color: #18314c;
-  font-size: 12px;
+  color: {{ink_800}};
+  font-size: {{font_body}};
   font-weight: 700;
 }
 
 QLabel#mainOperatorDetail {
-  color: #788b9e;
-  font-size: 9px;
+  color: {{ink_400}};
+  font-size: {{font_label}};
 }
 
 QLabel#mainPageTitle {
-  color: #18314c;
-  font-size: 15px;
+  color: {{ink_800}};
+  font-size: {{font_section}};
   font-weight: 700;
 }
 
 QLabel#mainPageContext {
-  color: #8697a8;
-  font-size: 9px;
+  color: {{ink_400}};
+  font-size: {{font_label}};
 }
 
 QStackedWidget#mainPageStack {
-  background-color: #f3f6fa;
+  background-color: {{surface_0}};
   border: none;
 }

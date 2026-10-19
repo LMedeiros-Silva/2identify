@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.domain import AdminCredentials
+from app.ui.styles import login_stylesheet
 
 
 class LoginWindow(QWidget):
@@ -320,113 +321,4 @@ class LoginWindow(QWidget):
 
     @staticmethod
     def estilos() -> str:
-
-        return """
-        QWidget {
-            font-family: "Segoe UI";
-            color: #172033;
-        }
-
-        #painel_esquerdo {
-            background-color: #0B1F3A;
-        }
-
-        #painel_direito {
-            background-color: #F7F9FC;
-        }
-
-        #logo {
-            color: white;
-            font-size: 42px;
-            font-weight: 800;
-        }
-
-        #subtitulo_logo {
-            color: #B8C7DC;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-
-        #descricao {
-            color: #D7E1EF;
-            font-size: 16px;
-            line-height: 1.5;
-        }
-
-        #rodape {
-            color: #8195B1;
-            font-size: 12px;
-        }
-
-        #formulario {
-            background-color: white;
-            border-radius: 18px;
-            padding: 36px;
-        }
-
-        #titulo {
-            color: #172033;
-            font-size: 30px;
-            font-weight: 700;
-        }
-
-        #subtitulo {
-            color: #718096;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        #label_campo {
-            color: #344054;
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        QLineEdit {
-            background-color: #F8FAFC;
-            border: 1px solid #D9E1EC;
-            border-radius: 10px;
-            padding: 0 15px;
-            font-size: 14px;
-            color: #172033;
-        }
-
-        QLineEdit:focus {
-            border: 2px solid #2563EB;
-            background-color: white;
-        }
-
-        QLineEdit:hover {
-            border: 1px solid #AAB8CC;
-        }
-
-        #botao_entrar {
-            background-color: #2563EB;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 700;
-        }
-
-        #botao_entrar:hover {
-            background-color: #1D4ED8;
-        }
-
-        #botao_entrar:pressed {
-            background-color: #1E40AF;
-        }
-
-        #botao_entrar:disabled {
-            background-color: #93B4F4;
-        }
-
-        #mensagem_erro {
-            color: #DC2626;
-            background-color: #FEF2F2;
-            border: 1px solid #FECACA;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 13px;
-        }
-        """
+        return login_stylesheet()

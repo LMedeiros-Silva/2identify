@@ -1,47 +1,47 @@
 QWidget#safetyVerificationPage {
-  background-color: #f3f6fa;
+  background-color: {{surface_0}};
 }
 
 QPushButton#safetyBackButton {
   min-height: 30px;
-  color: #176daf;
+  color: {{brand_700}};
   background-color: transparent;
-  border: 1px solid #b4d8f2;
+  border: 1px solid {{brand_200}};
   border-radius: 6px;
   padding: 0 12px;
-  font-size: 8px;
+  font-size: {{font_small}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QPushButton#safetyBackButton:hover {
-  color: #ffffff;
-  background-color: #1677d2;
-  border-color: #1677d2;
+  color: {{surface_1}};
+  background-color: {{brand_600}};
+  border-color: {{brand_600}};
 }
 
 QPushButton#safetyBackButton:pressed {
-  background-color: #0f5ca5;
-  border-color: #0f5ca5;
+  background-color: {{brand_700}};
+  border-color: {{brand_700}};
   padding-top: 1px;
 }
 
 QLabel#safetyEyebrow {
-  color: #1677d2;
-  font-size: 9px;
+  color: {{brand_600}};
+  font-size: {{font_label}};
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
 }
 
 QLabel#safetyTitle {
-  color: #10243e;
-  font-size: 26px;
+  color: {{ink_900}};
+  font-size: {{font_title}};
   font-weight: 700;
 }
 
 QLabel#safetyDescription {
-  color: #60758c;
-  font-size: 12px;
+  color: {{ink_500}};
+  font-size: {{font_body}};
 }
 
 QSplitter#safetySplitter {
@@ -56,119 +56,119 @@ QSplitter#safetySplitter::handle {
 
 QFrame#safetyCameraPanel,
 QFrame#safetyContextPanel {
-  background-color: #ffffff;
-  border: 1px solid #d8e2ec;
+  background-color: {{surface_1}};
+  border: 1px solid {{line_200}};
   border-radius: 10px;
 }
 
 QLabel#safetyPanelTitle {
-  color: #18314c;
-  font-size: 13px;
+  color: {{ink_800}};
+  font-size: {{font_panel}};
   font-weight: 700;
 }
 
 QLabel#safetyDetectionOverlayStatus {
-  color: #4f7594;
-  background-color: #eef7fe;
-  border: 1px solid #bddcf2;
+  color: {{ink_500}};
+  background-color: {{brand_50}};
+  border: 1px solid {{brand_200}};
   border-radius: 6px;
   padding: 4px 7px;
-  font-size: 7px;
+  font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QLabel#safetyCameraStatus {
-  color: #687b8f;
-  background-color: #edf2f6;
-  border: 1px solid #d2dce6;
+  color: {{ink_500}};
+  background-color: {{surface_3}};
+  border: 1px solid {{line_200}};
   border-radius: 10px;
   padding: 4px 8px;
-  font-size: 8px;
+  font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QLabel#safetyCameraStatus[state="starting"] {
-  color: #176daf;
-  background-color: #e8f3fc;
-  border-color: #b4d8f2;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border-color: {{brand_200}};
 }
 
 QLabel#safetyCameraStatus[state="active"] {
-  color: #238056;
-  background-color: #e5f7ed;
-  border-color: #9cd8b7;
+  color: {{safe_600}};
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
 QLabel#safetyCameraStatus[state="unavailable"] {
-  color: #8a651d;
-  background-color: #fff7df;
-  border-color: #efd48d;
+  color: {{warn_600}};
+  background-color: {{warn_100}};
+  border-color: {{warn_300}};
 }
 
 QLabel#safetyCameraStatus[state="error"] {
-  color: #a23838;
-  background-color: #fcebea;
-  border-color: #efb9b5;
+  color: {{crit_700}};
+  background-color: {{crit_100}};
+  border-color: {{crit_300}};
 }
 
 QPushButton#safetyCameraRetryButton {
   min-height: 26px;
-  color: #176daf;
-  background-color: #eef7fe;
-  border: 1px solid #9ccdf0;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border: 1px solid {{brand_300}};
   border-radius: 6px;
   padding: 0 9px;
-  font-size: 7px;
+  font-size: {{font_small}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QPushButton#safetyCameraRetryButton:hover {
-  color: #ffffff;
-  background-color: #1677d2;
-  border-color: #1677d2;
+  color: {{surface_1}};
+  background-color: {{brand_600}};
+  border-color: {{brand_600}};
 }
 
 QPushButton#safetyCameraRetryButton:pressed {
-  background-color: #0f5ca5;
-  border-color: #0f5ca5;
+  background-color: {{brand_700}};
+  border-color: {{brand_700}};
   padding-top: 1px;
 }
 
 QStackedWidget#safetyCameraStack,
 QFrame#safetyCameraPreview {
-  background-color: #10243e;
-  border: 1px solid #223d5a;
+  background-color: {{ink_900}};
+  border: 1px solid {{nav_600}};
   border-radius: 9px;
 }
 
 QFrame#safetyCameraPlaceholder {
-  background-color: #10243e;
-  border: 1px solid #223d5a;
+  background-color: {{ink_900}};
+  border: 1px solid {{nav_600}};
   border-radius: 9px;
 }
 
 QLabel#safetyCameraMarker {
-  color: #9dcff2;
-  background-color: #173552;
-  border: 1px solid #315775;
+  color: {{brand_300}};
+  background-color: {{nav_700}};
+  border: 1px solid {{nav_500}};
   border-radius: 10px;
-  font-size: 10px;
+  font-size: {{font_badge}};
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 QLabel#safetyCameraPlaceholderTitle {
-  color: #ffffff;
-  font-size: 17px;
+  color: {{surface_1}};
+  font-size: {{font_section}};
   font-weight: 700;
 }
 
 QLabel#safetyCameraPlaceholderDescription {
-  color: #a9bed2;
-  font-size: 10px;
+  color: {{ink_300}};
+  font-size: {{font_body}};
 }
 
 QScrollArea#safetyContextScrollArea,
@@ -180,8 +180,8 @@ QWidget#safetyPpeContainer {
 }
 
 QLabel#safetySectionLabel {
-  color: #6c8195;
-  font-size: 8px;
+  color: {{ink_500}};
+  font-size: {{font_label}};
   font-weight: 700;
   letter-spacing: 1px;
 }
@@ -189,23 +189,23 @@ QLabel#safetySectionLabel {
 QLabel#safetyOperationName,
 QLabel#safetyOperatorName,
 QLabel#safetyRiskAreaName {
-  color: #18314c;
-  font-size: 12px;
+  color: {{ink_800}};
+  font-size: {{font_body}};
   font-weight: 650;
 }
 
 QLabel#safetyMetadata {
-  color: #74879a;
-  font-size: 9px;
+  color: {{ink_400}};
+  font-size: {{font_label}};
 }
 
 QLabel#safetyPpeCount {
-  color: #176daf;
-  background-color: #e8f3fc;
-  border: 1px solid #b4d8f2;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border: 1px solid {{brand_200}};
   border-radius: 9px;
   padding: 4px 8px;
-  font-size: 8px;
+  font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
@@ -213,96 +213,96 @@ QLabel#safetyPpeCount {
 QLabel#safetyInferenceStatus {
   border-radius: 8px;
   padding: 4px 7px;
-  font-size: 7px;
+  font-size: {{font_label}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QLabel#safetyInferenceStatus[state="not_initialized"] {
-  color: #687b8f;
-  background-color: #edf2f6;
-  border: 1px solid #d2dce6;
+  color: {{ink_500}};
+  background-color: {{surface_3}};
+  border: 1px solid {{line_200}};
 }
 
 QLabel#safetyInferenceStatus[state="loading"] {
-  color: #176daf;
-  background-color: #e8f3fc;
-  border: 1px solid #b4d8f2;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border: 1px solid {{brand_200}};
 }
 
 QLabel#safetyInferenceStatus[state="active"] {
-  color: #176daf;
-  background-color: #e8f3fc;
-  border: 1px solid #b4d8f2;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border: 1px solid {{brand_200}};
 }
 
 QLabel#safetyInferenceStatus[state="unavailable"],
 QLabel#safetyInferenceStatus[state="error"] {
-  color: #a23838;
-  background-color: #fcebea;
-  border: 1px solid #efb9b5;
+  color: {{crit_700}};
+  background-color: {{crit_100}};
+  border: 1px solid {{crit_300}};
 }
 
 QFrame#safetyPpeRow {
-  background-color: #f8fafc;
-  border: 1px solid #d8e3ed;
+  background-color: {{surface_2}};
+  border: 1px solid {{line_200}};
   border-radius: 7px;
 }
 
 QLabel#safetyPpeName {
-  color: #28445f;
-  font-size: 10px;
+  color: {{nav_600}};
+  font-size: {{font_body}};
   font-weight: 650;
 }
 
 QLabel#safetyPpeState {
-  color: #7a5b1b;
-  background-color: #fff7df;
-  border: 1px solid #efd48d;
+  color: {{warn_700}};
+  background-color: {{warn_100}};
+  border: 1px solid {{warn_300}};
   border-radius: 8px;
   padding: 4px 7px;
-  font-size: 7px;
+  font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
 QLabel#safetyPpeState[state="confirmed"] {
-  color: #238056;
-  background-color: #e5f7ed;
-  border-color: #9cd8b7;
+  color: {{safe_600}};
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
 QLabel#safetyPpeState[state="collecting"] {
-  color: #176daf;
-  background-color: #e8f3fc;
-  border-color: #94c9ef;
+  color: {{brand_700}};
+  background-color: {{brand_50}};
+  border-color: {{brand_300}};
 }
 
 QLabel#safetyPpeState[state="absent"] {
-  color: #a23838;
-  background-color: #fcebea;
-  border-color: #efb9b5;
+  color: {{crit_700}};
+  background-color: {{crit_100}};
+  border-color: {{crit_300}};
 }
 
 QLabel#safetyPpeState[state="unstable"] {
-  color: #8a651d;
-  background-color: #fff7df;
-  border-color: #efd48d;
+  color: {{warn_600}};
+  background-color: {{warn_100}};
+  border-color: {{warn_300}};
 }
 
 QLabel#safetyPpeState[state="unmapped"] {
-  color: #687b8f;
-  background-color: #edf2f6;
-  border-color: #d2dce6;
+  color: {{ink_500}};
+  background-color: {{surface_3}};
+  border-color: {{line_200}};
 }
 
 QLabel#safetyPpeEmptyState {
-  color: #708397;
-  background-color: #f8fafc;
-  border: 1px dashed #cbd7e2;
+  color: {{ink_400}};
+  background-color: {{surface_2}};
+  border: 1px dashed {{line_300}};
   border-radius: 7px;
   padding: 14px;
-  font-size: 9px;
+  font-size: {{font_badge}};
 }
 
 QScrollArea#safetyContextScrollArea QScrollBar:vertical {
@@ -313,12 +313,12 @@ QScrollArea#safetyContextScrollArea QScrollBar:vertical {
 
 QScrollArea#safetyContextScrollArea QScrollBar::handle:vertical {
   min-height: 28px;
-  background-color: #c7d4df;
+  background-color: {{line_300}};
   border-radius: 4px;
 }
 
 QScrollArea#safetyContextScrollArea QScrollBar::handle:vertical:hover {
-  background-color: #aebfce;
+  background-color: {{ink_300}};
 }
 
 QScrollArea#safetyContextScrollArea QScrollBar::add-line:vertical,
@@ -330,91 +330,98 @@ QScrollArea#safetyContextScrollArea QScrollBar::sub-page:vertical {
 }
 
 QFrame#safetyReleaseBanner {
-  background-color: #fff8e5;
-  border: 1px solid #e9cf86;
+  background-color: {{warn_100}};
+  border: 1px solid {{warn_300}};
   border-radius: 9px;
 }
 
 QFrame#safetyReleaseBanner[state="compliant"] {
-  background-color: #eaf8f0;
-  border-color: #8fd0ad;
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
 QLabel#safetyReleaseMarker {
-  color: #7a5b1b;
-  background-color: #ffefbd;
-  border: 1px solid #e9cf86;
+  color: {{warn_700}};
+  background-color: {{warn_100}};
+  border: 1px solid {{warn_300}};
   border-radius: 19px;
-  font-size: 17px;
+  font-size: {{font_section}};
   font-weight: 800;
 }
 
 QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseMarker {
-  color: #1f754e;
-  background-color: #ccefdc;
-  border-color: #8fd0ad;
+  color: {{safe_700}};
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
 QLabel#safetyReleaseTitle {
-  color: #563f12;
-  font-size: 11px;
+  color: {{warn_800}};
+  font-size: {{font_body}};
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseTitle {
-  color: #1f6647;
+  color: {{safe_700}};
 }
 
 QLabel#safetyReleaseDescription {
-  color: #7b6840;
-  font-size: 9px;
+  color: {{warn_700}};
+  font-size: {{font_small}};
 }
 
 QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseDescription {
-  color: #39755a;
+  color: {{safe_700}};
 }
 
 QLabel#safetyReleaseStatus {
-  color: #7a5b1b;
-  background-color: #ffefbd;
-  border: 1px solid #e0c36f;
+  color: {{warn_700}};
+  background-color: {{warn_100}};
+  border: 1px solid {{warn_300}};
   border-radius: 10px;
   padding: 6px 10px;
-  font-size: 8px;
+  font-size: {{font_badge}};
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 QFrame#safetyReleaseBanner[state="compliant"] QLabel#safetyReleaseStatus {
-  color: #1f754e;
-  background-color: #ccefdc;
-  border-color: #8fd0ad;
+  color: {{safe_700}};
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
 QPushButton#safetyStartOperationButton {
   min-height: 34px;
-  color: #ffffff;
-  background-color: #238056;
-  border: 1px solid #1c6d49;
+  color: {{surface_1}};
+  background-color: {{safe_600}};
+  border: 1px solid {{safe_700}};
   border-radius: 7px;
   padding: 0 14px;
-  font-size: 8px;
+  font-size: {{font_small}};
   font-weight: 800;
   letter-spacing: 1px;
 }
 
 QPushButton#safetyStartOperationButton:hover {
-  background-color: #1c6d49;
+  background-color: {{safe_700}};
 }
 
 QPushButton#safetyStartOperationButton:pressed {
-  background-color: #15563a;
+  background-color: {{safe_800}};
   padding-top: 1px;
 }
 
 QPushButton#safetyStartOperationButton:disabled {
-  color: #8998a6;
-  background-color: #e2e8ed;
-  border-color: #cbd5dd;
+  color: {{ink_400}};
+  background-color: {{line_100}};
+  border-color: {{line_300}};
+}
+
+/* Keyboard focus ring (design system). */
+QPushButton#safetyBackButton:focus,
+QPushButton#safetyCameraRetryButton:focus,
+QPushButton#safetyStartOperationButton:focus {
+  border: 2px solid {{brand_800}};
 }

@@ -1,83 +1,288 @@
-/* 2Identify shared visual foundation. */
+/* 2Identify design system: shared foundation for every Operator screen.
+   Colors and type sizes are tokens resolved by app/ui/theme.py. */
 
 * {
-  font-family: "Segoe UI", "Inter", sans-serif;
+  font-family: {{font_family}};
 }
 
 QMainWindow {
-  background-color: #f4f7fb;
+  background-color: {{surface_0}};
+}
+
+QWidget {
+  color: {{ink_900}};
+  font-size: {{font_small}};
 }
 
 QToolTip {
-  color: #f7f9fc;
-  background-color: #10243e;
-  border: 1px solid #294968;
+  color: {{surface_1}};
+  background-color: {{nav_800}};
+  border: 1px solid {{nav_600}};
+  border-radius: {{radius_sm}};
+  padding: 6px 8px;
+  font-size: {{font_label}};
+}
+
+/* Buttons without a screen-specific rule use the secondary style. */
+QPushButton {
+  color: {{ink_800}};
+  background-color: {{surface_1}};
+  border: 1px solid {{line_300}};
+  border-radius: {{radius_md}};
+  min-height: 32px;
+  padding: 0 16px;
+  font-size: {{font_small}};
+  font-weight: 600;
+}
+
+QPushButton:hover {
+  background-color: {{brand_50}};
+  border-color: {{brand_300}};
+}
+
+QPushButton:pressed {
+  background-color: {{brand_100}};
+}
+
+QPushButton:focus {
+  border-color: {{brand_500}};
+}
+
+QPushButton:disabled {
+  color: {{ink_400}};
+  background-color: {{surface_3}};
+  border-color: {{line_200}};
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QSpinBox,
+QDoubleSpinBox,
+QComboBox {
+  color: {{ink_900}};
+  background-color: {{surface_1}};
+  border: 1px solid {{line_300}};
+  border-radius: {{radius_md}};
+  padding: 6px 10px;
+  font-size: {{font_body}};
+  selection-color: {{ink_900}};
+  selection-background-color: {{brand_200}};
+}
+
+QLineEdit:hover,
+QTextEdit:hover,
+QPlainTextEdit:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover,
+QComboBox:hover {
+  border-color: {{ink_300}};
+}
+
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QComboBox:focus {
+  border-color: {{brand_500}};
+}
+
+QLineEdit:disabled,
+QTextEdit:disabled,
+QPlainTextEdit:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled,
+QComboBox:disabled {
+  color: {{ink_400}};
+  background-color: {{surface_3}};
+  border-color: {{line_200}};
+}
+
+QComboBox QAbstractItemView {
+  background-color: {{surface_1}};
+  border: 1px solid {{line_300}};
+  selection-color: {{ink_900}};
+  selection-background-color: {{brand_100}};
+  outline: 0;
+}
+
+QCheckBox,
+QRadioButton {
+  color: {{ink_800}};
+  spacing: 8px;
+  font-size: {{font_body}};
+}
+
+QCheckBox:disabled,
+QRadioButton:disabled {
+  color: {{ink_400}};
+}
+
+QListView,
+QTreeView,
+QTableView {
+  color: {{ink_900}};
+  background-color: {{surface_1}};
+  alternate-background-color: {{surface_2}};
+  border: 1px solid {{line_200}};
+  border-radius: {{radius_md}};
+  gridline-color: {{line_100}};
+  selection-color: {{ink_900}};
+  selection-background-color: {{brand_100}};
+  font-size: {{font_body}};
+  outline: 0;
+}
+
+QListView::item,
+QTreeView::item,
+QTableView::item {
   padding: 6px 8px;
 }
 
+QListView::item:hover,
+QTreeView::item:hover,
+QTableView::item:hover {
+  background-color: {{brand_50}};
+}
+
+QListView::item:selected,
+QTreeView::item:selected,
+QTableView::item:selected {
+  color: {{ink_900}};
+  background-color: {{brand_100}};
+}
+
+QHeaderView::section {
+  color: {{ink_600}};
+  background-color: {{surface_2}};
+  border: none;
+  border-bottom: 1px solid {{line_200}};
+  padding: 8px;
+  font-size: {{font_label}};
+  font-weight: 700;
+}
+
+QScrollBar:vertical {
+  background: transparent;
+  width: 10px;
+  margin: 2px;
+}
+
+QScrollBar:horizontal {
+  background: transparent;
+  height: 10px;
+  margin: 2px;
+}
+
+QScrollBar::handle:vertical,
+QScrollBar::handle:horizontal {
+  background-color: {{line_300}};
+  border-radius: 3px;
+  min-height: 32px;
+  min-width: 32px;
+}
+
+QScrollBar::handle:vertical:hover,
+QScrollBar::handle:horizontal:hover {
+  background-color: {{ink_300}};
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line,
+QScrollBar::add-page,
+QScrollBar::sub-page {
+  background: transparent;
+  border: none;
+  width: 0;
+  height: 0;
+}
+
+QProgressBar {
+  color: {{ink_600}};
+  background-color: {{surface_3}};
+  border: none;
+  border-radius: {{radius_sm}};
+  text-align: center;
+  font-size: {{font_label}};
+}
+
+QProgressBar::chunk {
+  background-color: {{brand_600}};
+  border-radius: {{radius_sm}};
+}
+
+QSplitter::handle {
+  background-color: transparent;
+}
+
+QMessageBox QLabel {
+  color: {{ink_900}};
+  font-size: {{font_body}};
+}
 
 QLabel#productLabel {
-  color: #51a8ff;
-  font-size: 13px;
+  color: {{brand_400}};
+  font-size: {{font_small}};
   font-weight: 700;
   padding-top: 5px;
 }
 
 QLabel#onlineBadge {
-  color: #72e5ae;
+  color: {{safe_300}};
   background-color: rgba(32, 166, 106, 0.16);
   border: 1px solid rgba(71, 211, 146, 0.45);
   border-radius: 13px;
-  font-size: 11px;
+  font-size: {{font_badge}};
   font-weight: 700;
   min-height: 26px;
 }
 
 QLabel#eyebrowLabel {
-  color: #51a8ff;
-  font-size: 12px;
+  color: {{brand_400}};
+  font-size: {{font_label}};
   font-weight: 700;
   letter-spacing: 1px;
   margin-bottom: 12px;
 }
 
 QLabel#heroTitle {
-  color: #ffffff;
+  color: {{surface_1}};
   font-size: 38px;
   font-weight: 700;
   margin-bottom: 14px;
 }
 
 QLabel#heroSubtitle {
-  color: #a9b8cc;
-  font-size: 16px;
+  color: {{ink_300}};
+  font-size: {{font_panel}};
   line-height: 1.5;
 }
 
 QFrame#diagnosticCard {
-  background-color: #0d2037;
-  border: 1px solid #1e3b5b;
+  background-color: {{nav_850}};
+  border: 1px solid {{nav_700}};
   border-radius: 12px;
 }
 
 QLabel#diagnosticLabel {
-  color: #6f88a6;
-  font-size: 10px;
+  color: {{ink_400}};
+  font-size: {{font_label}};
   font-weight: 700;
 }
 
 QLabel#diagnosticValue {
-  color: #eef5ff;
-  font-size: 13px;
+  color: {{brand_50}};
+  font-size: {{font_small}};
   font-weight: 600;
 }
 
 QFrame#cardSeparator {
-  color: #1e3b5b;
+  color: {{nav_700}};
   max-width: 1px;
 }
 
 QLabel#footerLabel {
-  color: #70849e;
-  font-size: 11px;
+  color: {{ink_400}};
+  font-size: {{font_label}};
 }

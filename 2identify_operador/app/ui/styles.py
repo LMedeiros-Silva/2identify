@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from app.core.constants import APPLICATION_STYLESHEET, STYLES_DIRECTORY
+from app.ui.theme import apply_theme
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ def load_application_stylesheet() -> str:
             if path != APPLICATION_STYLESHEET
         ),
     ]
-    return "\n\n".join(_read_stylesheet(path) for path in stylesheets)
+    return apply_theme("\n\n".join(_read_stylesheet(path) for path in stylesheets))
 
 
 def _read_stylesheet(path: Path) -> str:

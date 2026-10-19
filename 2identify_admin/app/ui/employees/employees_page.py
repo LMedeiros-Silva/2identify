@@ -132,7 +132,7 @@ class EmployeesPage(QWidget):
         elif not records:
             self.new_employee()
         self.save_button.setEnabled(True)
-        self.feedback.setText(f"{len(records)} funcionário(s) carregado(s).")
+        self._set_feedback(f"{len(records)} funcionário(s) carregado(s).")
 
     def _render_list(self) -> None:
         self.employee_list.blockSignals(True)
@@ -181,7 +181,7 @@ class EmployeesPage(QWidget):
         self.shift.clear()
         self.active.setChecked(True)
         self.face_status.setText("Face ID ainda não capturado nesta edição.")
-        self.feedback.setText("Preencha nome, matrícula e setor.")
+        self._set_feedback("Preencha nome, matrícula e setor.")
 
     def _capture_face(self) -> None:
         dialog = self._face_dialog_factory(self._settings, self)
@@ -210,23 +210,29 @@ class EmployeesPage(QWidget):
 
     def show_loading(self, message: str = "Carregando funcionários...") -> None:
         self.save_button.setEnabled(False)
-        self.feedback.setText(message)
+        self._set_feedback(message, "loading")
 
     def show_error(self, message: str) -> None:
         self.save_button.setEnabled(True)
-        self.feedback.setText(message)
+        self._set_feedback(message, "error")
 
     def employee_saved(self, employee: EmployeeRecord) -> None:
         self._records[employee.id] = employee
         self._editing_id = employee.id
         self._render_list()
         self.save_button.setEnabled(True)
-        self.feedback.setText("Funcionário salvo pela API.")
+        self._set_feedback("Funcionário salvo pela API.", "success")
 
     def face_saved(self) -> None:
         self._pending_face = None
         self.face_status.setText("Face ID cadastrado centralmente.")
-        self.feedback.setText("Funcionário e Face ID salvos pela API.")
+        self._set_feedback("Funcionário e Face ID salvos pela API.", "success")
+
+    def _set_feedback(self, message: str, state: str = "info") -> None:
+        self.feedback.setText(message)
+        self.feedback.setProperty("state", state)
+        self.feedback.style().unpolish(self.feedback)
+        self.feedback.style().polish(self.feedback)
 
 
 __all__ = ["EmployeesPage"]
