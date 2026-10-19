@@ -2,6 +2,7 @@
 
 from app.engine.alert import AlertEngine, AlertEngineUpdate
 from app.engine.ergonomics import ErgonomicAssessment, ErgonomicsEngine
+from app.engine.ppe_fusion import PpeFusionDecision, PpeFusionResult, PpeMultiCameraFusion
 from app.engine.ppe_safety import (
     PpeRequirementAssessment,
     PpeRequirementSafetyState,
@@ -27,6 +28,9 @@ __all__ = [
     "AlertEngineUpdate",
     "ErgonomicAssessment",
     "ErgonomicsEngine",
+    "PpeFusionDecision",
+    "PpeFusionResult",
+    "PpeMultiCameraFusion",
     "PpeRequirementAssessment",
     "PpeRequirementSafetyState",
     "PpeSafetyAssessment",

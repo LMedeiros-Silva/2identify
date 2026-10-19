@@ -56,6 +56,10 @@ class AppSettings(BaseSettings):
         float,
         Field(gt=0, le=10),
     ] = 2.0
+    ppe_fusion_evidence_max_age_seconds: Annotated[float, Field(gt=0, le=10)] = 2.0
+    ppe_fusion_conflict_resolution_seconds: Annotated[float, Field(gt=0, le=60)] = 2.0
+    # None derives the tolerance from the stabilization window and the per-camera rate.
+    ppe_inconclusive_tolerance_seconds: Annotated[float, Field(gt=0, le=300)] | None = None
     ppe_tracking_iou_threshold: Annotated[float, Field(gt=0, le=1)] = 0.30
     ppe_tracking_maximum_missed_batches: Annotated[int, Field(ge=0, le=120)] = 3
     ppe_tracking_minimum_confirmation_hits: Annotated[

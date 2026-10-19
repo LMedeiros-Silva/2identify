@@ -167,7 +167,7 @@ class PpeSafetyEngine:
             )
             for requirement in operation.required_ppe
         )
-        status = self._status_for(operation, requirements)
+        status = self.status_for(operation, requirements)
         return PpeSafetyAssessment(
             operation_id=operation.operation_id,
             operation_active=operation.active,
@@ -215,7 +215,7 @@ class PpeSafetyEngine:
         )
 
     @staticmethod
-    def _status_for(
+    def status_for(
         operation: Operation,
         requirements: tuple[PpeRequirementAssessment, ...],
     ) -> PpeSafetyStatus:

@@ -245,21 +245,26 @@ class AlertEngine:
             state.violation,
             severity=self._temporal_severity(state, raised_at),
         )
+        source_camera_id = (
+            violation.camera_id
+            if violation.camera_id is not None
+            else violation.evidence_camera_id
+        )
         return SafetyAlert(
             alert_id=self._alert_id_factory(),
             work_session_id=work_session.session_id,
             operator_id=work_session.operator_id,
             operation_id=work_session.operation_id,
             camera_id=(
-                violation.camera_id
-                if violation.camera_id is not None
+                source_camera_id
+                if source_camera_id is not None
                 else work_session.camera_id
             ),
             risk_area_id=(
                 violation.risk_area_id
                 if violation.risk_area_id is not None
                 else work_session.risk_area_id
-                if violation.camera_id is None or violation.camera_id == work_session.camera_id
+                if source_camera_id is None or source_camera_id == work_session.camera_id
                 else None
             ),
             violation=violation,
@@ -277,6 +282,8 @@ class AlertEngine:
         first_observed_at = state.first_observed_at
         if first_observed_at is None:
             raise RuntimeError("estado persistente sem first_observed_at")
+        if not state.violation.escalate:
+            return state.violation.severity
         if observed_at - first_observed_at >= self._critical_after:
             return SafetyAlertSeverity.CRITICAL
         return SafetyAlertSeverity.WARNING

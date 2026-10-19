@@ -44,6 +44,11 @@ class SafetyViolation:
     track_id: int | None = None
     camera_id: int | None = None
     risk_area_id: int | None = None
+    # Camera that produced the evidence when the condition itself is session-wide
+    # (camera_id None): it identifies the alert origin without entering the dedup key.
+    evidence_camera_id: int | None = None
+    # False keeps the declared severity instead of escalating WARNING → CRITICAL.
+    escalate: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.violation_type, SafetyViolationType):
@@ -67,6 +72,8 @@ class SafetyViolation:
             raise ValueError("camera_id deve ser positivo quando informado")
         if self.risk_area_id is not None and self.risk_area_id <= 0:
             raise ValueError("risk_area_id deve ser positivo quando informado")
+        if self.evidence_camera_id is not None and self.evidence_camera_id <= 0:
+            raise ValueError("evidence_camera_id deve ser positivo quando informado")
         if self.violation_type is SafetyViolationType.PPE_ABSENT and (
             self.ppe_id is None or ppe_name is None
         ):

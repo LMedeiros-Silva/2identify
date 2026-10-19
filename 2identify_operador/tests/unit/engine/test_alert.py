@@ -280,3 +280,44 @@ def test_alert_engine_escalates_same_occurrence_after_five_seconds(
     assert critical.active_alerts[0].violation.severity is SafetyAlertSeverity.CRITICAL
     assert repeated.escalated_alerts == ()
     assert safe.active_alerts == ()
+
+
+def test_session_condition_keeps_its_key_and_labels_the_evidence_camera() -> None:
+    engine = _engine(minimum_observations=1, persistence_seconds=0)
+    first = replace(_violation(), evidence_camera_id=2)
+    later = replace(_violation(), evidence_camera_id=3)
+
+    raised = engine.observe(_work_session(), (first,), _STARTED_AT)
+    switched = engine.observe(_work_session(), (later,), _STARTED_AT + timedelta(seconds=1))
+
+    assert first.deduplication_key == later.deduplication_key == "ppe_absent:ppe:4"
+    assert [alert.camera_id for alert in raised.raised_alerts] == [2]
+    # The risk area belongs to the session camera, not to another evidence camera.
+    assert raised.raised_alerts[0].risk_area_id is None
+    assert switched.raised_alerts == ()
+    assert [alert.camera_id for alert in switched.active_alerts] == [2]
+
+
+def test_non_escalating_condition_keeps_its_declared_severity() -> None:
+    engine = _engine(minimum_observations=1, persistence_seconds=0, critical_after_seconds=1)
+    violation = SafetyViolation(
+        SafetyViolationType.MONITORING_INTERRUPTED,
+        "ppe_inconclusive:4",
+        "Monitoramento de EPI inconclusivo: Mangote",
+        SafetyAlertSeverity.WARNING,
+        ppe_id=4,
+        ppe_name="Mangote",
+        escalate=False,
+    )
+
+    raised = engine.observe(_work_session(), (violation,), _STARTED_AT)
+    later = engine.observe(_work_session(), (violation,), _STARTED_AT + timedelta(seconds=30))
+
+    assert raised.raised_alerts[0].violation.severity is SafetyAlertSeverity.WARNING
+    assert later.escalated_alerts == ()
+    assert later.active_alerts[0].violation.severity is SafetyAlertSeverity.WARNING
+
+
+def test_evidence_camera_must_be_positive() -> None:
+    with pytest.raises(ValueError):
+        replace(_violation(), evidence_camera_id=0)
