@@ -58,13 +58,19 @@ class CameraCatalogItem(BaseModel):
     stream_source: str
 
 
+class CameraStreamSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stream_source: str
+
+
 class AdminCameraItem(CameraCatalogItem):
     sector_id: PositiveInt
     active: bool
 
 
 class OperatorCameraItem(BaseModel):
-    """Camera metadata without station-specific USB indices or RTSP credentials."""
+    """Camera metadata; network cameras carry their full registered locator."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -116,13 +122,8 @@ class CameraWrite(BaseModel):
 
         classify_camera_source(value)
         parsed = urlsplit(value)
-        if (
-            parsed.username is not None
-            or parsed.password is not None
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError("credenciais de câmera devem ficar na estação Operator")
+        if parsed.fragment:
+            raise ValueError("a URL da câmera não pode conter fragmento (#)")
         return value
 
     @field_validator("description")

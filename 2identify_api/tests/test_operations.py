@@ -456,7 +456,7 @@ def test_admin_camera_edit_does_not_erase_hidden_legacy_credentials(operations_a
             {"source": legacy_source},
         )
     camera = next(item for item in client.get("/admin/cameras").json() if item["id"] == 5)
-    assert camera["stream_source"] == "rtsp://camera.local/stream"
+    assert camera["stream_source"] == "rtsp://test-user:***@camera.local/stream?channel=1"
     updated = client.put(
         "/admin/cameras/5",
         json={
@@ -469,13 +469,44 @@ def test_admin_camera_edit_does_not_erase_hidden_legacy_credentials(operations_a
         assert session.scalar(text("SELECT endereco FROM cameras WHERE id=5")) == legacy_source
 
 
-def test_camera_registration_rejects_source_query_configuration(operations_api) -> None:
+def test_camera_registration_accepts_full_rtsp_url_and_masks_password(operations_api) -> None:
+    client, sessions = operations_api
+    password = "Senha%40" + token_urlsafe(8)
+    source = f"rtsp://user3EC:{password}@192.168.50.121:554/cam/realmonitor?channel=1&subtype=0"
+    masked = "rtsp://user3EC:***@192.168.50.121:554/cam/realmonitor?channel=1&subtype=0"
+    created = client.post(
+        "/admin/cameras",
+        json={"name": "Câmera IP", "stream_source": source, "sector_id": 1},
+    )
+    assert created.status_code == 201
+    assert created.json()["stream_source"] == masked
+    camera_id = created.json()["id"]
+    assert password not in client.get("/admin/cameras").text
+    assert password not in client.get("/admin/operations/catalog").text
+    preview = client.get(f"/admin/cameras/{camera_id}/stream-source")
+    assert preview.status_code == 200
+    assert preview.json() == {"stream_source": source}
+
+    moved = masked.replace("192.168.50.121", "192.168.50.122")
+    updated = client.put(
+        f"/admin/cameras/{camera_id}",
+        json={"name": "Câmera IP", "stream_source": moved, "sector_id": 1},
+    )
+    assert updated.status_code == 200
+    with sessions() as session:
+        stored = session.scalar(
+            text("SELECT endereco FROM cameras WHERE id=:id"), {"id": camera_id}
+        )
+    assert stored == source.replace("192.168.50.121", "192.168.50.122")
+
+
+def test_camera_registration_rejects_masked_password_without_stored_one(operations_api) -> None:
     client, _sessions = operations_api
     response = client.post(
         "/admin/cameras",
         json={
             "name": "Câmera IP",
-            "stream_source": "rtsp://camera.local/live?option",
+            "stream_source": "rtsp://user:***@camera.local/live",
             "sector_id": 1,
         },
     )

@@ -37,8 +37,9 @@ class CameraRegistrationDialog(QDialog):
         title.setObjectName("risk_editor_title")
         layout.addWidget(title)
         instructions = QLabel(
-            "USB: o índice é referência local da estação. IP: use URL RTSP/HTTP(S) "
-            "sem credenciais; configure a fonte privada no .env do Operator."
+            "USB: o índice é referência local da estação. IP: cole a URL completa "
+            "da câmera (RTSP/HTTP(S)), com usuário e senha se houver. A senha fica "
+            "oculta (***) depois de salva; mantenha *** para não alterá-la."
         )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -114,7 +115,7 @@ class CameraRegistrationDialog(QDialog):
         if self.type_combo.currentData() == CameraSourceType.USB:
             self.source_edit.setPlaceholderText("Índice USB local, ex.: 0")
         else:
-            self.source_edit.setPlaceholderText("rtsp://host/path ou https://host/path")
+            self.source_edit.setPlaceholderText("rtsp://usuario:senha@host:554/caminho")
 
 
 __all__ = ["CameraRegistrationDialog"]

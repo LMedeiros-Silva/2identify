@@ -17,6 +17,7 @@ from app.repositories import (
 from app.schemas import (
     AdminCameraItem,
     CameraCatalogItem,
+    CameraStreamSource,
     CameraWrite,
     OperationCatalog,
     OperationDetail,
@@ -25,6 +26,7 @@ from app.schemas import (
     RiskAreaWrite,
 )
 from app.services import AdministratorPrincipal, OperationsService
+from app.services.camera_sources import CameraPasswordRequiredError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["administrative-operations"])
@@ -77,6 +79,21 @@ def update_camera(
 ) -> AdminCameraItem:
     response.headers.update(_NO_STORE_HEADERS)
     return _execute(lambda: service.update_camera(camera_id, payload))
+
+
+@router.get("/admin/cameras/{camera_id}/stream-source", response_model=CameraStreamSource)
+def get_camera_stream_source(
+    camera_id: int,
+    response: Response,
+    _administrator: Annotated[AdministratorPrincipal, Depends(get_current_admin)],
+    service: Annotated[OperationsService, Depends(get_operations_service)],
+) -> CameraStreamSource:
+    """Unmasked locator used only to open the Admin's risk-area preview."""
+
+    response.headers.update(_NO_STORE_HEADERS)
+    return CameraStreamSource(
+        stream_source=_execute(lambda: service.get_camera_stream_source(camera_id))
+    )
 
 
 @router.get("/admin/risk-areas", response_model=tuple[RiskAreaDetail, ...])
@@ -157,6 +174,12 @@ def update_operation(
 def _execute[T](action: Callable[[], T]) -> T:
     try:
         return action()
+    except CameraPasswordRequiredError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+            headers=_NO_STORE_HEADERS,
+        ) from error
     except OperationConfigurationNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

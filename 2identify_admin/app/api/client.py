@@ -638,6 +638,19 @@ class AdminApiClient:
         self._ensure_configuration_success(response, operation="camera_create")
         return self._parse_operation_response(response, parse_camera, "câmera")
 
+    def get_camera_stream_source(self, access_token: str, camera_id: int) -> str:
+        response = self._authorized_request(
+            "GET", f"/admin/cameras/{camera_id}/stream-source", access_token=access_token
+        )
+        self._ensure_protected_success(response, operation="camera_stream_source")
+        try:
+            source = response.json()["stream_source"]
+        except (ValueError, KeyError, TypeError) as error:
+            raise InvalidApiResponseError("A API retornou uma fonte de câmera inválida.") from error
+        if not isinstance(source, str) or not source.strip():
+            raise InvalidApiResponseError("A API retornou uma fonte de câmera inválida.")
+        return source.strip()
+
     def get_cameras(self, access_token: str) -> tuple[ManagedCamera, ...]:
         response = self._authorized_request("GET", "/admin/cameras", access_token=access_token)
         self._ensure_protected_success(response, operation="camera_list")

@@ -21,6 +21,7 @@ from app.schemas.authentication import (
 from app.schemas.health import HealthResponse, RootResponse
 from app.schemas.operations import (
     AdminCameraItem,
+    CameraStreamSource,
     CameraCatalogItem,
     CameraWrite,
     EpiReference,
@@ -51,6 +52,7 @@ from app.schemas.safety_state import (
 
 __all__ = [
     "AdminCameraItem",
+    "CameraStreamSource",
     "AdminAlertActionRequest",
     "ActiveOperationOverallStatus",
     "ActiveOperationPpe",

@@ -27,6 +27,7 @@ from app.schemas.operations import (
 from app.services.camera_sources import (
     classify_camera_source,
     public_camera_source,
+    restore_masked_password,
     sanitized_admin_source,
 )
 
@@ -48,11 +49,16 @@ class OperationsService:
             self._repository.create_camera(
                 name=payload.name,
                 description=payload.description,
-                stream_source=payload.stream_source,
+                stream_source=restore_masked_password(payload.stream_source, None),
                 sector_id=payload.sector_id,
                 active=payload.active,
             )
         )
+
+    def get_camera_stream_source(self, camera_id: int) -> str:
+        """Full locator for the Admin's own camera preview; never listed."""
+
+        return self._repository.get_camera(camera_id).stream_source.strip()
 
     def list_risk_areas(self, camera_id: int | None = None) -> tuple[RiskAreaDetail, ...]:
         return tuple(self._risk_area(item) for item in self._repository.list_risk_areas(camera_id))
@@ -107,7 +113,7 @@ class OperationsService:
         source = (
             existing.stream_source
             if payload.stream_source == sanitized_admin_source(existing.stream_source)
-            else payload.stream_source
+            else restore_masked_password(payload.stream_source, existing.stream_source)
         )
         return self._admin_camera(
             self._repository.update_camera(

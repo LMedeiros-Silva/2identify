@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from urllib.parse import urlsplit
@@ -32,7 +32,7 @@ class CameraSource:
     name: str
     sector_id: int
     source_type: CameraType
-    source_hint: str | None = None
+    source_hint: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.camera_id <= 0 or self.sector_id <= 0 or not self.name.strip():

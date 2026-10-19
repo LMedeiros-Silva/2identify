@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Literal
 
 from PySide6.QtCore import QThread, Signal
@@ -442,13 +443,23 @@ class CameraFrameWorker(QThread):
     succeeded = Signal(object)
     failed = Signal(str, bool)
 
-    def __init__(self, source: str, *, camera_id: int | None = None) -> None:
+    def __init__(
+        self,
+        source: str,
+        *,
+        camera_id: int | None = None,
+        source_loader: Callable[[], str] | None = None,
+    ) -> None:
         super().__init__()
         self._source = source.strip()
         self._camera_id = camera_id
+        # Loads the unmasked catalog URL off the UI thread when the list hid it.
+        self._source_loader = source_loader
 
     def run(self) -> None:
         try:
+            if self._source_loader is not None:
+                self._source = self._source_loader().strip()
             source = (
                 resolve_camera_source(self._camera_id, self._source)
                 if self._camera_id is not None

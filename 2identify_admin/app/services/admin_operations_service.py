@@ -22,6 +22,7 @@ class AdminOperationsProvider(Protocol):
     def get_operations(self, access_token: str) -> tuple[OperationConfiguration, ...]: ...
     def get_cameras(self, access_token: str) -> tuple[ManagedCamera, ...]: ...
     def create_camera(self, access_token: str, draft: CameraDraft) -> CameraOption: ...
+    def get_camera_stream_source(self, access_token: str, camera_id: int) -> str: ...
     def save_camera(
         self, access_token: str, draft: CameraDraft, camera_id: int
     ) -> ManagedCamera: ...
@@ -65,6 +66,9 @@ class AdminOperationsService:
 
     def save_camera(self, token: str, draft: CameraDraft, camera_id: int) -> ManagedCamera:
         return self._provider.save_camera(token, draft, camera_id)
+
+    def get_camera_stream_source(self, token: str, camera_id: int) -> str:
+        return self._provider.get_camera_stream_source(token, camera_id)
 
     def save_operation(
         self, token: str, draft: OperationDraft, operation_id: int | None

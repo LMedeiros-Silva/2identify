@@ -17,6 +17,7 @@ from app.domain import (
     RiskArea,
     RiskAreaDraft,
 )
+from app.domain.camera_source import has_masked_password
 from app.services.admin_operations_service import AdminOperationsService
 from app.ui.operations import OperationsPage, RiskAreaEditorDialog
 from app.workers import (
@@ -96,7 +97,22 @@ class OperationsController(QObject):
         self._pending_camera = camera_value
         self._pending_area = area
         self._view.show_loading("Abrindo uma imagem atual da câmera...")
-        worker = CameraFrameWorker(camera_value.stream_source, camera_id=camera_value.id)
+        source_loader = None
+        if has_masked_password(camera_value.stream_source):
+            session = self._session_context.current()
+            if session is None:
+                self.session_expired.emit("Sua sessão expirou. Entre novamente.")
+                return
+            camera_id = camera_value.id
+            service = self._service
+            token = session.access_token
+
+            def source_loader() -> str:
+                return service.get_camera_stream_source(token, camera_id)
+
+        worker = CameraFrameWorker(
+            camera_value.stream_source, camera_id=camera_value.id, source_loader=source_loader
+        )
         self._camera_worker = worker
         worker.succeeded.connect(self._camera_loaded)
         worker.failed.connect(self._failed)

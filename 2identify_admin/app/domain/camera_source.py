@@ -18,11 +18,15 @@ def parse_camera_source(value: str) -> CameraSourceType:
     parsed = urlsplit(source)
     if parsed.scheme.casefold() not in {"rtsp", "http", "https"} or not parsed.hostname:
         raise ValueError("informe índice USB ou URL RTSP/HTTP(S) válida")
-    if (
-        parsed.username is not None
-        or parsed.password is not None
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise ValueError("credenciais devem ficar no .env local do Operator")
+    if parsed.fragment:
+        raise ValueError("a URL da câmera não pode conter fragmento (#)")
     return CameraSourceType.IP
+
+
+MASKED_PASSWORD = "***"
+
+
+def has_masked_password(value: str) -> bool:
+    """True when the API returned this locator with its password hidden."""
+
+    return urlsplit(value.strip()).password == MASKED_PASSWORD
