@@ -48,6 +48,7 @@ def _label(text: str, *, name: str = "") -> QLabel:
 
 class PpeManagementPage(QWidget):
     refresh_requested = Signal()
+    active_operations_changed = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -228,6 +229,7 @@ class PpeManagementPage(QWidget):
         self.alert_count_label.setText(str(len(with_alert)))
         self._filter_cards()
         self._update_timing()
+        self.active_operations_changed.emit(tuple(self._snapshots.values()))
 
     def _filter_cards(self) -> None:
         query = self.search_input.text().strip().casefold()

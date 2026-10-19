@@ -294,27 +294,50 @@ QMainWindow,
 /* Sidebar */
 
 #sidebar {
-    background-color: {{nav_900}};
-    border-right: 1px solid {{nav_700}};
+    background-color: {{nav_950}};
+    border-right: 1px solid {{nav_800}};
 }
 
 #sidebar QLabel {
     background: transparent;
 }
 
+#sidebar_marca {
+    color: {{surface_1}};
+    background-color: {{brand_500}};
+    border-radius: {{radius_md}};
+    font-size: {{font_panel}};
+    font-weight: 800;
+}
+
 #sidebar_logo {
     color: {{surface_1}};
-    font-size: {{font_kpi}};
+    font-size: {{font_section}};
     font-weight: 800;
 }
 
 #sidebar_subtitulo {
     color: {{brand_400}};
-    font-size: {{font_label}};
-    font-weight: 600;
+    font-size: {{font_badge}};
+    font-weight: 700;
+    letter-spacing: 1px;
 }
 
-#menu_botao {
+#sidebar_secao {
+    color: {{nav_muted}};
+    font-size: {{font_badge}};
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding-left: 12px;
+}
+
+#sidebar_separador {
+    background-color: {{nav_800}};
+    border: none;
+}
+
+#menu_botao,
+#menu_sair {
     background-color: transparent;
     color: {{nav_text}};
     border: none;
@@ -322,25 +345,42 @@ QMainWindow,
     border-radius: {{radius_md}};
     text-align: left;
     min-height: 22px;
-    padding: 11px 14px;
+    padding: 9px 12px;
     font-size: {{font_body}};
     font-weight: 600;
 }
 
-#menu_botao:hover {
-    background-color: {{nav_700}};
+#menu_botao:hover,
+#menu_sair:hover {
+    background-color: {{nav_800}};
     color: {{surface_1}};
 }
 
 #menu_botao:checked {
-    background-color: {{brand_600}};
+    background-color: {{nav_700}};
     border-left: 3px solid {{brand_400}};
     color: {{surface_1}};
     font-weight: 700;
 }
 
-#menu_botao:pressed {
+#menu_botao:pressed,
+#menu_sair:pressed {
     background-color: {{nav_850}};
+}
+
+#menu_sair:hover {
+    color: {{crit_300}};
+}
+
+#sidebar #menu_badge {
+    color: {{surface_1}};
+    background-color: {{crit_600}};
+    border-radius: 9px;
+    min-width: 18px;
+    max-height: 18px;
+    padding: 0 6px;
+    font-size: {{font_badge}};
+    font-weight: 800;
 }
 
 /* Header */
@@ -350,33 +390,70 @@ QMainWindow,
     border-bottom: 1px solid {{line_200}};
 }
 
+#header_contexto {
+    color: {{brand_600}};
+    font-size: {{font_badge}};
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
 #header_titulo {
     color: {{ink_900}};
     font-size: {{font_section}};
     font-weight: 700;
 }
 
+#header_conexao {
+    color: {{warn_700}};
+    background-color: {{warn_50}};
+    border: 1px solid {{warn_300}};
+    border-radius: 13px;
+    padding: 4px 12px;
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#header_conexao[state="connected"] {
+    color: {{safe_700}};
+    background-color: {{safe_50}};
+    border-color: {{safe_300}};
+}
+
+#header_conexao[state="connecting"] {
+    color: {{brand_700}};
+    background-color: {{brand_50}};
+    border-color: {{brand_200}};
+}
+
+#header_divisor {
+    background-color: {{line_200}};
+    border: none;
+}
+
+#usuario_avatar {
+    color: {{surface_1}};
+    background-color: {{nav_800}};
+    border-radius: 18px;
+    font-size: {{font_small}};
+    font-weight: 800;
+}
+
 #usuario_nome {
     color: {{ink_900}};
-    font-size: {{font_body}};
+    font-size: {{font_small}};
     font-weight: 700;
-    margin-right: 8px;
 }
 
 #usuario_perfil {
-    color: {{brand_700}};
-    background-color: {{brand_50}};
-    border: 1px solid {{brand_200}};
-    border-radius: {{radius_sm}};
-    max-height: 24px;
-    padding: 2px 8px;
+    color: {{ink_500}};
     font-size: {{font_label}};
-    font-weight: 600;
 }
 
 /* Page scaffolding shared by every screen */
 
 #dashboard_page,
+#dashboard_conteudo,
+QScrollArea > #qt_scrollarea_viewport > #dashboard_conteudo,
 #alerts_page,
 #operations_page,
 #employees_page,
@@ -604,17 +681,190 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
 }
 
 #dashboard_painel {
-    min-height: 260px;
+    min-height: 300px;
 }
 
 #dashboard_grafico_painel {
-    min-height: 280px;
+    min-height: 240px;
 }
 
-#dashboard_resumo {
+/* Dashboard: KPI tones */
+
+#dashboard_card[tone="hero"] {
+    background-color: {{nav_900}};
+    border: 1px solid {{nav_900}};
+}
+
+#dashboard_card[tone="hero"] #card_titulo {
+    color: {{brand_300}};
+}
+
+#dashboard_card[tone="hero"] #card_valor {
+    color: {{surface_1}};
+}
+
+#dashboard_card[tone="hero"] #card_descricao {
+    color: {{nav_text}};
+}
+
+#dashboard_card[tone="warn"] {
+    border-top: 3px solid {{warn_500}};
+}
+
+#dashboard_card[tone="warn"] #card_valor {
+    color: {{warn_700}};
+}
+
+#dashboard_card[tone="crit"] {
+    border-top: 3px solid {{crit_600}};
+}
+
+#dashboard_card[tone="crit"] #card_valor {
+    color: {{crit_700}};
+}
+
+#dashboard_secao {
+    color: {{ink_600}};
+    font-size: {{font_label}};
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+#dashboard_link {
+    color: {{brand_700}};
     background-color: {{brand_50}};
     border: 1px solid {{brand_200}};
     border-radius: {{radius_md}};
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#dashboard_link:hover {
+    background-color: {{brand_100}};
+    border-color: {{brand_400}};
+}
+
+#dashboard_link:focus {
+    border: 2px solid {{brand_500}};
+}
+
+#dashboard_vazio {
+    color: {{ink_500}};
+    background-color: {{surface_2}};
+    border: 1px dashed {{line_300}};
+    border-radius: {{radius_md}};
+    padding: 22px;
+    font-size: {{font_small}};
+}
+
+/* Dashboard: live rows */
+
+#dashboard_operacao,
+#dashboard_alerta {
+    background-color: {{surface_2}};
+    border: 1px solid {{line_100}};
+    border-left: 4px solid {{line_300}};
+    border-radius: {{radius_md}};
+}
+
+#dashboard_operacao:hover,
+#dashboard_alerta:hover {
+    background-color: {{brand_50}};
+    border-color: {{brand_200}};
+}
+
+#dashboard_operacao[tone="safe"] {
+    border-left: 4px solid {{safe_500}};
+}
+
+#dashboard_operacao[tone="warn"],
+#dashboard_alerta[tone="warn"] {
+    border-left: 4px solid {{warn_500}};
+}
+
+#dashboard_operacao[tone="crit"],
+#dashboard_alerta[tone="crit"] {
+    border-left: 4px solid {{crit_600}};
+}
+
+#dashboard_operacao QWidget,
+#dashboard_alerta QWidget {
+    background: transparent;
+}
+
+#linha_titulo {
+    color: {{ink_900}};
+    font-size: {{font_body}};
+    font-weight: 700;
+}
+
+#linha_valor {
+    color: {{ink_800}};
+    font-size: {{font_small}};
+    font-weight: 700;
+}
+
+#linha_texto {
+    color: {{ink_500}};
+    font-size: {{font_label}};
+}
+
+#linha_texto[stale="true"] {
+    color: {{warn_700}};
+    font-weight: 700;
+}
+
+#linha_alerta {
+    color: {{crit_700}};
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#dashboard_operacao #status_chip,
+#dashboard_alerta #status_chip,
+#status_chip {
+    border-radius: 11px;
+    padding: 3px 10px;
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#dashboard_operacao #status_chip[tone="safe"] {
+    color: {{safe_700}};
+    background-color: {{safe_100}};
+}
+
+#dashboard_operacao #status_chip[tone="warn"],
+#dashboard_alerta #status_chip[tone="warn"] {
+    color: {{warn_800}};
+    background-color: {{warn_100}};
+}
+
+#dashboard_operacao #status_chip[tone="crit"],
+#dashboard_alerta #status_chip[tone="crit"] {
+    color: {{crit_800}};
+    background-color: {{crit_100}};
+}
+
+#dashboard_painel #realtime_status {
+    border-radius: 11px;
+    padding: 3px 10px;
+    font-size: {{font_label}};
+    font-weight: 700;
+    color: {{warn_700}};
+    background-color: {{warn_50}};
+}
+
+#dashboard_painel #realtime_status[state="connected"] {
+    color: {{safe_700}};
+    background-color: {{safe_50}};
+}
+
+#dashboard_painel #realtime_status[state="connecting"] {
+    color: {{brand_700}};
+    background-color: {{brand_50}};
 }
 
 #card_titulo {
@@ -634,6 +884,17 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
     color: {{ink_500}};
     font-size: {{font_label}};
     margin-top: 3px;
+}
+
+#dashboard_page #card_titulo {
+    font-size: {{font_label}};
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+#dashboard_page #card_valor {
+    font-size: 30px;
+    margin-top: 2px;
 }
 
 #grafico_titulo,

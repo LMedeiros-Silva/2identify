@@ -23,6 +23,24 @@ from app.ui.ppe import PpeManagementPage
 from app.ui.reports import ReportsPage
 from app.ui.styles import main_window_stylesheet
 
+_PAGE_TITLES = {
+    "dashboard": "Central de segurança",
+    "epis": "Gestão de EPIs",
+    "alertas": "Alertas",
+    "operacoes": "Operações e Áreas",
+    "relatorios": "Relatórios",
+    "funcionarios": "Funcionários",
+    "configuracoes": "Configurações",
+}
+
+
+def _initials(name: str) -> str:
+    parts = [part for part in name.split() if part]
+    if not parts:
+        return "?"
+    letters = parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")
+    return letters.upper()
+
 
 class MainWindow(QMainWindow):
     """
@@ -83,7 +101,7 @@ class MainWindow(QMainWindow):
 
         self.sidebar = Sidebar()
 
-        self.sidebar.setFixedWidth(250)
+        self.sidebar.setFixedWidth(236)
 
         self.sidebar.pagina_selecionada.connect(self.trocar_pagina)
 
@@ -116,36 +134,76 @@ class MainWindow(QMainWindow):
 
         header.setObjectName("header")
 
-        header.setFixedHeight(72)
+        header.setFixedHeight(64)
 
         layout_header = QHBoxLayout(header)
 
         layout_header.setContentsMargins(
-            30,
+            28,
             0,
-            30,
+            24,
             0,
         )
 
-        titulo_header = QLabel("Monitoramento de Segurança")
+        layout_header.setSpacing(12)
 
-        titulo_header.setObjectName("header_titulo")
+        titulos_header = QVBoxLayout()
+        titulos_header.setSpacing(0)
+        titulos_header.addStretch()
 
-        layout_header.addWidget(titulo_header)
+        contexto_header = QLabel("MONITORAMENTO DE SEGURANÇA")
+
+        contexto_header.setObjectName("header_contexto")
+
+        titulos_header.addWidget(contexto_header)
+
+        self.titulo_header = QLabel(_PAGE_TITLES["dashboard"])
+
+        self.titulo_header.setObjectName("header_titulo")
+
+        titulos_header.addWidget(self.titulo_header)
+        titulos_header.addStretch()
+
+        layout_header.addLayout(titulos_header)
 
         layout_header.addStretch()
+
+        self.header_conexao = QLabel("● Tempo real desconectado")
+        self.header_conexao.setObjectName("header_conexao")
+        self.header_conexao.setProperty("state", "offline")
+        layout_header.addWidget(self.header_conexao, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        divisor = QFrame()
+        divisor.setObjectName("header_divisor")
+        divisor.setFixedSize(1, 30)
+        layout_header.addSpacing(6)
+        layout_header.addWidget(divisor)
+        layout_header.addSpacing(6)
+
+        avatar = QLabel(_initials(self.administrator.name))
+        avatar.setObjectName("usuario_avatar")
+        avatar.setFixedSize(36, 36)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_header.addWidget(avatar)
+
+        identificacao = QVBoxLayout()
+        identificacao.setSpacing(0)
+        identificacao.addStretch()
 
         usuario_nome = QLabel(self.administrator.name)
 
         usuario_nome.setObjectName("usuario_nome")
 
-        layout_header.addWidget(usuario_nome)
+        identificacao.addWidget(usuario_nome)
 
         perfil = QLabel(self.administrator.profile.capitalize())
 
         perfil.setObjectName("usuario_perfil")
 
-        layout_header.addWidget(perfil)
+        identificacao.addWidget(perfil)
+        identificacao.addStretch()
+
+        layout_header.addLayout(identificacao)
 
         layout_direita.addWidget(header)
 
@@ -165,7 +223,18 @@ class MainWindow(QMainWindow):
         self.reports = ReportsPage()
         self.employees = EmployeesPage(self._settings)
 
+
         self.stack.addWidget(self.dashboard)
+
+        self.dashboard.navigate_requested.connect(self.sidebar.selecionar)
+        self.dashboard.alert_open_requested.connect(self.abrir_alerta)
+        self.dashboard.open_alerts_changed.connect(
+            lambda quantidade: self.sidebar.set_badge("alertas", quantidade)
+        )
+        self.alerts.alerts_changed.connect(self.dashboard.set_recent_alerts)
+        self.ppe_management.active_operations_changed.connect(
+            self.dashboard.set_active_operations
+        )
 
         self.stack.addWidget(self.alerts)
 
@@ -186,6 +255,9 @@ class MainWindow(QMainWindow):
         self,
         pagina: str,
     ) -> None:
+
+        if pagina in _PAGE_TITLES:
+            self.titulo_header.setText(_PAGE_TITLES[pagina])
 
         if pagina == "dashboard":
             self.stack.setCurrentWidget(self.dashboard)
@@ -236,7 +308,21 @@ class MainWindow(QMainWindow):
 
         self.stack.setCurrentWidget(pagina)
 
+    def abrir_alerta(self, alert_id: int) -> None:
+        self.sidebar.selecionar("alertas")
+        self.alerts.select_alert(alert_id)
+
     def set_realtime_status(self, message: str, *, state: str) -> None:
+        self.header_conexao.setText(
+            {
+                "connected": "● Tempo real ativo",
+                "connecting": "● Conectando ao tempo real",
+            }.get(state, "● Tempo real offline")
+        )
+        self.header_conexao.setToolTip(message)
+        self.header_conexao.setProperty("state", state)
+        self.header_conexao.style().unpolish(self.header_conexao)
+        self.header_conexao.style().polish(self.header_conexao)
         self.dashboard.set_realtime_status(message, state=state)
         self.alerts.set_connection_status(message, state=state)
         self.ppe_management.set_connection_status(message, state=state)

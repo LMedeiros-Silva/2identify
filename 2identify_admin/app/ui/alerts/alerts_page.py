@@ -28,6 +28,7 @@ class AlertsPage(QWidget):
     alert_selected = Signal(int)
     confirm_requested = Signal(int)
     close_requested = Signal(int)
+    alerts_changed = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -151,6 +152,7 @@ class AlertsPage(QWidget):
             self._show_placeholder("Nenhum alerta foi registrado até o momento.")
         elif self.alert_list.currentItem() is None:
             self.alert_list.setCurrentRow(0)
+        self.alerts_changed.emit(tuple(self._alerts.values()))
 
     def update_alert(self, alert: AdminAlert) -> None:
         self._alerts[alert.id] = alert
@@ -162,6 +164,17 @@ class AlertsPage(QWidget):
                 break
         self._selected_alert_id = alert.id
         self._show_alert(alert)
+        self.alerts_changed.emit(tuple(self._alerts.values()))
+
+    def select_alert(self, alert_id: int) -> None:
+        """Select an alert already listed, as requested from the dashboard."""
+
+        for index in range(self.alert_list.count()):
+            item = self.alert_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) == alert_id:
+                self.alert_list.setCurrentItem(item)
+                self.alert_list.scrollToItem(item)
+                return
 
     def add_alert(self, alert: RealtimeAlert) -> None:
         """Surface a realtime notification while the controller reloads history."""
