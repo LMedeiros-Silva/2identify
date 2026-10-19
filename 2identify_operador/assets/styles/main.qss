@@ -10,36 +10,51 @@ QFrame#mainHeader {
   border-bottom: 1px solid {{line_200}};
 }
 
-QLabel#mainSessionBadge {
-  color: {{safe_600}};
-  background-color: {{safe_100}};
-  border: 1px solid {{safe_300}};
-  border-radius: 12px;
-  padding: 5px 10px;
+QLabel#mainPageContext {
+  color: {{brand_600}};
   font-size: {{font_badge}};
   font-weight: 700;
   letter-spacing: 1px;
 }
 
-QLabel#mainOperatorName {
-  color: {{ink_800}};
-  font-size: {{font_body}};
-  font-weight: 700;
-}
-
-QLabel#mainOperatorDetail {
-  color: {{ink_400}};
-  font-size: {{font_label}};
-}
-
 QLabel#mainPageTitle {
-  color: {{ink_800}};
+  color: {{ink_900}};
   font-size: {{font_section}};
   font-weight: 700;
 }
 
-QLabel#mainPageContext {
-  color: {{ink_400}};
+QLabel#mainSessionBadge {
+  color: {{safe_700}};
+  background-color: {{safe_50}};
+  border: 1px solid {{safe_300}};
+  border-radius: 13px;
+  padding: 0 12px;
+  font-size: {{font_label}};
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+QFrame#mainHeaderDivider {
+  background-color: {{line_200}};
+  border: none;
+}
+
+QLabel#mainOperatorAvatar {
+  color: {{surface_1}};
+  background-color: {{nav_800}};
+  border-radius: 18px;
+  font-size: {{font_small}};
+  font-weight: 800;
+}
+
+QLabel#mainOperatorName {
+  color: {{ink_900}};
+  font-size: {{font_small}};
+  font-weight: 700;
+}
+
+QLabel#mainOperatorDetail {
+  color: {{ink_500}};
   font-size: {{font_label}};
 }
 

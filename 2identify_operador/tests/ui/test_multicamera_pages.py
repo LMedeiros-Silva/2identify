@@ -147,7 +147,7 @@ def test_active_grid_has_one_named_visible_tile_per_selected_camera(qtbot, camer
         tile = page._tile_containers[camera_id]
         assert page._camera_grid.indexOf(tile) >= 0
         assert tile.findChild(QLabel, "activeCameraTileName").text() == f"Câmera {camera_id}"
-        assert page._tile_statuses[camera_id].text() == "CONNECTING"
+        assert page._tile_statuses[camera_id].text() == "CONECTANDO"
     page.clear()
 
 
@@ -285,7 +285,7 @@ def test_ppe_stability_is_independent_for_each_camera_and_offline_becomes_unknow
     assert page.active_alert_count == 0
     camera.status_changed.emit(1, CameraStatus.OFFLINE)
     assert 1 not in controller._assessment_by_camera
-    assert "UNKNOWN" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
+    assert "INCONCLUSIVO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller._handle_detections(
         PpeDetectionBatch(
             present, 48, 32, 1.0, camera_id=1, generation=2, captured_at=datetime.now(UTC)
@@ -318,7 +318,7 @@ def test_inference_failure_invalidates_camera_ppe_evidence(qtbot) -> None:
     )
     assert "VERIFICANDO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller._handle_failure("Modelo indisponível", True)
-    assert "UNKNOWN" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
+    assert "INCONCLUSIVO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller.shutdown()
     page.clear()
 

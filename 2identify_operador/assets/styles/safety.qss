@@ -425,3 +425,54 @@ QPushButton#safetyCameraRetryButton:focus,
 QPushButton#safetyStartOperationButton:focus {
   border: 2px solid {{brand_800}};
 }
+
+/* Phase 4: camera panel matches the dark monitoring surface. */
+QFrame#safetyCameraPanel {
+  background-color: {{nav_950}};
+  border: 1px solid {{nav_800}};
+  border-radius: {{radius_lg}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyPanelTitle {
+  color: {{surface_1}};
+}
+
+QFrame#safetyContextPanel {
+  border-radius: {{radius_lg}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyDetectionOverlayStatus {
+  color: {{nav_text}};
+  background-color: {{nav_900}};
+  border: 1px solid {{nav_700}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyCameraStatus {
+  color: {{nav_text}};
+  background-color: {{nav_800}};
+  border-color: {{nav_700}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyCameraStatus[state="starting"] {
+  color: {{brand_300}};
+  border-color: {{brand_700}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyCameraStatus[state="active"] {
+  color: {{safe_300}};
+  border-color: {{safe_700}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyCameraStatus[state="unavailable"] {
+  color: {{warn_300}};
+  border-color: {{warn_700}};
+}
+
+QFrame#safetyCameraPanel QLabel#safetyCameraStatus[state="error"] {
+  color: {{crit_300}};
+  border-color: {{crit_700}};
+}
+
+QLabel#safetyDescription {
+  font-size: {{font_small}};
+}

@@ -27,6 +27,13 @@ _AUTHENTICATION_LABELS = {
 }
 
 
+def _initials(name: str) -> str:
+    parts = [part for part in name.split() if part]
+    if not parts:
+        return "?"
+    return (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper()
+
+
 class MainWindow(QMainWindow):
     """Top-level shell shown only after an authenticated session exists."""
 
@@ -102,42 +109,61 @@ class MainWindow(QMainWindow):
     def _build_header(self) -> QFrame:
         header = QFrame()
         header.setObjectName("mainHeader")
-        header.setFixedHeight(76)
+        header.setFixedHeight(64)
+        self._header = header
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(28, 0, 28, 0)
+        layout.setContentsMargins(28, 0, 24, 0)
         layout.setSpacing(14)
 
         page_context = QVBoxLayout()
-        page_context.setSpacing(1)
-        self._page_title = self._label("Trabalhos", "mainPageTitle")
-        page_context.addWidget(self._page_title)
+        page_context.setSpacing(0)
+        page_context.addStretch(1)
         self._page_context = self._label(
             "Ambiente do operador",
             "mainPageContext",
         )
         page_context.addWidget(self._page_context)
+        self._page_title = self._label("Trabalhos", "mainPageTitle")
+        page_context.addWidget(self._page_title)
+        page_context.addStretch(1)
         layout.addLayout(page_context)
         layout.addStretch(1)
 
         session_status = self._label("SESSÃO ATIVA", "mainSessionBadge")
         session_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         session_status.setFixedHeight(26)
-        layout.addWidget(session_status)
+        layout.addWidget(session_status, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        divider = QFrame()
+        divider.setObjectName("mainHeaderDivider")
+        divider.setFixedSize(1, 30)
+        layout.addWidget(divider, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        avatar = self._label(_initials(self._session.operator_name), "mainOperatorAvatar")
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setFixedSize(36, 36)
+        layout.addWidget(avatar, 0, Qt.AlignmentFlag.AlignVCenter)
 
         operator = QVBoxLayout()
-        operator.setSpacing(1)
+        operator.setSpacing(0)
+        operator.addStretch(1)
         operator_name = self._label(self._session.operator_name, "mainOperatorName")
-        operator_name.setAlignment(Qt.AlignmentFlag.AlignRight)
         operator.addWidget(operator_name)
         authentication = _AUTHENTICATION_LABELS[self._session.authentication_method]
         operator_detail = self._label(
             f"Operador #{self._session.operator_id} · {authentication}",
             "mainOperatorDetail",
         )
-        operator_detail.setAlignment(Qt.AlignmentFlag.AlignRight)
         operator.addWidget(operator_detail)
+        operator.addStretch(1)
         layout.addLayout(operator)
         return header
+
+    def _set_monitoring_layout(self, monitoring: bool) -> None:
+        """Give the cameras the whole workspace while an operation is active."""
+
+        self._header.setVisible(not monitoring)
+        self._sidebar.set_compact(monitoring)
 
     @Slot(str)
     def _handle_route_request(self, route: str) -> None:
@@ -155,6 +181,7 @@ class MainWindow(QMainWindow):
         self._page_stack.setCurrentWidget(self._operations_page)
         self._page_title.setText("Trabalhos")
         self._page_context.setText("Ambiente do operador")
+        self._set_monitoring_layout(False)
 
     @Slot(object)
     def show_safety_verification(self, value: object) -> None:
@@ -170,6 +197,7 @@ class MainWindow(QMainWindow):
         self._page_stack.setCurrentWidget(self._safety_verification_page)
         self._page_title.setText("Verificação de segurança")
         self._page_context.setText("Preparação para liberação")
+        self._set_monitoring_layout(False)
         self._safety_verification_page.activate()
 
     def show_active_operation(
@@ -187,6 +215,7 @@ class MainWindow(QMainWindow):
         self._page_stack.setCurrentWidget(self._active_operation_page)
         self._page_title.setText("Operação ativa")
         self._page_context.setText(operation.name)
+        self._set_monitoring_layout(True)
         self._active_operation_page.activate_monitoring()
 
     def close_active_operation(self) -> None:
@@ -196,6 +225,7 @@ class MainWindow(QMainWindow):
         self._page_stack.setCurrentWidget(self._operations_page)
         self._page_title.setText("Trabalhos")
         self._page_context.setText("Ambiente do operador")
+        self._set_monitoring_layout(False)
 
     @staticmethod
     def _label(text: str, object_name: str) -> QLabel:

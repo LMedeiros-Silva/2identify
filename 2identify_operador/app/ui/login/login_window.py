@@ -153,7 +153,13 @@ class LoginWindow(QMainWindow):
         self._stack.addWidget(self._face_panel)
         self._stack.addWidget(self._credential_panel)
         self._stack.setCurrentWidget(self._face_panel)
-        outer_layout.addWidget(self._stack, 0, Qt.AlignmentFlag.AlignHCenter)
+        # Centered by stretches, not by alignment: an aligned widget is capped at
+        # its size hint, which squeezed the Face ID status under the camera.
+        centered = QHBoxLayout()
+        centered.addStretch(1)
+        centered.addWidget(self._stack)
+        centered.addStretch(1)
+        outer_layout.addLayout(centered)
         outer_layout.addStretch(1)
 
         footer = self._label(

@@ -1,5 +1,5 @@
 QFrame#mainSidebar {
-  background-color: {{nav_900}};
+  background-color: {{nav_950}};
   border: none;
   border-right: 1px solid {{nav_700}};
 }
@@ -56,7 +56,7 @@ QPushButton#sidebarLogoutButton:hover {
 
 QPushButton#sidebarNavigationButton[selected="true"] {
   color: {{surface_1}};
-  background-color: {{brand_600}};
+  background-color: {{nav_700}};
   border-left: 3px solid {{brand_400}};
   font-weight: 700;
 }
@@ -79,4 +79,10 @@ QFrame#sidebarSeparator {
 QLabel#sidebarVersion {
   color: {{nav_muted}};
   font-size: {{font_label}};
+}
+
+QFrame#mainSidebar[compact="true"] QPushButton#sidebarNavigationButton,
+QFrame#mainSidebar[compact="true"] QPushButton#sidebarLogoutButton {
+  padding: 0;
+  text-align: center;
 }

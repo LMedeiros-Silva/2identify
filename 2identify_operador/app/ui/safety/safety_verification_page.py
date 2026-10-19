@@ -393,10 +393,10 @@ class SafetyVerificationPage(QWidget):
                 self._set_ppe_state(requirement.ppe_id, "SEM EVIDÊNCIA", "unmapped")
                 continue
             labels = {
-                PpeRequirementSafetyState.COLLECTING: ("COLETANDO", "collecting"),
+                PpeRequirementSafetyState.COLLECTING: ("AGUARDANDO EVIDÊNCIA", "collecting"),
                 PpeRequirementSafetyState.CONFIRMED: ("CONFIRMADO", "confirmed"),
                 PpeRequirementSafetyState.ABSENT: ("AUSENTE", "absent"),
-                PpeRequirementSafetyState.UNSTABLE: ("INSTÁVEL", "unstable"),
+                PpeRequirementSafetyState.UNSTABLE: ("INCONCLUSIVO", "unstable"),
                 PpeRequirementSafetyState.UNMAPPED: ("SEM MAPEAMENTO", "unmapped"),
             }
             text, state = labels[assessment.state]
@@ -478,39 +478,41 @@ class SafetyVerificationPage(QWidget):
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 22, 32, 26)
+        layout.setContentsMargins(20, 14, 20, 16)
         layout.setSpacing(0)
 
+        top = QHBoxLayout()
+        top.setSpacing(14)
         back_button = QPushButton("VOLTAR ÀS OPERAÇÕES")
         back_button.setObjectName("safetyBackButton")
         back_button.setCursor(Qt.CursorShape.PointingHandCursor)
         back_button.setAccessibleName("Voltar para a lista de operações")
         back_button.clicked.connect(self.back_requested)
-        layout.addWidget(back_button, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addSpacing(17)
-
-        layout.addWidget(self._label("SEGURANÇA OPERACIONAL", "safetyEyebrow"))
-        layout.addSpacing(5)
-        layout.addWidget(self._label("Verificação de segurança", "safetyTitle"))
-        layout.addSpacing(6)
+        top.addWidget(back_button)
+        heading = QVBoxLayout()
+        heading.setSpacing(1)
+        heading.addWidget(self._label("SEGURANÇA OPERACIONAL", "safetyEyebrow"))
         description = self._label(
-            "Confirme o contexto antes da futura captura e análise dos EPIs.",
+            "Posicione-se diante da câmera: a operação é liberada quando todos os EPIs "
+            "obrigatórios forem confirmados pela IA.",
             "safetyDescription",
         )
         description.setWordWrap(True)
-        layout.addWidget(description)
-        layout.addSpacing(20)
+        heading.addWidget(description)
+        top.addLayout(heading, 1)
+        layout.addLayout(top)
+        layout.addSpacing(12)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setObjectName("safetySplitter")
         splitter.setChildrenCollapsible(False)
         splitter.addWidget(self._build_camera_panel())
         splitter.addWidget(self._build_context_panel())
-        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(0, 5)
         splitter.setStretchFactor(1, 2)
-        splitter.setSizes([650, 430])
+        splitter.setSizes([780, 360])
         layout.addWidget(splitter, 1)
-        layout.addSpacing(16)
+        layout.addSpacing(12)
         layout.addWidget(self._build_release_banner())
 
     def _build_camera_panel(self) -> QFrame:

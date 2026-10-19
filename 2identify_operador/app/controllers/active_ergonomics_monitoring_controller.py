@@ -99,6 +99,8 @@ class ActiveErgonomicsMonitoringController(QObject):
                 round(3_000 / settings.pose_inference_fps),
             ),
         )
+        # Presentation only: lets the page say whether fall detection runs here.
+        self._page.configure_fall_detection(enabled=self._fall_detection_enabled)
         self._worker: PoseInferenceWorker | None = None
         self._model_ready = False
         self._restart_after_finish = False
