@@ -15,6 +15,7 @@ class SafetyViolationType(StrEnum):
     PERSON_IN_RISK_AREA = "person_in_risk_area"
     MONITORING_INTERRUPTED = "monitoring_interrupted"
     ERGONOMIC_RISK = "ergonomic_risk"
+    FALL_DETECTED = "fall_detected"
 
 
 class SafetyAlertSeverity(StrEnum):

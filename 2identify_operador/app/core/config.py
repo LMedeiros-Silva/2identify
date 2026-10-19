@@ -94,6 +94,14 @@ class AppSettings(BaseSettings):
         float,
         Field(gt=0, lt=180),
     ] = 90.0
+    fall_detection_enabled: bool = True
+    fall_lying_trunk_degrees: Annotated[float, Field(gt=0, le=90)] = 60.0
+    fall_upright_trunk_degrees: Annotated[float, Field(gt=0, lt=90)] = 40.0
+    fall_lying_aspect_ratio: Annotated[float, Field(gt=0, le=10)] = 1.2
+    fall_confirmation_seconds: Annotated[float, Field(gt=0, le=60)] = 2.0
+    fall_minimum_frames: Annotated[int, Field(ge=2, le=120)] = 3
+    fall_recovery_seconds: Annotated[float, Field(gt=0, le=120)] = 3.0
+    fall_evidence_gap_seconds: Annotated[float, Field(gt=0, le=30)] = 1.5
     alert_minimum_consecutive_observations: Annotated[
         int,
         Field(ge=1, le=120),
@@ -253,6 +261,10 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "ERGONOMICS_KNEE_CRITICAL_DEGREES deve ser menor que "
                 "ERGONOMICS_KNEE_WARNING_DEGREES"
+            )
+        if self.fall_upright_trunk_degrees >= self.fall_lying_trunk_degrees:
+            raise ValueError(
+                "FALL_UPRIGHT_TRUNK_DEGREES deve ser menor que FALL_LYING_TRUNK_DEGREES"
             )
         if self.alert_minimum_persistence_seconds >= self.alert_critical_after_seconds:
             raise ValueError(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Literal, cast
+from uuid import UUID
 
 from app.repositories.safety_alert_repository import SafetyAlertRepository, StoredAlert
 from app.schemas.operator_alerts import OperatorAlertCreate
@@ -24,6 +25,19 @@ class OperatorAlertService:
 
     def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
         return self._repository.active_conditions()
+
+    def resolve_session_conditions(
+        self,
+        *,
+        operator_id: int,
+        work_session_id: UUID,
+        session_ended: bool,
+    ) -> int:
+        return self._repository.resolve_session_conditions(
+            operator_id=operator_id,
+            work_session_id=work_session_id,
+            session_ended=session_ended,
+        )
 
     def ingest(
         self,
@@ -59,12 +73,13 @@ class OperatorAlertService:
             resolved_at=payload.resolved_at,
         )
         category = cast(
-            Literal["ppe", "ergonomics", "monitoring", "risk_area"],
+            Literal["ppe", "ergonomics", "monitoring", "risk_area", "safety"],
             {
                 "ergonomic_risk": "ergonomics",
                 "ppe_absent": "ppe",
                 "person_in_risk_area": "risk_area",
                 "monitoring_interrupted": "monitoring",
+                "fall_detected": "safety",
             }[payload.violation_type],
         )
         event = RealtimeEventEnvelope(

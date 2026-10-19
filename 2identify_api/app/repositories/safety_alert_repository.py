@@ -22,6 +22,7 @@ _REASON_BY_TYPE: dict[str, SafetyConditionReason] = {
     "ergonomic_risk": "ERGONOMIC_RISK",
     "person_in_risk_area": "PERSON_IN_RISK_AREA",
     "monitoring_interrupted": "MONITORING_INTERRUPTED",
+    "fall_detected": "FALL_DETECTED",
 }
 
 
@@ -44,17 +45,22 @@ class SafetyAlertRepository:
         self._session = session
 
     def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
-        """Read all non-closed alerts and release the transaction even on WebSockets."""
+        """Read physically active Operator conditions, whatever their Admin review status.
+
+        Closing an alert in the Admin does not hide a hazard that is still present, and
+        alerts without an Operator physical lifecycle never drive the device tower.
+        """
         alerts = PERSISTED_SAFETY_ALERTS
+        ingestion = SafetyAlertIngestion.__table__
         try:
             rows = self._session.execute(
                 select(alerts.c.id, alerts.c.nivel, alerts.c.criado_em, SAFETY_OCCURRENCES.c.tipo)
                 .select_from(
-                    alerts.outerjoin(
+                    ingestion.join(alerts, alerts.c.id == ingestion.c.alerta_id).outerjoin(
                         SAFETY_OCCURRENCES, SAFETY_OCCURRENCES.c.id == alerts.c.ocorrencia_id
                     )
                 )
-                .where(alerts.c.status != "encerrado")
+                .where(ingestion.c.condicao_resolvida_em.is_(None))
                 .order_by(alerts.c.id)
             ).all()
             return tuple(
@@ -124,11 +130,12 @@ class SafetyAlertRepository:
             .values(
                 ocorrencia_id=occurrence_id,
                 nivel="critico" if severity == "critical" else "aviso",
-                status="encerrado" if resolved_at is not None else "nao_lido",
+                # The Admin review starts unread even when the hazard already ended.
+                status="nao_lido",
                 observacao=summary,
                 criado_em=detected_at,
                 recebido_em=now,
-                encerrado_em=resolved_at,
+                encerrado_em=None,
                 encerrado_por=None,
             )
             .returning(PERSISTED_SAFETY_ALERTS.c.id)
@@ -144,6 +151,7 @@ class SafetyAlertRepository:
             violacao_tipo=violation_type,
             assunto_chave=subject_key,
             recebido_em=now,
+            condicao_resolvida_em=resolved_at,
         )
         self._session.add(ingestion)
         try:
@@ -161,14 +169,7 @@ class SafetyAlertRepository:
                 operator_id,
                 resolved_at,
             )
-        return StoredAlert(
-            event_id,
-            alert_id,
-            occurrence_id,
-            False,
-            "encerrado" if resolved_at is not None else "nao_lido",
-            severity,
-        )
+        return StoredAlert(event_id, alert_id, occurrence_id, False, "nao_lido", severity)
 
     def _existing(
         self,
@@ -195,17 +196,13 @@ class SafetyAlertRepository:
         if row is None:
             raise RuntimeError("registro idempotente aponta para alerta inexistente")
         changed = False
-        alert_status = row.status
         stored_severity = "critical" if row.nivel in {"critico", "critical"} else "warning"
-        if alert_status != "encerrado" and resolved_at is not None:
-            self._session.execute(
-                update(PERSISTED_SAFETY_ALERTS)
-                .where(PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id)
-                .values(status="encerrado", encerrado_em=resolved_at, encerrado_por=None)
-            )
-            alert_status = "encerrado"
+        physically_active = ingestion.condicao_resolvida_em is None
+        if physically_active and resolved_at is not None:
+            # Physical resolution only; the Admin review status is left untouched.
+            ingestion.condicao_resolvida_em = resolved_at
             changed = True
-        if row.status != "encerrado" and severity == "critical":
+        if physically_active and severity == "critical":
             result = self._session.execute(
                 update(PERSISTED_SAFETY_ALERTS)
                 .where(
@@ -224,6 +221,40 @@ class SafetyAlertRepository:
             alert_id=ingestion.alerta_id,
             occurrence_id=row.ocorrencia_id,
             duplicate=not changed,
-            status=alert_status,
+            status=row.status,
             severity=stored_severity,
         )
+
+    def resolve_session_conditions(
+        self,
+        *,
+        operator_id: int,
+        work_session_id: UUID,
+        session_ended: bool,
+    ) -> int:
+        """Physically resolve conditions no live Operator session can resolve anymore.
+
+        An ended WorkSession resolves its own conditions; an active one resolves those
+        left behind by earlier sessions of the same operator (e.g. after a crash).
+        """
+        ingestion = SafetyAlertIngestion.__table__
+        session_filter = (
+            ingestion.c.sessao_trabalho_id == work_session_id
+            if session_ended
+            else ingestion.c.sessao_trabalho_id != work_session_id
+        )
+        try:
+            result = self._session.execute(
+                update(ingestion)
+                .where(
+                    ingestion.c.operador_usuario_id == operator_id,
+                    ingestion.c.condicao_resolvida_em.is_(None),
+                    session_filter,
+                )
+                .values(condicao_resolvida_em=datetime.now(UTC))
+            )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        return result.rowcount or 0

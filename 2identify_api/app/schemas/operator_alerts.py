@@ -23,6 +23,7 @@ SafetyViolationName = Literal[
     "person_in_risk_area",
     "monitoring_interrupted",
     "ergonomic_risk",
+    "fall_detected",
 ]
 
 

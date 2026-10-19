@@ -82,3 +82,9 @@ class SafetyAlertIngestion(Base):
     violacao_tipo: Mapped[str] = mapped_column(String(50), nullable=False)
     assunto_chave: Mapped[str] = mapped_column(String(150), nullable=False)
     recebido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Physical lifecycle reported by the Operator, independent from the Admin
+    # review status kept in ``alertas.status`` (nao_lido → lido → encerrado).
+    condicao_resolvida_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

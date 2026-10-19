@@ -13,8 +13,14 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from app.controllers.active_camera_controller import ActiveCameraController
 from app.core.config import AppSettings
+from app.domain import SafetyViolation
 from app.domain.camera_source import CameraFrame, CameraStatus
-from app.engine import ErgonomicsEngine, RiskAreaPoseEngine
+from app.engine import (
+    ErgonomicsEngine,
+    FallDetectionEngine,
+    FallPostureClassifier,
+    RiskAreaPoseEngine,
+)
 from app.ui.active import ActiveOperationPage
 from app.vision.pose import PoseDetectionBatch, UltralyticsPoseEstimator
 from app.vision.types import Frame
@@ -70,6 +76,22 @@ class ActiveErgonomicsMonitoringController(QObject):
                 settings.pose_keypoint_confidence_threshold
             ),
         )
+        self._fall_detection_enabled = settings.fall_detection_enabled
+        self._fall_engine_factory = partial(
+            FallDetectionEngine,
+            FallPostureClassifier(
+                keypoint_confidence_threshold=settings.pose_keypoint_confidence_threshold,
+                lying_trunk_degrees=settings.fall_lying_trunk_degrees,
+                upright_trunk_degrees=settings.fall_upright_trunk_degrees,
+                lying_aspect_ratio=settings.fall_lying_aspect_ratio,
+            ),
+            confirmation_seconds=settings.fall_confirmation_seconds,
+            minimum_frames=settings.fall_minimum_frames,
+            recovery_seconds=settings.fall_recovery_seconds,
+            evidence_gap_seconds=settings.fall_evidence_gap_seconds,
+        )
+        # One temporal state per camera stream (None for a camera-less frame source).
+        self._fall_engines: dict[int | None, FallDetectionEngine] = {}
         self._page.configure_pose_overlay(
             minimum_keypoint_confidence=(settings.pose_keypoint_confidence_threshold),
             maximum_age_ms=max(
@@ -107,6 +129,7 @@ class ActiveErgonomicsMonitoringController(QObject):
         self._restart_after_finish = False
         self._model_ready = False
         self._camera_statuses.clear()
+        self._fall_engines.clear()
         self._page.show_ergonomics_loading()
         worker = self._worker_factory()
         worker.model_ready.connect(self._handle_model_ready)
@@ -136,6 +159,7 @@ class ActiveErgonomicsMonitoringController(QObject):
         self._restart_after_finish = False
         self._model_ready = False
         self._camera_statuses.clear()
+        self._fall_engines.clear()
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.request_stop()
@@ -144,6 +168,7 @@ class ActiveErgonomicsMonitoringController(QObject):
         self._restart_after_finish = False
         self._model_ready = False
         self._camera_statuses.clear()
+        self._fall_engines.clear()
         worker = self._worker
         if worker is None:
             return
@@ -187,6 +212,9 @@ class ActiveErgonomicsMonitoringController(QObject):
         self._page.update_monitoring_pose_overlay(value)
         self.pose_batch_ready.emit(value)
         assessment = self._engine.evaluate(value)
+        fall = self._observe_fall(value)
+        if fall is not None:
+            assessment = replace(assessment, violations=(*assessment.violations, fall))
         if value.camera_id is not None:
             assessment = replace(
                 assessment,
@@ -233,10 +261,22 @@ class ActiveErgonomicsMonitoringController(QObject):
         self._page.update_risk_area_assessment(risk_assessment)
         self.risk_area_assessment_ready.emit(risk_assessment)
 
+    def _observe_fall(self, batch: PoseDetectionBatch) -> SafetyViolation | None:
+        if not self._fall_detection_enabled:
+            return None
+        engine = self._fall_engines.get(batch.camera_id)
+        if engine is None:
+            engine = self._fall_engine_factory()
+            self._fall_engines[batch.camera_id] = engine
+        return engine.observe(batch.poses, batch.captured_at or datetime.now(UTC))
+
     @Slot(int, object)
     def handle_camera_status(self, camera_id: int, status: object) -> None:
         if isinstance(status, CameraStatus):
             self._camera_statuses[camera_id] = status
+            if status is not CameraStatus.ONLINE:
+                # Without frames there is no evidence; never keep an old fall state.
+                self._fall_engines.pop(camera_id, None)
 
     @Slot(str, bool)
     def _handle_failure(self, message: str, unavailable: bool) -> None:

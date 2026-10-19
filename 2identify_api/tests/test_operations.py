@@ -120,6 +120,16 @@ def operations_api() -> Iterator[tuple[TestClient, sessionmaker[Session]]]:
         Column("status", String(30)),
         Column("criado_em", DateTime(timezone=True)),
     )
+    # The tower only follows conditions with an Operator physical lifecycle.
+    Table(
+        "alertas_ingestao",
+        metadata,
+        Column("evento_id", String(36), primary_key=True),
+        Column("alerta_id", Integer),
+        Column("sessao_trabalho_id", String(36)),
+        Column("operador_usuario_id", Integer),
+        Column("condicao_resolvida_em", DateTime(timezone=True)),
+    )
     metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     with engine.begin() as connection:

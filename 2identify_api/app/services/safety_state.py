@@ -34,6 +34,7 @@ _REASON_PRIORITY: dict[SafetyConditionReason, int] = {
     "ERGONOMIC_RISK": 1,
     "PPE_MISSING": 2,
     "PERSON_IN_RISK_AREA": 3,
+    "FALL_DETECTED": 4,
 }
 
 

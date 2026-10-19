@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -65,6 +66,7 @@ async def update_operator_safety_state(
                 operation=operation,
                 snapshot=payload,
             )
+            await _resolve_orphaned_conditions(payload, principal, aggregator, safety_alerts)
         current = await aggregator.current()
         if current is None:
             current = (await aggregator.refresh(safety_alerts.active_conditions)).message
@@ -101,3 +103,30 @@ async def update_operator_safety_state(
             headers=_NO_STORE_HEADERS,
         ) from error
     return current
+
+
+async def _resolve_orphaned_conditions(
+    payload: OperatorSafetyStateSnapshot,
+    principal: OperatorPrincipal,
+    aggregator: SafetyStateAggregator,
+    safety_alerts: OperatorAlertService,
+) -> None:
+    """Clear physical conditions that no live session can resolve; never block the snapshot."""
+
+    try:
+        resolved = await run_in_threadpool(
+            partial(
+                safety_alerts.resolve_session_conditions,
+                operator_id=principal.account_id,
+                work_session_id=payload.work_session_id,
+                session_ended=payload.session_status == "ended",
+            )
+        )
+    except SQLAlchemyError as error:
+        logger.error(
+            "operator_orphaned_conditions_unavailable",
+            extra={"error_type": type(error).__name__},
+        )
+        return
+    if resolved:
+        await aggregator.refresh_after_commit(safety_alerts.active_conditions)

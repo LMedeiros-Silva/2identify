@@ -16,6 +16,7 @@ SafetyConditionReason = Literal[
     "PERSON_IN_RISK_AREA",
     "MONITORING_INTERRUPTED",
     "OTHER_SAFETY_ALERT",
+    "FALL_DETECTED",
 ]
 HardwareSafetyState = Literal["GREEN", "YELLOW", "RED"]
 PpeRequirementState = Literal[

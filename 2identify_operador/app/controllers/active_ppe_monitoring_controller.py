@@ -153,6 +153,7 @@ class ActivePpeMonitoringController(QObject):
         self._ppe_unknown_since: dict[int, datetime] = {}
         self._inconclusive_monitoring_armed = False
         self._inconclusive_ppe_violations: tuple[SafetyViolation, ...] = ()
+        self._fall_evidence_camera_id: int | None = None
         self._last_captured_by_camera: dict[int, datetime] = {}
         self._last_pose_by_camera: dict[int, datetime] = {}
         self._last_risk_by_camera: dict[int, datetime] = {}
@@ -519,17 +520,24 @@ class ActivePpeMonitoringController(QObject):
             return
         observed_at = datetime.now(UTC)
         self._inconclusive_ppe_violations = self._inconclusive_violations_for(observed_at)
-        session_violations = (*self._fused_ppe_violations, *self._inconclusive_ppe_violations)
+        pose_violations = (
+            *self._ergonomic_violations,
+            *(item for values in self._ergonomic_violations_by_camera.values() for item in values),
+        )
+        session_violations = (
+            *self._fused_ppe_violations,
+            *self._inconclusive_ppe_violations,
+            *self._fall_violations_for(pose_violations),
+        )
         if include_camera_conditions:
             violations = (
                 *self._ppe_violations,
-                *self._ergonomic_violations,
-                *self._risk_area_violations,
                 *(
                     item
-                    for values in self._ergonomic_violations_by_camera.values()
-                    for item in values
+                    for item in pose_violations
+                    if item.violation_type is not SafetyViolationType.FALL_DETECTED
                 ),
+                *self._risk_area_violations,
                 *(
                     item
                     for values in self._risk_area_violations_by_camera.values()
@@ -657,6 +665,7 @@ class ActivePpeMonitoringController(QObject):
         self._ppe_evidence_camera_by_ppe.clear()
         self._ergonomic_violations_by_camera.clear()
         self._risk_area_violations_by_camera.clear()
+        self._fall_evidence_camera_id = None
 
     def _refresh_fusion(self) -> bool:
         """Consolidate per-camera evidence; return whether the fused decision changed."""
@@ -713,6 +722,30 @@ class ActivePpeMonitoringController(QObject):
             )
         self._ppe_evidence_camera_by_ppe = evidence_cameras
         return tuple(violations)
+
+    def _fall_violations_for(
+        self, pose_violations: tuple[SafetyViolation, ...]
+    ) -> tuple[SafetyViolation, ...]:
+        """One session-wide fall condition, however many cameras confirm it."""
+
+        falls = [
+            item
+            for item in pose_violations
+            if item.violation_type is SafetyViolationType.FALL_DETECTED
+        ]
+        if not falls:
+            self._fall_evidence_camera_id = None
+            return ()
+        cameras = [item.camera_id for item in falls if item.camera_id is not None]
+        if self._fall_evidence_camera_id not in cameras:
+            self._fall_evidence_camera_id = cameras[0] if cameras else None
+        return (
+            replace(
+                falls[0],
+                camera_id=None,
+                evidence_camera_id=self._fall_evidence_camera_id,
+            ),
+        )
 
     def _inconclusive_tolerance(self) -> timedelta:
         configured = self._settings.ppe_inconclusive_tolerance_seconds

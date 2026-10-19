@@ -30,6 +30,7 @@ class SafetyStateReason(StrEnum):
     PERSON_IN_RISK_AREA = "PERSON_IN_RISK_AREA"
     MONITORING_INTERRUPTED = "MONITORING_INTERRUPTED"
     OTHER_SAFETY_ALERT = "OTHER_SAFETY_ALERT"
+    FALL_DETECTED = "FALL_DETECTED"
 
 
 class HardwareSafetyState(StrEnum):
@@ -67,6 +68,7 @@ _REASON_BY_VIOLATION = {
     SafetyViolationType.PPE_ABSENT: SafetyStateReason.PPE_MISSING,
     SafetyViolationType.ERGONOMIC_RISK: SafetyStateReason.ERGONOMIC_RISK,
     SafetyViolationType.PERSON_IN_RISK_AREA: SafetyStateReason.PERSON_IN_RISK_AREA,
+    SafetyViolationType.FALL_DETECTED: SafetyStateReason.FALL_DETECTED,
 }
 
 

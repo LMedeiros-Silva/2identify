@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.testclient import WebSocketDenialResponse
 
 from app.api.dependencies import get_current_operator
+from app.models import SafetyAlertIngestion
 from app.repositories.safety_alert_repository import SafetyAlertRepository
 from app.services import OperatorPrincipal
 from tests.test_admin_alerts import _alert_api, _token
@@ -61,7 +62,7 @@ def test_tower_tracks_persisted_priority_and_automatic_resolution() -> None:
         fixture.close()
 
 
-def test_device_boot_and_reconnect_load_existing_critical_and_admin_closure() -> None:
+def test_device_boot_and_reconnect_keep_physical_critical_after_admin_closure() -> None:
     fixture = _alert_api()
     application, _sessions, _alerts = next(fixture)
     application.state.settings = application.state.settings.model_copy(
@@ -84,9 +85,10 @@ def test_device_boot_and_reconnect_load_existing_critical_and_admin_closure() ->
                     client.patch("/admin/alerts/20/close", json={}, headers=headers).status_code
                     == 200
                 )
-                assert ws.receive_json()["state"] == "GREEN"
+                # Closing the review does not hide a hazard the Operator still reports.
+                assert current(client, application).state == "RED"
             with client.websocket_connect("/ws/devices/safety", headers=device_headers) as ws:
-                assert ws.receive_json()["state"] == "GREEN"
+                assert ws.receive_json()["state"] == "RED"
     finally:
         fixture.close()
 
@@ -172,7 +174,8 @@ def test_websocket_receives_escalation_resolution_and_application_heartbeat() ->
                     else:
                         pytest.fail("state transition not delivered to hardware")
             assert len({event.event_id for event in broker.published}) == 3
-            assert broker.published[-1].payload.status == "encerrado"
+            # Physical resolution leaves the alert pending Admin review.
+            assert broker.published[-1].payload.status == "nao_lido"
     finally:
         fixture.close()
 
@@ -294,8 +297,9 @@ def test_coalesced_critical_resolution_preserves_highest_persisted_severity() ->
             with sessions() as session:
                 assert session.execute(select(alerts.c.nivel, alerts.c.status)).one() == (
                     "critico",
-                    "encerrado",
+                    "nao_lido",
                 )
+                assert session.scalar(select(SafetyAlertIngestion.condicao_resolvida_em))
     finally:
         fixture.close()
 
