@@ -36,6 +36,7 @@ from app.services import (
     OperatorAuthorizationService,
     OperatorPrincipal,
     SafetyStateAggregator,
+    SessionLiveness,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,13 @@ def get_safety_state_aggregator(connection: HTTPConnection) -> SafetyStateAggreg
     if not isinstance(aggregator, SafetyStateAggregator):
         raise RuntimeError("agregador de segurança não disponível")
     return aggregator
+
+
+def get_session_liveness(connection: HTTPConnection) -> SessionLiveness:
+    liveness = getattr(connection.app.state, "session_liveness", None)
+    if not isinstance(liveness, SessionLiveness):
+        raise RuntimeError("registro de sessões do Operator não disponível")
+    return liveness
 
 
 def get_active_operation_registry(connection: HTTPConnection) -> ActiveOperationRegistry:
@@ -185,8 +193,9 @@ def get_operations_service(
 
 def get_operator_alert_service(
     session: Annotated[Session, Depends(get_db)],
+    liveness: Annotated[SessionLiveness, Depends(get_session_liveness)],
 ) -> OperatorAlertService:
-    return OperatorAlertService(SafetyAlertRepository(session))
+    return OperatorAlertService(SafetyAlertRepository(session), liveness=liveness)
 
 
 def get_operator_authorization_service(

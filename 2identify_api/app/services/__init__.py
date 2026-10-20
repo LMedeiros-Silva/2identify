@@ -24,6 +24,7 @@ from app.services.operator_authorization import (
     OperatorPrincipal,
 )
 from app.services.safety_state import SafetyStateAggregator, SafetyStateUpdateResult
+from app.services.session_liveness import SessionLiveness
 
 __all__ = [
     "AdminAlertsService",
@@ -45,4 +46,5 @@ __all__ = [
     "OperatorPrincipal",
     "SafetyStateAggregator",
     "SafetyStateUpdateResult",
+    "SessionLiveness",
 ]

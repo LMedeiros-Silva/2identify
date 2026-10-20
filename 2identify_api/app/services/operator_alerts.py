@@ -11,6 +11,7 @@ from app.repositories.safety_alert_repository import SafetyAlertRepository, Stor
 from app.schemas.operator_alerts import OperatorAlertCreate
 from app.schemas.realtime import AlertCreatedPayload, RealtimeEventEnvelope
 from app.schemas.safety_state import SafetyConditionSnapshot
+from app.services.session_liveness import SessionLiveness
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,11 +21,20 @@ class OperatorAlertResult:
 
 
 class OperatorAlertService:
-    def __init__(self, repository: SafetyAlertRepository) -> None:
+    def __init__(
+        self,
+        repository: SafetyAlertRepository,
+        *,
+        liveness: SessionLiveness | None = None,
+    ) -> None:
         self._repository = repository
+        self._liveness = liveness
 
     def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
-        return self._repository.active_conditions()
+        """Physical conditions of sessions still reporting; history never drives the tower."""
+
+        live = self._liveness.live_sessions() if self._liveness is not None else None
+        return self._repository.active_conditions(live_sessions=live)
 
     def resolve_session_conditions(
         self,
@@ -56,6 +66,9 @@ class OperatorAlertService:
                 exclude_none=False,
             ).encode("utf-8")
         ).hexdigest()
+        if self._liveness is not None:
+            # An alert proves the Operator session is alive (an ended one stays ended).
+            self._liveness.touch(operator_id, payload.work_session_id)
         stored = self._repository.store(
             event_id=payload.event_id,
             payload_hash=payload_hash,

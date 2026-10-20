@@ -64,11 +64,17 @@ def test_tower_tracks_persisted_priority_and_automatic_resolution() -> None:
 
 def test_device_boot_and_reconnect_keep_physical_critical_after_admin_closure() -> None:
     fixture = _alert_api()
-    application, _sessions, _alerts = next(fixture)
+    application, sessions, _alerts = next(fixture)
     application.state.settings = application.state.settings.model_copy(
         update={"safety_device_token": SecretStr(DEVICE_TOKEN)}
     )
     device_headers = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with sessions() as session:
+        seeded = session.scalars(select(SafetyAlertIngestion)).one()
+        # The seeded hazard belongs to an Operator session that is still reporting.
+        application.state.session_liveness.touch(
+            seeded.operador_usuario_id, seeded.sessao_trabalho_id
+        )
     try:
         with TestClient(application) as client:
             headers = {"Authorization": f"Bearer {_token(client)}"}
@@ -310,12 +316,12 @@ def test_tower_refresh_failure_does_not_lose_committed_admin_notification(monkey
     original = SafetyAlertRepository.active_conditions
     calls = 0
 
-    def intermittent_failure(repository):
+    def intermittent_failure(repository, **filters):
         nonlocal calls
         calls += 1
         if calls == 1:
             raise OperationalError("test select", {}, Exception("database unavailable"))
-        return original(repository)
+        return original(repository, **filters)
 
     monkeypatch.setattr(SafetyAlertRepository, "active_conditions", intermittent_failure)
     payload = _payload()

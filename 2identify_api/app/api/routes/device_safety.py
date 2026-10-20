@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
+from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +18,7 @@ from app.api.dependencies import (
     get_runtime_settings,
     get_safety_state_aggregator,
     get_safety_state_broker,
+    get_session_liveness,
 )
 from app.core.config import Settings
 from app.realtime import (
@@ -24,7 +27,7 @@ from app.realtime import (
     RealtimeEventBroker,
     WebSocketEventSink,
 )
-from app.services import OperatorAlertService, SafetyStateAggregator
+from app.services import OperatorAlertService, SafetyStateAggregator, SessionLiveness
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["device-safety"])
@@ -95,6 +98,7 @@ async def safety_device_stream(
     aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
     broker: Annotated[RealtimeEventBroker, Depends(get_safety_state_broker)],
     alerts: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
+    liveness: Annotated[SessionLiveness, Depends(get_session_liveness)],
 ) -> None:
     """Send the current state immediately and then only effective changes."""
 
@@ -154,6 +158,7 @@ async def safety_device_stream(
             aggregator,
             subscription_id,
             min(settings.realtime_heartbeat_interval_seconds, 10.0),
+            partial(_refresh_if_sessions_expired, liveness, aggregator, alerts),
         )
     except BrokerClosedError:
         await sink.close(
@@ -186,14 +191,34 @@ async def safety_device_stream(
             await broker.unsubscribe(subscription_id)
 
 
+async def _refresh_if_sessions_expired(
+    liveness: SessionLiveness,
+    aggregator: SafetyStateAggregator,
+    alerts: OperatorAlertService,
+) -> None:
+    """Re-read the tower only when an Operator session stopped reporting (no polling)."""
+
+    if liveness.prune_expired():
+        await aggregator.refresh(alerts.active_conditions)
+
+
 async def _heartbeat(
     broker: RealtimeEventBroker,
     aggregator: SafetyStateAggregator,
     subscription_id: UUID,
     interval: float,
+    before_send: Callable[[], Awaitable[None]],
 ) -> None:
     while True:
         await asyncio.sleep(interval)
+        try:
+            await before_send()
+        except Exception as error:
+            # A failed read already cleared the cached state; send_current reports it.
+            logger.warning(
+                "safety_device_liveness_refresh_failed",
+                extra={"error_type": type(error).__name__},
+            )
         if not await aggregator.send_current(subscription_id):
             await broker.disconnect(subscription_id, code=1011, reason="Estado indisponível")
             return
@@ -205,9 +230,12 @@ async def _run_connection(
     aggregator: SafetyStateAggregator,
     subscription_id: UUID,
     interval: float,
+    before_send: Callable[[], Awaitable[None]],
 ) -> None:
     tasks = {
-        asyncio.create_task(_heartbeat(broker, aggregator, subscription_id, interval)),
+        asyncio.create_task(
+            _heartbeat(broker, aggregator, subscription_id, interval, before_send)
+        ),
         asyncio.create_task(_receive_until_disconnect(websocket, broker, subscription_id)),
     }
     try:

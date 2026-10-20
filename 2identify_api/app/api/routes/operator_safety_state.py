@@ -16,6 +16,7 @@ from app.api.dependencies import (
     get_operations_service,
     get_operator_alert_service,
     get_safety_state_aggregator,
+    get_session_liveness,
 )
 from app.repositories.operation_repository import OperationConfigurationNotFoundError
 from app.schemas import OperatorSafetyStateSnapshot, SafetyStateMessage
@@ -26,6 +27,7 @@ from app.services import (
     OperatorAlertService,
     OperatorPrincipal,
     SafetyStateAggregator,
+    SessionLiveness,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,11 +53,20 @@ async def update_operator_safety_state(
     ],
     operations: Annotated[OperationsService, Depends(get_operations_service)],
     safety_alerts: Annotated[OperatorAlertService, Depends(get_operator_alert_service)],
+    liveness: Annotated[SessionLiveness, Depends(get_session_liveness)],
 ) -> SafetyStateMessage:
     """Replace one WorkSession snapshot and return the effective global state."""
 
+    # The snapshot is the Operator heartbeat: only reporting sessions drive the tower.
+    if payload.session_status == "ended":
+        liveness_changed = liveness.end(principal.account_id, payload.work_session_id)
+    else:
+        liveness_changed = liveness.touch(principal.account_id, payload.work_session_id)
     try:
         if payload.started_at is not None:
+            # Physical resolution never depends on the operation configuration: an ended
+            # session must clear its conditions even if the Admin changed the operation.
+            await _resolve_orphaned_conditions(payload, principal, aggregator, safety_alerts)
             operation = await run_in_threadpool(
                 operations.get_operation,
                 payload.operation_id,
@@ -66,7 +77,8 @@ async def update_operator_safety_state(
                 operation=operation,
                 snapshot=payload,
             )
-            await _resolve_orphaned_conditions(payload, principal, aggregator, safety_alerts)
+        if liveness_changed:
+            await aggregator.refresh_after_commit(safety_alerts.active_conditions)
         current = await aggregator.current()
         if current is None:
             current = (await aggregator.refresh(safety_alerts.active_conditions)).message

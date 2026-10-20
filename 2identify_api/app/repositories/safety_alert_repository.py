@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -44,17 +45,29 @@ class SafetyAlertRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def active_conditions(self) -> tuple[SafetyConditionSnapshot, ...]:
+    def active_conditions(
+        self,
+        live_sessions: Set[tuple[int, UUID]] | None = None,
+    ) -> tuple[SafetyConditionSnapshot, ...]:
         """Read physically active Operator conditions, whatever their Admin review status.
 
         Closing an alert in the Admin does not hide a hazard that is still present, and
-        alerts without an Operator physical lifecycle never drive the device tower.
+        alerts without an Operator physical lifecycle never drive the device tower. When
+        ``live_sessions`` is given, only conditions of those (operator, WorkSession) pairs
+        are returned: an unresolved row whose session stopped reporting is history.
         """
         alerts = PERSISTED_SAFETY_ALERTS
         ingestion = SafetyAlertIngestion.__table__
         try:
             rows = self._session.execute(
-                select(alerts.c.id, alerts.c.nivel, alerts.c.criado_em, SAFETY_OCCURRENCES.c.tipo)
+                select(
+                    alerts.c.id,
+                    alerts.c.nivel,
+                    alerts.c.criado_em,
+                    SAFETY_OCCURRENCES.c.tipo,
+                    ingestion.c.operador_usuario_id,
+                    ingestion.c.sessao_trabalho_id,
+                )
                 .select_from(
                     ingestion.join(alerts, alerts.c.id == ingestion.c.alerta_id).outerjoin(
                         SAFETY_OCCURRENCES, SAFETY_OCCURRENCES.c.id == alerts.c.ocorrencia_id
@@ -77,6 +90,8 @@ class SafetyAlertRepository:
                     ),
                 )
                 for row in rows
+                if live_sessions is None
+                or (row.operador_usuario_id, row.sessao_trabalho_id) in live_sessions
             )
         finally:
             self._session.rollback()

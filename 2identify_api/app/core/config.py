@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     realtime_max_connections: Annotated[int, Field(ge=1, le=10_000)] = 128
     realtime_max_connections_per_admin: Annotated[int, Field(ge=1, le=100)] = 4
     safety_device_max_connections: Annotated[int, Field(ge=1, le=100)] = 8
+    # An Operator WorkSession that sends no safety snapshot or alert for this long no
+    # longer drives the device tower (the Operator reports every ~2 s while monitoring).
+    safety_session_liveness_seconds: Annotated[float, Field(ge=5.0, le=600.0)] = 30.0
     safety_device_token: SecretStr | None = None
     realtime_sink_close_timeout_seconds: Annotated[
         float,

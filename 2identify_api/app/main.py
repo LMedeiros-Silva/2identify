@@ -23,7 +23,7 @@ from app.realtime import (
     RealtimeEventBroker,
     UnavailableAdminRealtimeAuthorizer,
 )
-from app.services import ActiveOperationRegistry, SafetyStateAggregator
+from app.services import ActiveOperationRegistry, SafetyStateAggregator, SessionLiveness
 
 logger = logging.getLogger(__name__)
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -79,6 +79,9 @@ def create_app(
         sink_close_timeout_seconds=resolved_settings.realtime_sink_close_timeout_seconds,
     )
     resolved_safety_state_aggregator = SafetyStateAggregator(resolved_safety_state_broker)
+    resolved_session_liveness = SessionLiveness(
+        resolved_settings.safety_session_liveness_seconds
+    )
     resolved_active_operation_registry = ActiveOperationRegistry(
         resolved_realtime_event_broker
     )
@@ -132,6 +135,7 @@ def create_app(
     application.state.realtime_event_broker = resolved_realtime_event_broker
     application.state.safety_state_broker = resolved_safety_state_broker
     application.state.safety_state_aggregator = resolved_safety_state_aggregator
+    application.state.session_liveness = resolved_session_liveness
     application.state.active_operation_registry = resolved_active_operation_registry
     application.state.admin_realtime_authorizer = resolved_admin_realtime_authorizer
     application.add_exception_handler(RequestValidationError, request_validation_error_handler)
