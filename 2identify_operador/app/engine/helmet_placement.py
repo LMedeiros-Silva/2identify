@@ -17,6 +17,17 @@ class HelmetPlacement(StrEnum):
     INDETERMINADO = "indeterminado"
 
 
+class HelmetPendingReason(StrEnum):
+    """Why the helmet is still INDETERMINADO, for the operator and the logs."""
+
+    SEM_POSE = "sem_pose"
+    SEM_REFERENCIA = "sem_referencia"
+    SEM_CAPACETE = "sem_capacete"
+    FORA_DA_CABECA = "fora_da_cabeca"
+    ESTABILIZANDO = "estabilizando"
+    OUTRA_PESSOA = "outra_pessoa"
+
+
 @dataclass(frozen=True, slots=True)
 class PersonHelmetPlacement:
     person_id: int
@@ -28,6 +39,7 @@ class HelmetPlacementResult:
     camera_id: int | None
     people: tuple[PersonHelmetPlacement, ...]
     overall: HelmetPlacement
+    pending_reason: HelmetPendingReason | None = None
 
 
 def _point(person: PersonPose, name: CocoKeypoint) -> tuple[float, float] | None:
@@ -141,7 +153,9 @@ class HelmetPlacementEngine:
         self, ppe: PpeDetectionBatch, pose: PoseDetectionBatch | None
     ) -> HelmetPlacementResult:
         camera_id = ppe.camera_id
-        unknown = HelmetPlacementResult(camera_id, (), HelmetPlacement.INDETERMINADO)
+        unknown = HelmetPlacementResult(
+            camera_id, (), HelmetPlacement.INDETERMINADO, HelmetPendingReason.SEM_POSE
+        )
         if (
             pose is None
             or pose.camera_id != camera_id
@@ -231,7 +245,27 @@ class HelmetPlacementEngine:
             overall = HelmetPlacement.NA_CABECA
         else:
             overall = HelmetPlacement.INDETERMINADO
-        return HelmetPlacementResult(camera_id, tuple(people), overall)
+        reason = None
+        if overall is HelmetPlacement.INDETERMINADO:
+            reason = self._pending_reason(ppe, observed, placements, states)
+        return HelmetPlacementResult(camera_id, tuple(people), overall, reason)
+
+    @staticmethod
+    def _pending_reason(
+        ppe: PpeDetectionBatch,
+        observed: list[tuple[_PersonTrack, PersonPose]],
+        placements: dict[int, HelmetPlacement],
+        states: list[HelmetPlacement],
+    ) -> HelmetPendingReason:
+        if not observed:
+            return HelmetPendingReason.SEM_REFERENCIA
+        if HelmetPlacement.NA_CABECA in states:
+            return HelmetPendingReason.OUTRA_PESSOA
+        if not any(item.class_name == "capacete" for item in ppe.detections):
+            return HelmetPendingReason.SEM_CAPACETE
+        if HelmetPlacement.NA_CABECA in placements.values():
+            return HelmetPendingReason.ESTABILIZANDO
+        return HelmetPendingReason.FORA_DA_CABECA
 
     def _stable(self, track: _PersonTrack) -> HelmetPlacement:
         history = track.history

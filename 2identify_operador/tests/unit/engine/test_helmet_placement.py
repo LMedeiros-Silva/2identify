@@ -196,3 +196,22 @@ def test_windowed_placement_tolerates_unknown_frames_but_not_a_hand() -> None:
     for _ in range(6):
         result = engine.observe(hand, pose).overall.name
     assert result == "NA_MAO"
+
+
+def test_indeterminate_helmet_reports_why() -> None:
+    module = import_module("app.engine.helmet_placement")
+    reason = module.HelmetPendingReason
+    engine = module.HelmetPlacementEngine(stability_frames=2)
+    head, pose = _batch(1, (_helmet((85, 25, 115, 60)),), (_person(),))
+    empty, _ = _batch(1, (), (_person(),))
+    far, _ = _batch(1, (_helmet((300, 300, 330, 330)),), (_person(),))
+    no_landmarks = _batch(1, (), (_person(incomplete=True),))[1]
+    two_people = _batch(1, (), (_person(), _person(offset=200)))[1]
+    assert engine.observe(head, None).pending_reason is reason.SEM_POSE
+    assert engine.observe(head, no_landmarks).pending_reason is reason.SEM_REFERENCIA
+    assert engine.observe(empty, pose).pending_reason is reason.SEM_CAPACETE
+    assert engine.observe(far, pose).pending_reason is reason.FORA_DA_CABECA
+    assert engine.observe(head, pose).pending_reason is reason.ESTABILIZANDO
+    assert engine.observe(head, pose).pending_reason is None
+    engine.observe(head, two_people)
+    assert engine.observe(head, two_people).pending_reason is reason.OUTRA_PESSOA

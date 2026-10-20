@@ -14,8 +14,20 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from app.controllers.safety_camera_controller import SafetyCameraController
 from app.core.config import AppSettings
 from app.domain import OperationStartAuthorization
-from app.engine import PpeSafetyAssessment, PpeSafetyEngine, PpeStabilityEngine
-from app.engine.helmet_placement import HelmetPlacementEngine
+from app.engine import (
+    PpeRequirementSafetyState,
+    PpeSafetyAssessment,
+    PpeSafetyEngine,
+    PpeSafetyStatus,
+    PpeStabilityEngine,
+    PpeStabilitySnapshot,
+)
+from app.engine.helmet_placement import (
+    HelmetPendingReason,
+    HelmetPlacement,
+    HelmetPlacementEngine,
+    HelmetPlacementResult,
+)
 from app.ui.safety import SafetyCameraState, SafetyVerificationPage
 from app.vision.pose import PoseDetectionBatch, UltralyticsPoseEstimator
 from app.vision.ppe import PpeDetectionBatch, UltralyticsPpeDetector
@@ -27,6 +39,15 @@ logger = logging.getLogger(__name__)
 
 PpeInferenceWorkerFactory = Callable[[], PpeInferenceWorker]
 PoseInferenceWorkerFactory = Callable[[], PoseInferenceWorker]
+
+_HELMET_REASON_TEXT = {
+    HelmetPendingReason.SEM_REFERENCIA: "rosto e ombros precisam aparecer na câmera",
+    HelmetPendingReason.SEM_CAPACETE: "capacete não detectado no quadro atual",
+    HelmetPendingReason.FORA_DA_CABECA: "capacete detectado fora da cabeça",
+    HelmetPendingReason.ESTABILIZANDO: "confirmando o capacete na cabeça",
+    HelmetPendingReason.OUTRA_PESSOA: "outra pessoa no quadro sem capacete confirmado",
+}
+_GATE_LOG_INTERVAL_SECONDS = 1.0
 
 
 class PpeInferenceController(QObject):
@@ -87,6 +108,9 @@ class PpeInferenceController(QObject):
             absent_ratio=settings.ppe_stability_absent_ratio,
         )
         self._safety_engine = PpeSafetyEngine()
+        self._minimum_samples = settings.ppe_stability_minimum_frames
+        self._present_ratio = settings.ppe_stability_present_ratio
+        self._last_gate_log: tuple[float, PpeSafetyStatus] | None = None
         self._assessment_max_age_seconds = settings.ppe_release_assessment_max_age_seconds
         self._model_classes: frozenset[str] = frozenset()
         self._latest_assessment: PpeSafetyAssessment | None = None
@@ -164,7 +188,6 @@ class PpeInferenceController(QObject):
             pose_worker.finished.connect(self._handle_pose_finished)
             self._pose_worker = pose_worker
             pose_worker.start()
-        self._page.set_helmet_pose_available(self._pose_worker is not None)
 
     @Slot(object)
     def submit_frame(self, value: object) -> None:
@@ -195,7 +218,6 @@ class PpeInferenceController(QObject):
         )
         self._latest_pose = None
         self._helmet_engine.reset()
-        self._page.set_helmet_pose_available(False)
 
     def _recent_pose(self) -> PoseDetectionBatch | None:
         entry = self._latest_pose
@@ -273,6 +295,8 @@ class PpeInferenceController(QObject):
             self._auto_start_suspended = False
             self._assessment_expiry_timer.stop()
             self._model_ready = True
+            self._last_gate_log = None
+            self._log_requirement_mapping(model_classes)
             self._page.show_inference_ready(value)
             return
         self._handle_inference_failure(
@@ -306,12 +330,140 @@ class PpeInferenceController(QObject):
             else:
                 self._assessment_expiry_timer.stop()
             self._page.update_ppe_safety(assessment)
+            reasons = self._pending_reasons(assessment, snapshot, helmet)
+            if assessment.status is PpeSafetyStatus.PENDING:
+                self._page.show_pending_reasons(reasons)
+            self._log_gate(assessment, snapshot, helmet, value)
             if (
                 assessment.can_start_operation
                 and self._auto_start_enabled
                 and not self._auto_start_suspended
             ):
                 self._authorize_start(operation.operation_id, automatic=True)
+
+    def _pending_reasons(
+        self,
+        assessment: PpeSafetyAssessment,
+        snapshot: PpeStabilitySnapshot,
+        helmet: HelmetPlacementResult,
+    ) -> tuple[str, ...]:
+        """Per-requirement explanation built from the same evidence as the gate."""
+
+        reasons = []
+        for item in assessment.requirements:
+            if item.state is PpeRequirementSafetyState.CONFIRMED:
+                continue
+            if item.state is PpeRequirementSafetyState.UNMAPPED:
+                detail = (
+                    f"o modelo não tem a classe '{item.detection_class}'"
+                    if item.detection_class is not None
+                    else "sem classe correspondente no modelo"
+                )
+            elif item.state is PpeRequirementSafetyState.ABSENT:
+                detail = (
+                    "capacete na mão"
+                    if helmet.overall is HelmetPlacement.NA_MAO
+                    and item.detection_class == "capacete"
+                    else "ausente"
+                )
+            elif item.detection_class == "capacete" and helmet.pending_reason is not None:
+                if helmet.pending_reason is HelmetPendingReason.SEM_POSE:
+                    detail = (
+                        "aguardando a estimativa de postura"
+                        if self._pose_worker is not None and self._pose_worker.isRunning()
+                        else "estimativa de postura indisponível, o capacete não pode ser "
+                        "confirmado na cabeça"
+                    )
+                else:
+                    detail = _HELMET_REASON_TEXT[helmet.pending_reason]
+            else:
+                decision = (
+                    snapshot.decision_for(item.detection_class)
+                    if item.detection_class is not None
+                    else None
+                )
+                if decision is None or snapshot.sample_count < self._minimum_samples:
+                    detail = (
+                        f"coletando amostras ({snapshot.sample_count}/{self._minimum_samples})"
+                    )
+                else:
+                    detail = (
+                        f"visto em {decision.observed_frames} de {decision.sample_count} "
+                        f"quadros (mínimo {self._present_ratio:.0%})"
+                    )
+            reasons.append(f"{item.name}: {detail}")
+        return tuple(reasons)
+
+    def _log_requirement_mapping(self, model_classes: frozenset[str]) -> None:
+        operation = self._page.operation
+        if operation is None:
+            return
+        logger.info(
+            "ppe_requirement_mapping",
+            extra={
+                "operation_id": operation.operation_id,
+                "model_classes": sorted(model_classes),
+                "requirements": [
+                    {
+                        "ppe_id": item.ppe_id,
+                        "name": item.name,
+                        "detection_class": item.detection_class,
+                        "in_model": item.detection_class in model_classes,
+                    }
+                    for item in operation.required_ppe
+                ],
+            },
+        )
+
+    def _log_gate(
+        self,
+        assessment: PpeSafetyAssessment,
+        snapshot: PpeStabilitySnapshot,
+        helmet: HelmetPlacementResult,
+        batch: PpeDetectionBatch,
+    ) -> None:
+        # One line per second (or on a status change) explains a blocked release.
+        now = monotonic()
+        last = self._last_gate_log
+        if (
+            last is not None
+            and last[1] is assessment.status
+            and now - last[0] < _GATE_LOG_INTERVAL_SECONDS
+        ):
+            return
+        self._last_gate_log = now, assessment.status
+        logger.info(
+            "ppe_gate_snapshot",
+            extra={
+                "operation_id": assessment.operation_id,
+                "status": assessment.status.value,
+                "samples": f"{snapshot.sample_count}/{snapshot.window_size}",
+                "frame_detections": sorted(
+                    f"{item.class_name}:{item.confidence:.2f}" for item in batch.detections
+                ),
+                "requirements": [
+                    {
+                        "name": item.name,
+                        "detection_class": item.detection_class,
+                        "state": item.state.value,
+                        "observed": (
+                            decision.observed_frames
+                            if item.detection_class is not None
+                            and (decision := snapshot.decision_for(item.detection_class))
+                            else None
+                        ),
+                    }
+                    for item in assessment.requirements
+                ],
+                "helmet": helmet.overall.value,
+                "helmet_reason": (
+                    helmet.pending_reason.value if helmet.pending_reason is not None else None
+                ),
+                "pose_age_seconds": (
+                    round(now - self._latest_pose[1], 2) if self._latest_pose else None
+                ),
+            },
+        )
 
     @Slot(int)
     def _handle_operation_start_requested(self, operation_id: int) -> None:
