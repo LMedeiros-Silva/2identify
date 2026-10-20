@@ -72,8 +72,13 @@ class PpeInferenceController(QObject):
         )
         self._pose_worker: PoseInferenceWorker | None = None
         self._latest_pose: tuple[PoseDetectionBatch, float] | None = None
+        # Same window and ratio as every other PPE, so one frame without evidence
+        # (UNKNOWN) never erases the helmet-on-head observations already collected.
         self._helmet_engine = HelmetPlacementEngine(
-            stability_frames=settings.ppe_stability_minimum_frames
+            stability_frames=settings.ppe_stability_minimum_frames,
+            window_frames=settings.ppe_stability_window_frames,
+            present_ratio=settings.ppe_stability_present_ratio,
+            maximum_missed_frames=settings.ppe_tracking_maximum_missed_batches,
         )
         self._stability_engine = PpeStabilityEngine(
             window_size=settings.ppe_stability_window_frames,
@@ -87,6 +92,9 @@ class PpeInferenceController(QObject):
         self._latest_assessment: PpeSafetyAssessment | None = None
         self._latest_assessment_at: float | None = None
         self._start_authorized = False
+        self._auto_start_enabled = settings.ppe_auto_start_enabled
+        self._auto_start_suspended = False
+        self._restart_pending = False
         self._assessment_expiry_timer = QTimer(self)
         self._assessment_expiry_timer.setSingleShot(True)
         self._assessment_expiry_timer.setInterval(round(self._assessment_max_age_seconds * 1_000))
@@ -109,13 +117,20 @@ class PpeInferenceController(QObject):
         """Load the model once per active verification route."""
 
         worker = self._worker
-        if worker is not None and worker.isRunning():
+        if worker is not None and worker.isRunning() and not worker.isInterruptionRequested():
             return
         pose_worker = self._pose_worker
         if pose_worker is not None and pose_worker.isRunning():
-            logger.info("safety_pose_previous_session_still_stopping")
+            pose_worker.request_stop()
+        if any(item is not None and item.isRunning() for item in (worker, pose_worker)):
+            # The previous verification is still finishing its last inference. Start
+            # again once it ends instead of dropping the request: the page would stay
+            # without a model, and without any message, for the rest of the visit.
+            self._restart_pending = True
+            logger.info("safety_inference_start_deferred_until_previous_stops")
             return
 
+        self._restart_pending = False
         self._dispose_finished_worker()
         self._dispose_finished_pose_worker()
         self._model_ready = False
@@ -123,6 +138,7 @@ class PpeInferenceController(QObject):
         self._latest_assessment = None
         self._latest_assessment_at = None
         self._start_authorized = False
+        self._auto_start_suspended = False
         self._assessment_expiry_timer.stop()
         self._stability_engine.reset()
         self._helmet_engine.reset()
@@ -145,9 +161,10 @@ class PpeInferenceController(QObject):
             pose_worker = self._pose_worker_factory()
             pose_worker.poses_ready.connect(self._handle_poses)
             pose_worker.inference_failed.connect(self._handle_pose_failure)
-            pose_worker.finished.connect(self._dispose_finished_pose_worker)
+            pose_worker.finished.connect(self._handle_pose_finished)
             self._pose_worker = pose_worker
             pose_worker.start()
+        self._page.set_helmet_pose_available(self._pose_worker is not None)
 
     @Slot(object)
     def submit_frame(self, value: object) -> None:
@@ -178,6 +195,7 @@ class PpeInferenceController(QObject):
         )
         self._latest_pose = None
         self._helmet_engine.reset()
+        self._page.set_helmet_pose_available(False)
 
     def _recent_pose(self) -> PoseDetectionBatch | None:
         entry = self._latest_pose
@@ -187,6 +205,7 @@ class PpeInferenceController(QObject):
 
     @Slot()
     def stop(self) -> None:
+        self._restart_pending = False
         self._model_ready = False
         self._model_classes = frozenset()
         self._latest_assessment = None
@@ -204,6 +223,7 @@ class PpeInferenceController(QObject):
             pose_worker.request_stop()
 
     def shutdown(self, wait_timeout_ms: int = 10_000) -> bool:
+        self._restart_pending = False
         self._model_ready = False
         self._model_classes = frozenset()
         self._latest_assessment = None
@@ -250,6 +270,7 @@ class PpeInferenceController(QObject):
             self._latest_assessment = None
             self._latest_assessment_at = None
             self._start_authorized = False
+            self._auto_start_suspended = False
             self._assessment_expiry_timer.stop()
             self._model_ready = True
             self._page.show_inference_ready(value)
@@ -285,9 +306,20 @@ class PpeInferenceController(QObject):
             else:
                 self._assessment_expiry_timer.stop()
             self._page.update_ppe_safety(assessment)
+            if (
+                assessment.can_start_operation
+                and self._auto_start_enabled
+                and not self._auto_start_suspended
+            ):
+                self._authorize_start(operation.operation_id, automatic=True)
 
     @Slot(int)
     def _handle_operation_start_requested(self, operation_id: int) -> None:
+        self._authorize_start(operation_id, automatic=False)
+
+    def _authorize_start(self, operation_id: int, *, automatic: bool) -> None:
+        """Single release gate for the button and the automatic start."""
+
         operation = self._page.operation
         assessment = self._latest_assessment
         assessment_at = self._latest_assessment_at
@@ -305,9 +337,10 @@ class PpeInferenceController(QObject):
         ):
             logger.warning(
                 "operation_start_blocked_by_ppe_gate",
-                extra={"operation_id": operation_id},
+                extra={"operation_id": operation_id, "automatic": automatic},
             )
-            self._page.show_operation_start_rejected()
+            if not automatic:
+                self._page.show_operation_start_rejected()
             return
         self._start_authorized = True
         authorization = OperationStartAuthorization(
@@ -322,10 +355,39 @@ class PpeInferenceController(QObject):
         self._assessment_expiry_timer.stop()
         logger.info(
             "operation_start_authorized_by_ppe_gate",
-            extra={"operation_id": operation_id},
+            extra={"operation_id": operation_id, "automatic": automatic},
         )
         self._page.show_operation_start_authorized()
         self.operation_start_authorized.emit(authorization)
+
+    @Slot()
+    def handle_operation_start_rejected(self) -> None:
+        """The WorkSession was not created: re-arm the gate with fresh evidence.
+
+        Without this the one-shot flag stayed set and every later detection was ignored,
+        leaving the page on "VERIFICAÇÃO EXPIRADA" for good. Automatic start stays
+        suspended until the next verification so a persistent failure is not retried in
+        a loop; the button is enabled again by the next compliant assessment.
+        """
+
+        self._start_authorized = False
+        self._auto_start_suspended = True
+        self._latest_assessment = None
+        self._latest_assessment_at = None
+        self._assessment_expiry_timer.stop()
+        operation = self._page.operation
+        self._stability_engine.reset(
+            tuple(
+                requirement.detection_class
+                for requirement in operation.required_ppe
+                if requirement.detection_class is not None
+                and requirement.detection_class in self._model_classes
+            )
+            if operation is not None
+            else ()
+        )
+        self._helmet_engine.reset()
+        logger.warning("operation_start_rejected_after_ppe_authorization")
 
     @Slot()
     def _expire_assessment(self) -> None:
@@ -357,6 +419,20 @@ class PpeInferenceController(QObject):
     def _handle_finished(self) -> None:
         logger.info("ppe_inference_attempt_finished")
         self._dispose_finished_worker()
+        self._resume_pending_start()
+
+    @Slot()
+    def _handle_pose_finished(self) -> None:
+        self._dispose_finished_pose_worker()
+        self._resume_pending_start()
+
+    def _resume_pending_start(self) -> None:
+        if not self._restart_pending:
+            return
+        if any(item is not None and item.isRunning() for item in (self._worker, self._pose_worker)):
+            return
+        self._restart_pending = False
+        self.start()
 
     def _dispose_finished_worker(self) -> None:
         worker = self._worker

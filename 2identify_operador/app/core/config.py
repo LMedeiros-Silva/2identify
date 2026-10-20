@@ -56,6 +56,8 @@ class AppSettings(BaseSettings):
         float,
         Field(gt=0, le=10),
     ] = 2.0
+    # Start the operation as soon as a fresh assessment confirms every required PPE.
+    ppe_auto_start_enabled: bool = True
     ppe_fusion_evidence_max_age_seconds: Annotated[float, Field(gt=0, le=10)] = 2.0
     ppe_fusion_conflict_resolution_seconds: Annotated[float, Field(gt=0, le=60)] = 2.0
     # None derives the tolerance from the stabilization window and the per-camera rate.

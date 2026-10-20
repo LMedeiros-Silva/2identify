@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from enum import StrEnum
 from math import hypot
 
@@ -92,17 +93,42 @@ class _PersonTrack:
     person_id: int
     head: tuple[float, float]
     scale: float
-    pending: HelmetPlacement = HelmetPlacement.INDETERMINADO
-    count: int = 0
+    history: deque[HelmetPlacement] = field(default_factory=deque)
+    missed: int = 0
 
 
 class HelmetPlacementEngine:
-    """Stabilize independent person observations within each camera generation."""
+    """Stabilize independent person observations within each camera generation.
 
-    def __init__(self, *, stability_frames: int = 3) -> None:
+    A placement is stable when at least ``stability_frames`` of the person's last
+    ``window_frames`` observations agree and they make up ``present_ratio`` of that
+    window. The defaults keep the strict form (N consecutive observations). A frame
+    without helmet evidence is UNKNOWN: it counts against the ratio but does not erase
+    the observations already collected, and a person whose landmarks drop out for up
+    to ``maximum_missed_frames`` frames keeps that history.
+    """
+
+    def __init__(
+        self,
+        *,
+        stability_frames: int = 3,
+        window_frames: int | None = None,
+        present_ratio: float = 1.0,
+        maximum_missed_frames: int = 0,
+    ) -> None:
         if stability_frames < 1:
             raise ValueError("stability_frames deve ser positivo")
+        window = stability_frames if window_frames is None else window_frames
+        if window < stability_frames:
+            raise ValueError("window_frames deve ser maior ou igual a stability_frames")
+        if not 0.0 < present_ratio <= 1.0:
+            raise ValueError("present_ratio deve estar entre 0 e 1")
+        if maximum_missed_frames < 0:
+            raise ValueError("maximum_missed_frames não pode ser negativo")
         self._stability_frames = stability_frames
+        self._window_frames = window
+        self._present_ratio = present_ratio
+        self._maximum_missed_frames = maximum_missed_frames
         self._tracks: dict[int | None, list[_PersonTrack]] = {}
         self._generations: dict[int | None, int] = {}
         self._next_id = 1
@@ -154,11 +180,20 @@ class HelmetPlacementEngine:
                 track = nearest
                 available.remove(track)
             else:
-                track = _PersonTrack(self._next_id, head, scale)
+                track = _PersonTrack(
+                    self._next_id, head, scale, deque(maxlen=self._window_frames)
+                )
                 self._next_id += 1
-            track.head, track.scale = head, scale
+            track.head, track.scale, track.missed = head, scale, 0
             observed.append((track, person))
-        self._tracks[camera_id] = [track for track, _ in observed]
+        # Landmarks of a known person may drop out for a few frames; keep the history.
+        missed = []
+        for track in available:
+            track.missed += 1
+            if track.missed <= self._maximum_missed_frames:
+                track.history.append(HelmetPlacement.INDETERMINADO)
+                missed.append(track)
+        self._tracks[camera_id] = [track for track, _ in observed] + missed
 
         # A helmet is assigned only when one person's geometry wins clearly.
         placements = {track.person_id: HelmetPlacement.INDETERMINADO for track, _ in observed}
@@ -182,19 +217,13 @@ class HelmetPlacementEngine:
 
         people = []
         for track, _ in observed:
-            placement = placements[track.person_id]
-            if placement is HelmetPlacement.INDETERMINADO:
-                track.pending, track.count = placement, 0
-            elif track.pending is placement:
-                track.count += 1
-            else:
-                track.pending, track.count = placement, 1
-            stable = (
-                placement
-                if track.count >= self._stability_frames
-                else HelmetPlacement.INDETERMINADO
-            )
-            people.append(PersonHelmetPlacement(track.person_id, stable))
+            track.history.append(placements[track.person_id])
+            people.append(PersonHelmetPlacement(track.person_id, self._stable(track)))
+        # A person not seen in this frame cannot confirm anything right now.
+        people.extend(
+            PersonHelmetPlacement(track.person_id, HelmetPlacement.INDETERMINADO)
+            for track in missed
+        )
         states = [person.placement for person in people]
         if HelmetPlacement.NA_MAO in states:
             overall = HelmetPlacement.NA_MAO
@@ -203,3 +232,12 @@ class HelmetPlacementEngine:
         else:
             overall = HelmetPlacement.INDETERMINADO
         return HelmetPlacementResult(camera_id, tuple(people), overall)
+
+    def _stable(self, track: _PersonTrack) -> HelmetPlacement:
+        history = track.history
+        # NA_MAO is checked first so a helmet held in the hand is never read as worn.
+        for placement in (HelmetPlacement.NA_MAO, HelmetPlacement.NA_CABECA):
+            count = sum(item is placement for item in history)
+            if count >= self._stability_frames and count / len(history) >= self._present_ratio:
+                return placement
+        return HelmetPlacement.INDETERMINADO

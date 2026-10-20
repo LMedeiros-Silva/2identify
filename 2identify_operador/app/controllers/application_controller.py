@@ -568,7 +568,7 @@ class ApplicationController(QObject):
                 "operation_start_authorization_context_mismatch",
                 extra={"operation_id": value.operation_id},
             )
-            main_window.safety_verification_page.show_operation_start_rejected()
+            self._reject_operation_start()
             return
         try:
             work_session = self._work_session_service.start(
@@ -592,7 +592,7 @@ class ApplicationController(QObject):
             )
             if not camera_released or not model_released:
                 self._work_session_service.interrupt_active()
-                main_window.safety_verification_page.show_operation_start_rejected()
+                self._reject_operation_start()
                 return
             main_window.show_active_operation(
                 work_session, operation, main_window.safety_verification_page.selected_cameras
@@ -602,10 +602,18 @@ class ApplicationController(QObject):
                 "local_work_session_start_rejected",
                 extra={"operation_id": value.operation_id, "reason": str(error)},
             )
-            main_window.safety_verification_page.show_operation_start_rejected()
+            self._reject_operation_start()
         except Exception:
             self._work_session_service.interrupt_active()
             raise
+
+    def _reject_operation_start(self) -> None:
+        # Re-arm the PPE gate too: a one-shot authorization left set would make it
+        # ignore every later detection and keep the page blocked.
+        if self._ppe_inference_controller is not None:
+            self._ppe_inference_controller.handle_operation_start_rejected()
+        if self._main_window is not None:
+            self._main_window.safety_verification_page.show_operation_start_rejected()
 
     @Slot(str)
     def handle_work_session_finish_requested(self, session_id: str) -> None:

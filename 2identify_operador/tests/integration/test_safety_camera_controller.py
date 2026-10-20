@@ -189,8 +189,9 @@ def test_camera_and_ppe_controllers_authorize_only_stable_confirmation(qtbot) ->
     qtbot.addWidget(page)
     camera = CameraStub()
     camera_controller = _controller(page, camera, analysis_fps=15)
+    # Manual path: the button stays the gate when automatic start is turned off.
     inference_controller = PpeInferenceController(
-        settings=AppSettings(_env_file=None),
+        settings=AppSettings(_env_file=None, ppe_auto_start_enabled=False),
         page=page,
         camera_controller=camera_controller,
         worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
@@ -247,6 +248,7 @@ def test_compliant_release_gate_expires_when_analysis_stops(qtbot) -> None:
         settings=AppSettings(
             _env_file=None,
             ppe_release_assessment_max_age_seconds=0.15,
+            ppe_auto_start_enabled=False,
         ),
         page=page,
         camera_controller=camera_controller,
@@ -268,3 +270,38 @@ def test_compliant_release_gate_expires_when_analysis_stops(qtbot) -> None:
     page.deactivate()
     inference_controller.shutdown()
     camera_controller.shutdown()
+
+
+def test_compliant_verification_starts_automatically_and_releases_devices(qtbot) -> None:
+    page = _page()
+    qtbot.addWidget(page)
+    camera = CameraStub()
+    camera_controller = _controller(page, camera, analysis_fps=15)
+    inference_controller = PpeInferenceController(
+        settings=AppSettings(_env_file=None),
+        page=page,
+        camera_controller=camera_controller,
+        worker_factory=lambda: PpeInferenceWorker(detector_factory=DetectorStub),
+        pose_worker_factory=lambda: PoseInferenceWorker(estimator_factory=HeadPoseEstimatorStub),
+    )
+    released = []
+
+    def start_work_session(authorization) -> None:
+        # Same order as ApplicationController: release the camera and the models.
+        released.append(
+            (authorization, camera_controller.shutdown(), inference_controller.shutdown())
+        )
+
+    inference_controller.operation_start_authorized.connect(start_work_session)
+
+    page.activate()
+
+    qtbot.waitUntil(lambda: bool(released), timeout=3_000)
+    authorization, camera_released, model_released = released[0]
+    assert isinstance(authorization, OperationStartAuthorization)
+    assert authorization.verified_ppe_ids == (1,)
+    assert camera_released and model_released
+    assert camera.closed
+    assert not inference_controller.is_running
+    qtbot.wait(100)
+    assert len(released) == 1

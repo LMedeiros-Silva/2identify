@@ -253,3 +253,49 @@ def test_logout_interrupts_an_active_local_work_session(qtbot) -> None:
     assert controller.work_session_service.last_finished.status is (
         WorkSessionStatus.INTERRUPTED
     )
+
+
+def test_rejected_work_session_start_rearms_the_ppe_gate(qtbot) -> None:
+    operation = Operation(
+        41,
+        "Inspeção de segurança",
+        required_ppe=(PpeRequirement(1, "Capacete", "capacete"),),
+    )
+    _login_window, _session_context, controller = _setup_controller(
+        qtbot,
+        OperationService(MockOperationProvider((operation,))),
+    )
+    controller.handle_face_authentication(
+        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+    )
+    main_window = controller.main_window
+    assert main_window is not None
+    qtbot.addWidget(main_window)
+    main_window.show_safety_verification(operation)
+
+    class PpeGateStub:
+        rejected = 0
+
+        def handle_operation_start_rejected(self) -> None:
+            self.rejected += 1
+
+    gate = PpeGateStub()
+    controller._ppe_inference_controller = gate
+    # The authorization does not cover the required helmet: WorkSession refuses it.
+    controller.handle_operation_start_authorized(
+        OperationStartAuthorization(
+            operation_id=41,
+            verified_ppe_ids=(9,),
+            sample_count=8,
+            window_size=8,
+            authorized_at=datetime.now(UTC),
+        )
+    )
+
+    assert controller.work_session_service.current is None
+    assert gate.rejected == 1
+    assert main_window.safety_verification_page.findChild(
+        QLabel, "safetyReleaseStatus"
+    ).text() == "VERIFICAÇÃO EXPIRADA"
+    controller._ppe_inference_controller = None
+    controller.handle_logout()

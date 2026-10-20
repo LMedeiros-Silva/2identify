@@ -224,6 +224,14 @@ evidência anterior. `PPE_RELEASE_ASSESSMENT_MAX_AGE_SECONDS` limita por quanto 
 conforme pode autorizar o início sem receber nova evidência; o padrão é dois segundos. As caixas
 visuais usam a mesma validade e desaparecem quando o resultado deixa de ser atual.
 
+Com `PPE_AUTO_START_ENABLED=true` (padrão), a operação começa sozinha assim que uma avaliação atual
+confirma todos os EPIs obrigatórios, passando pelas mesmas verificações do botão "Iniciar operação".
+EPI ausente, inconclusivo ou ainda em coleta nunca libera. O capacete só é confirmado quando a
+postura o coloca na cabeça; esse posicionamento usa a mesma janela e as mesmas proporções acima, de
+modo que um frame isolado sem detecção conta contra a proporção, mas não apaga a evidência já
+coletada. Se a criação da sessão falhar, o início automático fica suspenso até a próxima
+verificação, e o botão volta a ser o caminho para tentar de novo.
+
 Durante a operação ativa, `PPE_TRACKING_IOU_THRESHOLD` controla a associação espacial de caixas da
 mesma classe entre inferências. `PPE_TRACKING_MAXIMUM_MISSED_BATCHES` mantém uma identidade durante
 perdas curtas e `PPE_TRACKING_MINIMUM_CONFIRMATION_HITS` define quantas associações confirmam o

@@ -28,6 +28,7 @@ from app.engine import (
     PpeSafetyAssessment,
     PpeSafetyStatus,
 )
+from app.engine.helmet_placement import HelmetPlacement
 from app.ui.components import CameraFrameOverlay, CameraFrameView, CameraOverlayBox
 from app.vision.ppe import PpeDetectionBatch
 
@@ -71,6 +72,7 @@ class SafetyVerificationPage(QWidget):
         self._inference_state = PpeInferenceState.NOT_INITIALIZED
         self._model_classes: frozenset[str] = frozenset()
         self._detection_overlay_maximum_age_ms = 2_000
+        self._helmet_pose_available = True
         self._camera_active = False
         self._catalog_mode = False
         self._available_cameras: tuple[CameraSource, ...] = ()
@@ -124,6 +126,11 @@ class SafetyVerificationPage(QWidget):
         if maximum_age_ms <= 0:
             raise ValueError("maximum_age_ms deve ser maior que zero")
         self._detection_overlay_maximum_age_ms = maximum_age_ms
+
+    def set_helmet_pose_available(self, available: bool) -> None:
+        """Whether the pose estimate that places the helmet on the head is running."""
+
+        self._helmet_pose_available = available
 
     def set_operation(self, operation: Operation) -> None:
         """Prepare a fresh, non-started verification context."""
@@ -427,11 +434,27 @@ class SafetyVerificationPage(QWidget):
         else:
             self._release_title.setText("OPERAÇÃO NÃO LIBERADA")
             self._release_status.setText("AGUARDANDO ESTABILIDADE")
-            self._release_description.setText(
-                "A IA ainda está consolidando observações da janela temporal."
-            )
+            self._release_description.setText(self._pending_description(value))
             self._set_release_banner_state("pending")
             self._set_operation_start_enabled(False)
+
+    def _pending_description(self, value: PpeSafetyAssessment) -> str:
+        helmet_waiting = value.helmet_placement is HelmetPlacement.INDETERMINADO and any(
+            item.detection_class == "capacete"
+            and item.state is PpeRequirementSafetyState.COLLECTING
+            for item in value.requirements
+        )
+        if helmet_waiting and not self._helmet_pose_available:
+            return (
+                "A estimativa de postura está indisponível, então o capacete não pode "
+                "ser confirmado na cabeça. A operação permanece bloqueada."
+            )
+        if helmet_waiting:
+            return (
+                "Mantenha o rosto e os ombros visíveis para a IA confirmar o capacete "
+                "na cabeça."
+            )
+        return "A IA ainda está consolidando observações da janela temporal."
 
     @Slot(str, bool)
     def show_inference_failure(self, message: str, unavailable: bool) -> None:

@@ -172,3 +172,27 @@ def test_helmet_placement_controls_safety_gate(placement, status) -> None:
         helmet_placement=module.HelmetPlacement[placement],
     )
     assert assessment.status is status
+
+
+def test_windowed_placement_tolerates_unknown_frames_but_not_a_hand() -> None:
+    module = import_module("app.engine.helmet_placement")
+    engine = module.HelmetPlacementEngine(
+        stability_frames=5, window_frames=8, present_ratio=0.75, maximum_missed_frames=3
+    )
+    head, pose = _batch(1, (_helmet((85, 25, 115, 60)),), (_person(),))
+    empty, _ = _batch(1, (), (_person(),))
+    hand, _ = _batch(1, (_helmet((60, 165, 85, 190)),), (_person(),))
+    no_landmarks = _batch(1, (), (_person(incomplete=True),))[1]
+    # Four on the head, one frame without a box, one landmark dropout: history is kept.
+    for batch in (head, head, head, head, empty):
+        assert engine.observe(batch, pose).overall.name == "INDETERMINADO"
+    assert engine.observe(empty, no_landmarks).overall.name == "INDETERMINADO"
+    assert engine.observe(head, pose).overall.name == "INDETERMINADO"  # 5/7 < 75%
+    assert engine.observe(head, pose).overall.name == "NA_CABECA"  # 6/8
+    # Half of the frames without evidence is inconclusive, never confirmed.
+    for batch in (empty, head) * 4:
+        result = engine.observe(batch, pose).overall.name
+    assert result == "INDETERMINADO"
+    for _ in range(6):
+        result = engine.observe(hand, pose).overall.name
+    assert result == "NA_MAO"
