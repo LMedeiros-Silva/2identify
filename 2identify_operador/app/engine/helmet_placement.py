@@ -47,7 +47,7 @@ def _point(person: PersonPose, name: CocoKeypoint) -> tuple[float, float] | None
     return (point.x, point.y) if point.confidence >= 0.5 else None
 
 
-def _geometry(person: PersonPose) -> tuple[tuple[float, float], float] | None:
+def person_geometry(person: PersonPose) -> tuple[tuple[float, float], float] | None:
     left = _point(person, CocoKeypoint.LEFT_SHOULDER)
     right = _point(person, CocoKeypoint.RIGHT_SHOULDER)
     face = [
@@ -71,7 +71,7 @@ def _geometry(person: PersonPose) -> tuple[tuple[float, float], float] | None:
 
 
 def _candidate(detection: PpeDetection, person: PersonPose) -> tuple[HelmetPlacement, float] | None:
-    geometry = _geometry(person)
+    geometry = person_geometry(person)
     if geometry is None:
         return None
     (head_x, head_y), width = geometry
@@ -178,7 +178,7 @@ class HelmetPlacementEngine:
         observed: list[tuple[_PersonTrack, PersonPose]] = []
         available = tracks.copy()
         for person in pose.poses:
-            geometry = _geometry(person)
+            geometry = person_geometry(person)
             if geometry is None:
                 continue
             head, scale = geometry

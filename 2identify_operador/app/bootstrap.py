@@ -65,7 +65,7 @@ def run_startup_check(runtime: RuntimeContext) -> int:
             "pose_model_available": pose_model_available,
             "face_detector_available": detector_available,
             "face_recognizer_available": recognizer_available,
-            "face_templates_available": runtime.settings.face_auth_template_store_path.is_file(),
+            "face_station_configured": runtime.settings.operator_station_token is not None,
             "operations_mock_enabled": runtime.settings.operations_mock_enabled,
             "manuals_directory_available": runtime.settings.manuals_directory.is_dir(),
         },
@@ -116,12 +116,12 @@ def run_desktop(runtime: RuntimeContext, argv: Sequence[str]) -> int:
     _install_exception_hook()
 
     window = LoginWindow(settings=runtime.settings)
-    face_login_controller = FaceLoginController(runtime.settings, window)
     api_client = OperatorApiClient(
         base_url=runtime.settings.api_base_url,
         connect_timeout_seconds=runtime.settings.api_connect_timeout_seconds,
         read_timeout_seconds=runtime.settings.api_read_timeout_seconds,
     )
+    face_login_controller = FaceLoginController(runtime.settings, window, api_client)
     credential_login_controller = CredentialLoginController(AuthService(api_client), window)
     manual_service = ManualService(
         manuals_directory=runtime.settings.manuals_directory,

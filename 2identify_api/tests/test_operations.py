@@ -109,6 +109,7 @@ def operations_api() -> Iterator[tuple[TestClient, sessionmaker[Session]]]:
         "ocorrencias",
         metadata,
         Column("id", Integer, primary_key=True),
+        Column("funcionario_id", Integer),
         Column("tipo", String(100)),
     )
     Table(

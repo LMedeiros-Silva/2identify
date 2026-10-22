@@ -7,16 +7,12 @@ from app.ui.login import LoginWindow
 from app.ui.login.face_login_panel import FaceLoginPanel
 
 
-def test_controller_fails_safely_before_camera_when_no_operator_is_enrolled(
+def test_controller_fails_safely_before_camera_when_the_station_is_not_configured(
     qtbot,
-    tmp_path,
 ) -> None:
-    settings = AppSettings(
-        face_auth_allow_local_authorization=True,
-        face_auth_template_store_path=tmp_path / "missing-operators.json",
-    )
+    settings = AppSettings(_env_file=None)
     window = LoginWindow(settings)
-    controller = FaceLoginController(settings, window)
+    controller = FaceLoginController(settings, window, api_client=object())
     qtbot.addWidget(window)
     window.show()
     face_panel = window.findChild(FaceLoginPanel, "faceLoginPanel")
@@ -25,7 +21,7 @@ def test_controller_fails_safely_before_camera_when_no_operator_is_enrolled(
 
     qtbot.mouseClick(scan_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
-        lambda: "Nenhum operador possui biometria" in status.text(),
+        lambda: "OPERATOR_STATION_TOKEN" in status.text(),
         timeout=3_000,
     )
 

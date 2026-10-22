@@ -28,6 +28,12 @@ from app.engine.helmet_placement import (
     HelmetPlacementEngine,
     HelmetPlacementResult,
 )
+from app.engine.verification_subject import (
+    SubjectIssue,
+    VerificationSubject,
+    identify_subject,
+    subject_detections,
+)
 from app.ui.safety import SafetyCameraState, SafetyVerificationPage
 from app.vision.pose import PoseDetectionBatch, UltralyticsPoseEstimator
 from app.vision.ppe import PpeDetectionBatch, UltralyticsPpeDetector
@@ -113,6 +119,7 @@ class PpeInferenceController(QObject):
         self._last_gate_log: tuple[float, PpeSafetyStatus] | None = None
         self._assessment_max_age_seconds = settings.ppe_release_assessment_max_age_seconds
         self._model_classes: frozenset[str] = frozenset()
+        self._required_classes: tuple[str, ...] = ()
         self._latest_assessment: PpeSafetyAssessment | None = None
         self._latest_assessment_at: float | None = None
         self._start_authorized = False
@@ -177,11 +184,8 @@ class PpeInferenceController(QObject):
         logger.info("ppe_inference_attempt_started")
         worker.start()
         operation = self._page.operation
-        if (
-            self._pose_enabled
-            and operation is not None
-            and any(item.detection_class == "capacete" for item in operation.required_ppe)
-        ):
+        # Pose identifies the single person being released, whatever PPE is required.
+        if self._pose_enabled and operation is not None and operation.required_ppe:
             pose_worker = self._pose_worker_factory()
             pose_worker.poses_ready.connect(self._handle_poses)
             pose_worker.inference_failed.connect(self._handle_pose_failure)
@@ -288,6 +292,7 @@ class PpeInferenceController(QObject):
                 else ()
             )
             self._stability_engine.reset(required_classes)
+            self._required_classes = required_classes
             self._model_classes = model_classes
             self._latest_assessment = None
             self._latest_assessment_at = None
@@ -315,8 +320,21 @@ class PpeInferenceController(QObject):
             if operation is None:
                 return
             self._page.update_ppe_detection_overlay(value)
-            snapshot = self._stability_engine.observe(value.observed_classes)
-            helmet = self._helmet_engine.observe(value, self._recent_pose())
+            pose = self._recent_pose()
+            subject = identify_subject(value, pose)
+            evidence = subject_detections(value, subject)
+            if subject.identified:
+                snapshot = self._stability_engine.observe(evidence.observed_classes)
+                helmet = self._helmet_engine.observe(evidence, pose)
+            else:
+                # Evidence from nobody, from several people or from an unreliable skeleton
+                # is discarded: the window restarts with the one person being released.
+                self._stability_engine.reset(self._required_classes)
+                self._helmet_engine.reset()
+                snapshot = self._stability_engine.observe(())
+                # The empty frame only produces a COLLECTING snapshot; it is not kept.
+                self._stability_engine.reset(self._required_classes)
+                helmet = self._helmet_engine.observe(evidence, None)
             assessment = self._safety_engine.evaluate(
                 operation,
                 self._model_classes,
@@ -330,16 +348,36 @@ class PpeInferenceController(QObject):
             else:
                 self._assessment_expiry_timer.stop()
             self._page.update_ppe_safety(assessment)
-            reasons = self._pending_reasons(assessment, snapshot, helmet)
+            reasons = (
+                self._pending_reasons(assessment, snapshot, helmet)
+                if subject.identified
+                else (f"Pessoa: {self._subject_reason(subject)}",)
+            )
             if assessment.status is PpeSafetyStatus.PENDING:
                 self._page.show_pending_reasons(reasons)
-            self._log_gate(assessment, snapshot, helmet, value)
+            self._log_gate(assessment, snapshot, helmet, value, subject)
             if (
                 assessment.can_start_operation
                 and self._auto_start_enabled
                 and not self._auto_start_suspended
             ):
                 self._authorize_start(operation.operation_id, automatic=True)
+
+    def _subject_reason(self, subject: VerificationSubject) -> str:
+        if subject.issue is SubjectIssue.VARIAS_PESSOAS:
+            return f"{subject.people} pessoas na câmera, a verificação exige apenas o operador"
+        if subject.issue is SubjectIssue.NENHUMA_PESSOA:
+            return "nenhuma pessoa identificada na câmera"
+        if subject.issue is SubjectIssue.PESSOA_INCERTA:
+            return "sem referência confiável da pessoa (rosto e ombros visíveis)"
+        if not self._pose_enabled:
+            return (
+                "estimativa de postura desativada, não é possível confirmar que há uma "
+                "única pessoa"
+            )
+        if self._pose_worker is not None and self._pose_worker.isRunning():
+            return "aguardando a estimativa de postura para identificar a pessoa"
+        return "estimativa de postura indisponível, não é possível confirmar uma única pessoa"
 
     def _pending_reasons(
         self,
@@ -421,6 +459,7 @@ class PpeInferenceController(QObject):
         snapshot: PpeStabilitySnapshot,
         helmet: HelmetPlacementResult,
         batch: PpeDetectionBatch,
+        subject: VerificationSubject,
     ) -> None:
         # One line per second (or on a status change) explains a blocked release.
         now = monotonic()
@@ -455,6 +494,8 @@ class PpeInferenceController(QObject):
                     }
                     for item in assessment.requirements
                 ],
+                "subject": subject.issue.value if subject.issue else "uma_pessoa",
+                "people": subject.people,
                 "helmet": helmet.overall.value,
                 "helmet_reason": (
                     helmet.pending_reason.value if helmet.pending_reason is not None else None

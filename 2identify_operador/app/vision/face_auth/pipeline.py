@@ -1,10 +1,16 @@
-"""Pure facial-authentication decision pipeline."""
+"""Facial-authentication decision pipeline: live frames here, identity at the API."""
 
 from __future__ import annotations
 
-from app.domain.auth import OperatorIdentity
-from app.vision.face_auth.contracts import FaceDetector, FaceEncoder, FaceMatcher, LivenessVerifier
+from app.vision.face_auth.contracts import (
+    FaceDetector,
+    FaceEncoder,
+    FaceIdentityAuthority,
+    LivenessVerifier,
+)
+from app.vision.face_auth.errors import FaceNotRecognizedError
 from app.vision.face_auth.types import (
+    Embedding,
     FacePipelineDecision,
     FacePipelineStatus,
     Frame,
@@ -13,25 +19,30 @@ from app.vision.face_auth.types import (
 
 
 class FaceAuthenticationPipeline:
-    """Combine detection, liveness, encoding and stable template matching."""
+    """Detect one live face, encode consecutive frames and let the API identify them.
+
+    The station never decides who the person is: the API compares every probe with the
+    templates enrolled in the Admin and returns the employee session, or rejects.
+    """
 
     def __init__(
         self,
         detector: FaceDetector,
         encoder: FaceEncoder,
         liveness: LivenessVerifier,
-        matcher: FaceMatcher,
+        authority: FaceIdentityAuthority,
+        model_id: str,
         minimum_face_ratio: float,
         minimum_consecutive_matches: int,
     ) -> None:
         self._detector = detector
         self._encoder = encoder
         self._liveness = liveness
-        self._matcher = matcher
+        self._authority = authority
+        self._model_id = model_id
         self._minimum_face_ratio = minimum_face_ratio
         self._minimum_consecutive_matches = minimum_consecutive_matches
-        self._candidate_id: int | None = None
-        self._candidate_count = 0
+        self._probes: list[Embedding] = []
 
     def process(self, frame: Frame, timestamp: float) -> FacePipelineDecision:
         faces = self._detector.detect(frame)
@@ -73,37 +84,26 @@ class FaceAuthenticationPipeline:
                 liveness.message,
             )
 
-        embedding = self._encoder.encode(frame, face)
-        match = self._matcher.match(embedding)
-        if match is None:
-            self._reset_match_candidate()
+        self._probes.append(self._encoder.encode(frame, face))
+        if len(self._probes) < self._minimum_consecutive_matches:
+            return FacePipelineDecision(
+                FacePipelineStatus.MATCHING,
+                "Rosto capturado. Confirmando identidade...",
+            )
+
+        probes = tuple(self._probes)
+        self._reset_match_candidate()
+        try:
+            session = self._authority.authenticate(self._model_id, probes)
+        except FaceNotRecognizedError:
             return FacePipelineDecision(
                 FacePipelineStatus.NOT_RECOGNIZED,
                 "Rosto não reconhecido. Tente novamente ou use e-mail e senha.",
             )
-
-        if self._candidate_id == match.template.operator_id:
-            self._candidate_count += 1
-        else:
-            self._candidate_id = match.template.operator_id
-            self._candidate_count = 1
-
-        if self._candidate_count < self._minimum_consecutive_matches:
-            return FacePipelineDecision(
-                FacePipelineStatus.MATCHING,
-                "Identidade encontrada. Confirmando correspondência...",
-            )
-
-        identity = OperatorIdentity(
-            operator_id=match.template.operator_id,
-            name=match.template.name,
-            confidence=match.similarity,
-            profile_photo_reference=match.template.profile_photo_reference,
-        )
         return FacePipelineDecision(
             FacePipelineStatus.RECOGNIZED,
             "Identidade facial confirmada.",
-            identity=identity,
+            identity=session,
         )
 
     def reset(self) -> None:
@@ -111,6 +111,6 @@ class FaceAuthenticationPipeline:
         self._reset_match_candidate()
 
     def _reset_match_candidate(self) -> None:
-        self._candidate_id = None
-        self._candidate_count = 0
+        # Probes must come from consecutive valid frames of the same live face.
+        self._probes.clear()
 

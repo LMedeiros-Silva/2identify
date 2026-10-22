@@ -156,21 +156,15 @@ Uma resposta `200` válida deve seguir este contrato mínimo:
 Respostas `401` e `403` são tratadas como credenciais rejeitadas. Outros erros HTTP, falhas
 de rede e payloads inválidos não criam sessão. Senhas e tokens não são registrados em logs.
 
-## Cadastro facial local de desenvolvimento
+## Face ID pela API
 
-O comando requer pelo menos três imagens distintas, cada uma contendo exatamente um rosto:
-
-```powershell
-python -m app.tools.enroll_operator_face `
-  --operator-id 15 `
-  --name "João Silva" `
-  --image "C:\cadastro\joao-frente.jpg" `
-  --image "C:\cadastro\joao-esquerda.jpg" `
-  --image "C:\cadastro\joao-direita.jpg"
-```
-
-O cadastro é gravado em `var/face_auth`, pasta ignorada pelo Git. Trata-se apenas de uma ponte
-para desenvolvimento: os embeddings locais não são a persistência final do produto.
+O rosto é cadastrado no Admin (frontal, esquerda e direita). No Operator, o Face ID detecta
+um único rosto, exige a prova de vida e envia à API os embeddings de quadros consecutivos
+(`POST /auth/face`), autenticado pelo `OPERATOR_STATION_TOKEN` da estação. A API compara com
+os cadastros dos funcionários ativos e devolve a sessão (token) do funcionário reconhecido;
+o Operator nunca escolhe o funcionário nem abre sessão local sem token. O mesmo valor de
+`OPERATOR_STATION_TOKEN` deve estar no `.env` da API e do Operator. Embeddings e tokens não
+são registrados em logs.
 
 ## Testes e qualidade
 

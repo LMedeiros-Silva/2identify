@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Set
+from collections.abc import Hashable, Set
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import and_, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.security import SUBJECT_EMPLOYEE
 from app.models import (
     PERSISTED_SAFETY_ALERTS,
     SAFETY_OCCURRENCES,
@@ -25,6 +26,16 @@ _REASON_BY_TYPE: dict[str, SafetyConditionReason] = {
     "monitoring_interrupted": "MONITORING_INTERRUPTED",
     "fall_detected": "FALL_DETECTED",
 }
+
+
+def session_owner(account_id: int | None, employee_id: int | None) -> Hashable:
+    """Who opened a WorkSession: a password account id, or a Face ID employee.
+
+    Face ID sessions store no ``operador_usuario_id``; their employee is the
+    occurrence's ``funcionario_id``, so ids of the two tables never collide.
+    """
+
+    return account_id if account_id is not None else (SUBJECT_EMPLOYEE, employee_id)
 
 
 class AlertEventConflictError(RuntimeError):
@@ -47,7 +58,7 @@ class SafetyAlertRepository:
 
     def active_conditions(
         self,
-        live_sessions: Set[tuple[int, UUID]] | None = None,
+        live_sessions: Set[tuple[Hashable, UUID]] | None = None,
     ) -> tuple[SafetyConditionSnapshot, ...]:
         """Read physically active Operator conditions, whatever their Admin review status.
 
@@ -65,6 +76,7 @@ class SafetyAlertRepository:
                     alerts.c.nivel,
                     alerts.c.criado_em,
                     SAFETY_OCCURRENCES.c.tipo,
+                    SAFETY_OCCURRENCES.c.funcionario_id,
                     ingestion.c.operador_usuario_id,
                     ingestion.c.sessao_trabalho_id,
                 )
@@ -91,7 +103,11 @@ class SafetyAlertRepository:
                 )
                 for row in rows
                 if live_sessions is None
-                or (row.operador_usuario_id, row.sessao_trabalho_id) in live_sessions
+                or (
+                    session_owner(row.operador_usuario_id, row.funcionario_id),
+                    row.sessao_trabalho_id,
+                )
+                in live_sessions
             )
         finally:
             self._session.rollback()
@@ -103,7 +119,7 @@ class SafetyAlertRepository:
         payload_hash: str,
         legacy_payload_hash: str,
         work_session_id: UUID,
-        operator_id: int,
+        operator_id: int | None,
         operation_id: int,
         camera_id: int | None,
         risk_area_id: int | None,
@@ -113,7 +129,9 @@ class SafetyAlertRepository:
         severity: str,
         detected_at: datetime,
         resolved_at: datetime | None = None,
+        employee_id: int | None = None,
     ) -> StoredAlert:
+        owner = session_owner(operator_id, employee_id)
         existing = self._session.get(SafetyAlertIngestion, event_id)
         if existing is not None:
             return self._existing(
@@ -121,7 +139,7 @@ class SafetyAlertRepository:
                 payload_hash,
                 legacy_payload_hash,
                 severity,
-                operator_id,
+                owner,
                 resolved_at,
             )
 
@@ -129,7 +147,7 @@ class SafetyAlertRepository:
         occurrence_id = self._session.execute(
             insert(SAFETY_OCCURRENCES)
             .values(
-                funcionario_id=None,
+                funcionario_id=employee_id,
                 camera_id=camera_id,
                 tipo=violation_type,
                 descricao=summary,
@@ -181,7 +199,7 @@ class SafetyAlertRepository:
                 payload_hash,
                 legacy_payload_hash,
                 severity,
-                operator_id,
+                owner,
                 resolved_at,
             )
         return StoredAlert(event_id, alert_id, occurrence_id, False, "nao_lido", severity)
@@ -192,10 +210,10 @@ class SafetyAlertRepository:
         payload_hash: str,
         legacy_payload_hash: str,
         severity: str,
-        operator_id: int,
+        owner: Hashable,
         resolved_at: datetime | None,
     ) -> StoredAlert:
-        if ingestion.operador_usuario_id != operator_id:
+        if self._owner_of(ingestion) != owner:
             raise AlertEventConflictError("evento pertence a outra sessão de operador")
         if ingestion.payload_hash not in {payload_hash, legacy_payload_hash}:
             raise AlertEventConflictError("event_id já utilizado por outro payload")
@@ -240,10 +258,25 @@ class SafetyAlertRepository:
             severity=stored_severity,
         )
 
+    def _owner_of(self, ingestion: SafetyAlertIngestion) -> Hashable:
+        if ingestion.operador_usuario_id is not None:
+            return ingestion.operador_usuario_id
+        employee_id = self._session.scalar(
+            select(SAFETY_OCCURRENCES.c.funcionario_id)
+            .select_from(
+                PERSISTED_SAFETY_ALERTS.join(
+                    SAFETY_OCCURRENCES,
+                    SAFETY_OCCURRENCES.c.id == PERSISTED_SAFETY_ALERTS.c.ocorrencia_id,
+                )
+            )
+            .where(PERSISTED_SAFETY_ALERTS.c.id == ingestion.alerta_id)
+        )
+        return session_owner(None, employee_id)
+
     def resolve_session_conditions(
         self,
         *,
-        operator_id: int,
+        owner: Hashable,
         work_session_id: UUID,
         session_ended: bool,
     ) -> int:
@@ -253,6 +286,23 @@ class SafetyAlertRepository:
         left behind by earlier sessions of the same operator (e.g. after a crash).
         """
         ingestion = SafetyAlertIngestion.__table__
+        if isinstance(owner, tuple):
+            employee_alerts = (
+                select(PERSISTED_SAFETY_ALERTS.c.id)
+                .select_from(
+                    PERSISTED_SAFETY_ALERTS.join(
+                        SAFETY_OCCURRENCES,
+                        SAFETY_OCCURRENCES.c.id == PERSISTED_SAFETY_ALERTS.c.ocorrencia_id,
+                    )
+                )
+                .where(SAFETY_OCCURRENCES.c.funcionario_id == owner[1])
+            )
+            owner_filter = and_(
+                ingestion.c.operador_usuario_id.is_(None),
+                ingestion.c.alerta_id.in_(employee_alerts),
+            )
+        else:
+            owner_filter = ingestion.c.operador_usuario_id == owner
         session_filter = (
             ingestion.c.sessao_trabalho_id == work_session_id
             if session_ended
@@ -262,7 +312,7 @@ class SafetyAlertRepository:
             result = self._session.execute(
                 update(ingestion)
                 .where(
-                    ingestion.c.operador_usuario_id == operator_id,
+                    owner_filter,
                     ingestion.c.condicao_resolvida_em.is_(None),
                     session_filter,
                 )

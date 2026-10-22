@@ -25,7 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.domain.auth import OperatorIdentity
+from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
+
+RecognizedIdentity = OperatorIdentity | CredentialAuthenticationResult
 
 
 class FaceLoginState(StrEnum):
@@ -162,7 +164,7 @@ class ProfileAvatar(QWidget):
     def has_portrait(self) -> bool:
         return self._portrait is not None and not self._portrait.isNull()
 
-    def set_profile(self, identity: OperatorIdentity, portrait: QImage | None) -> None:
+    def set_profile(self, identity: RecognizedIdentity, portrait: QImage | None) -> None:
         self._portrait = portrait.copy() if portrait is not None else None
         self._initials = "".join(part[0] for part in identity.name.split()[:2]).upper()
         self.update()
@@ -260,13 +262,17 @@ class FaceLoginPanel(QWidget):
             self._identity_card.hide()
             self._scan_button.show()
 
-    def show_identity(self, identity: OperatorIdentity, portrait: QImage | None = None) -> None:
-        self.set_state(
-            FaceLoginState.RECOGNIZED,
-            f"Operador confirmado com {identity.confidence:.0%} de confiança.",
-        )
+    def show_identity(self, identity: RecognizedIdentity, portrait: QImage | None = None) -> None:
+        if isinstance(identity, CredentialAuthenticationResult):
+            # The API identified the employee; it does not disclose similarity scores.
+            message = "Funcionário identificado pela API."
+            detail = f"Funcionário #{identity.operator_id} · Sessão autorizada"
+        else:
+            message = f"Operador confirmado com {identity.confidence:.0%} de confiança."
+            detail = f"Operador #{identity.operator_id} · Acesso autorizado"
+        self.set_state(FaceLoginState.RECOGNIZED, message)
         self._operator_name.setText(identity.name)
-        self._operator_detail.setText(f"Operador #{identity.operator_id} · Acesso autorizado")
+        self._operator_detail.setText(detail)
         self._set_portrait(identity, portrait)
         self._identity_card.show()
         self._scan_button.hide()
@@ -360,7 +366,7 @@ class FaceLoginPanel(QWidget):
         layout.addLayout(identity_text, 1)
         return card
 
-    def _set_portrait(self, identity: OperatorIdentity, portrait: QImage | None) -> None:
+    def _set_portrait(self, identity: RecognizedIdentity, portrait: QImage | None) -> None:
         self._operator_photo.set_profile(identity, portrait)
 
     def _request_scan(self) -> None:

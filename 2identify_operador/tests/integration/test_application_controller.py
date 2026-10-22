@@ -9,7 +9,6 @@ from app.core.session import AuthenticationMethod, OperatorSessionContext
 from app.domain import (
     CredentialAuthenticationResult,
     OperationStartAuthorization,
-    OperatorIdentity,
     PpeRequirement,
     WorkSessionStatus,
 )
@@ -22,6 +21,14 @@ from app.ui.login.credential_login_panel import CredentialLoginPanel
 from app.ui.login.face_login_panel import CameraPreview, FaceLoginPanel
 from app.ui.operations import OperationsPageState
 from app.ui.safety import SafetyVerificationPage
+
+
+def _face_session(operator_id: int, name: str) -> CredentialAuthenticationResult:
+    """What the API returns after recognizing an enrolled employee."""
+
+    return CredentialAuthenticationResult(
+        operator_id=operator_id, name=name, access_token=f"face-session-{operator_id}"
+    )
 
 
 def _setup_controller(
@@ -51,7 +58,7 @@ def test_face_authentication_opens_main_window_and_hides_login(qtbot) -> None:
     login_window, session_context, controller = _setup_controller(qtbot)
 
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
 
     main_window = controller.main_window
@@ -59,7 +66,9 @@ def test_face_authentication_opens_main_window_and_hides_login(qtbot) -> None:
     qtbot.addWidget(main_window)
     assert main_window.isVisible()
     assert not login_window.isVisible()
-    assert session_context.require_current().authentication_method is AuthenticationMethod.FACE_ID
+    session = session_context.require_current()
+    assert session.authentication_method is AuthenticationMethod.FACE_ID
+    assert session.access_token == "face-session-15"
     controller.handle_logout()
 
 
@@ -88,14 +97,14 @@ def test_credential_authentication_preserves_token_and_opens_main_window(qtbot) 
 def test_second_authentication_does_not_replace_active_session_or_window(qtbot) -> None:
     _login_window, session_context, controller = _setup_controller(qtbot)
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
     first_window = controller.main_window
     assert first_window is not None
     qtbot.addWidget(first_window)
 
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=22, name="Ana Lima", confidence=0.97)
+        _face_session(22, "Ana Lima")
     )
 
     assert controller.main_window is first_window
@@ -137,7 +146,7 @@ def test_authenticated_transition_loads_the_configured_operation_source(qtbot) -
     _login_window, _session_context, controller = _setup_controller(qtbot, service)
 
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
 
     main_window = controller.main_window
@@ -185,7 +194,7 @@ def test_safety_authorization_creates_and_completes_local_work_session(qtbot) ->
     service = OperationService(MockOperationProvider((operation,)))
     _login_window, _session_context, controller = _setup_controller(qtbot, service)
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
     main_window = controller.main_window
     assert main_window is not None
@@ -231,7 +240,7 @@ def test_logout_interrupts_an_active_local_work_session(qtbot) -> None:
         OperationService(MockOperationProvider((operation,))),
     )
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
     main_window = controller.main_window
     assert main_window is not None
@@ -266,7 +275,7 @@ def test_rejected_work_session_start_rearms_the_ppe_gate(qtbot) -> None:
         OperationService(MockOperationProvider((operation,))),
     )
     controller.handle_face_authentication(
-        OperatorIdentity(operator_id=15, name="João Silva", confidence=0.94)
+        _face_session(15, "João Silva")
     )
     main_window = controller.main_window
     assert main_window is not None

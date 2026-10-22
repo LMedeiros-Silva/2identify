@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.core.security import AccessTokenService, InvalidAccessTokenError
+from app.core.security import SUBJECT_ACCOUNT, AccessTokenService, InvalidAccessTokenError
 from app.repositories import UserRepository
 
 _ADMIN_PROFILE = "administrador"
@@ -35,7 +35,7 @@ class AdminAuthorizationService:
         except InvalidAccessTokenError as error:
             raise AdminAuthorizationRejectedError("acesso administrativo rejeitado") from error
 
-        if claims.profile != _ADMIN_PROFILE:
+        if claims.profile != _ADMIN_PROFILE or claims.subject_type != SUBJECT_ACCOUNT:
             raise AdminAuthorizationRejectedError("perfil do token rejeitado")
 
         account = self._repository.find_active_by_id(claims.subject)

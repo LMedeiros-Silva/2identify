@@ -11,10 +11,10 @@ from PySide6.QtGui import QImage
 
 from app.core.config import AppSettings
 from app.core.constants import PROJECT_ROOT
-from app.domain.auth import OperatorIdentity
+from app.domain.auth import CredentialAuthenticationResult
 from app.ui.login import FaceLoginState, LoginWindow
 from app.vision.camera import OpenCVCameraSession
-from app.vision.face_auth.factory import build_local_face_authentication_pipeline
+from app.vision.face_auth.factory import FaceApiClient, build_face_authentication_pipeline
 from app.workers.face_auth_worker import FaceAuthenticationWorker
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,16 @@ class FaceLoginController(QObject):
 
     operator_authenticated = Signal(object)
 
-    def __init__(self, settings: AppSettings, window: LoginWindow) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        window: LoginWindow,
+        api_client: FaceApiClient | None = None,
+    ) -> None:
         super().__init__(window)
         self._settings = settings
         self._window = window
+        self._api_client = api_client
         self._worker: FaceAuthenticationWorker | None = None
         self._window.face_login_requested.connect(self.start)
         self._window.face_login_cancel_requested.connect(self.stop)
@@ -57,8 +63,9 @@ class FaceLoginController(QObject):
                 read_timeout_ms=self._settings.login_camera_read_timeout_ms,
             ),
             pipeline_factory=partial(
-                build_local_face_authentication_pipeline,
+                build_face_authentication_pipeline,
                 self._settings,
+                self._api_client,
             ),
             timeout_seconds=self._settings.face_auth_timeout_seconds,
             inference_fps=self._settings.face_auth_inference_fps,
@@ -97,7 +104,7 @@ class FaceLoginController(QObject):
 
     @Slot(object)
     def _handle_recognized(self, result: object) -> None:
-        if not isinstance(result, OperatorIdentity):
+        if not isinstance(result, CredentialAuthenticationResult):
             self._handle_failure("O reconhecedor retornou uma identidade inválida.", False)
             return
 
@@ -105,11 +112,7 @@ class FaceLoginController(QObject):
         self._window.show_operator_recognized(result, portrait)
         logger.info(
             "operator_face_authenticated",
-            extra={
-                "operator_id": result.operator_id,
-                "confidence": round(result.confidence, 4),
-                "authorization_mode": "local_development",
-            },
+            extra={"operator_id": result.operator_id, "authorization_mode": "api"},
         )
         # Recognition is emitted before the worker's finally block closes VideoCapture.
         # Release the login device before a selected monitoring source can reuse it.

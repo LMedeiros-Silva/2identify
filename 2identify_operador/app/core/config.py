@@ -8,7 +8,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app import __version__
@@ -38,6 +45,8 @@ class AppSettings(BaseSettings):
     api_read_timeout_seconds: Annotated[float, Field(gt=0, le=300)] = 10.0
     operations_mock_enabled: bool = False
     operator_catalog_token: SecretStr | None = None
+    # Workstation credential for Face ID (same value as OPERATOR_STATION_TOKEN in the API).
+    operator_station_token: SecretStr | None = None
 
     ppe_model_path: Path = Path("models/ppe/best.pt")
     ppe_model_sha256: str = (
@@ -142,9 +151,7 @@ class AppSettings(BaseSettings):
     face_auth_timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 15.0
     face_detector_model_path: Path = Path("models/face_detection_yunet_2023mar.onnx")
     face_recognition_model_path: Path = Path("models/face_recognition_sface_2021dec.onnx")
-    face_auth_template_store_path: Path = Path("var/face_auth/operators.json")
     face_auth_model_id: str = "opencv_sface_2021dec"
-    face_auth_confidence_threshold: Annotated[float, Field(gt=0, le=1)] = 0.50
     face_auth_detection_threshold: Annotated[float, Field(gt=0, le=1)] = 0.90
     face_auth_inference_fps: Annotated[float, Field(gt=0, le=30)] = 8.0
     face_auth_preview_fps: Annotated[float, Field(gt=0, le=60)] = 20.0
@@ -153,7 +160,6 @@ class AppSettings(BaseSettings):
     face_auth_liveness_required: bool = True
     face_auth_liveness_min_duration_seconds: Annotated[float, Field(gt=0, le=10)] = 0.8
     face_auth_liveness_min_movement_ratio: Annotated[float, Field(gt=0, le=0.5)] = 0.045
-    face_auth_allow_local_authorization: bool = False
     login_camera_width: Annotated[int, Field(ge=320, le=7680)] = 1280
     login_camera_height: Annotated[int, Field(ge=240, le=4320)] = 720
     login_camera_open_timeout_ms: Annotated[int, Field(ge=500, le=60_000)] = 5_000
@@ -173,7 +179,6 @@ class AppSettings(BaseSettings):
         "manuals_directory",
         "face_detector_model_path",
         "face_recognition_model_path",
-        "face_auth_template_store_path",
         "log_directory",
         mode="after",
     )
@@ -200,16 +205,19 @@ class AppSettings(BaseSettings):
             raise ValueError("FACE_AUTH_MODEL_ID não pode ser vazio")
         return normalized
 
-    @field_validator("operator_catalog_token", mode="before")
+    @field_validator("operator_catalog_token", "operator_station_token", mode="before")
     @classmethod
-    def validate_operator_catalog_token(cls, value: object) -> SecretStr | None:
+    def validate_operator_station_secret(
+        cls, value: object, info: ValidationInfo
+    ) -> SecretStr | None:
         if value is None or (isinstance(value, str) and not value.strip()):
             return None
+        name = str(info.field_name).upper()
         raw_value = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
         if len(raw_value.encode("utf-8")) < 32:
-            raise ValueError("OPERATOR_CATALOG_TOKEN deve possuir pelo menos 32 bytes")
+            raise ValueError(f"{name} deve possuir pelo menos 32 bytes")
         if raw_value.casefold().startswith(("change_me", "generate_")):
-            raise ValueError("OPERATOR_CATALOG_TOKEN ainda contém um placeholder")
+            raise ValueError(f"{name} ainda contém um placeholder")
         return SecretStr(raw_value)
 
     @field_validator("ppe_inference_device", "pose_inference_device")
@@ -276,8 +284,6 @@ class AppSettings(BaseSettings):
         if self.app_environment is AppEnvironment.PRODUCTION:
             if not self.face_auth_liveness_required:
                 raise ValueError("prova de vida é obrigatória em produção")
-            if self.face_auth_allow_local_authorization:
-                raise ValueError("autorização facial local é proibida em produção")
             if self.operations_mock_enabled:
                 raise ValueError("operações mockadas são proibidas em produção")
         return self

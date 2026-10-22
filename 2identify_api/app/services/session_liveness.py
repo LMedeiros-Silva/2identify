@@ -5,10 +5,11 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from uuid import UUID
 
-SessionKey = tuple[int, UUID]
+# (session owner, WorkSession): the owner is an account id or a Face ID employee key.
+SessionKey = tuple[Hashable, UUID]
 
 # Ended sessions are remembered so that a late alert retry cannot revive them.
 _ENDED_MEMORY = 4_096
@@ -38,7 +39,7 @@ class SessionLiveness:
         self._last_seen: dict[SessionKey, float] = {}
         self._ended: OrderedDict[SessionKey, None] = OrderedDict()
 
-    def touch(self, operator_id: int, work_session_id: UUID) -> bool:
+    def touch(self, operator_id: Hashable, work_session_id: UUID) -> bool:
         """Record a report; True when the session was not live a moment ago."""
 
         key = (operator_id, work_session_id)
@@ -50,7 +51,7 @@ class SessionLiveness:
             self._last_seen[key] = now
             return previous is None or now - previous > self._ttl
 
-    def end(self, operator_id: int, work_session_id: UUID) -> bool:
+    def end(self, operator_id: Hashable, work_session_id: UUID) -> bool:
         """Forget an ended session for good; True when it was being tracked."""
 
         key = (operator_id, work_session_id)

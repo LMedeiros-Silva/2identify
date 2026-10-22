@@ -8,7 +8,7 @@ from enum import StrEnum
 import numpy as np
 from numpy.typing import NDArray
 
-from app.domain.auth import OperatorIdentity
+from app.domain.auth import CredentialAuthenticationResult
 from app.vision.types import Frame as Frame
 
 Embedding = NDArray[np.float32]
@@ -42,15 +42,6 @@ class DetectedFace:
             raise ValueError("confidence deve estar entre 0.0 e 1.0")
 
 
-@dataclass(frozen=True, slots=True)
-class RegisteredFaceTemplate:
-    operator_id: int
-    name: str
-    model_id: str
-    embedding: tuple[float, ...] = field(repr=False)
-    profile_photo_reference: str | None = None
-
-
 class LivenessStatus(StrEnum):
     PENDING = "pending"
     VERIFIED = "verified"
@@ -61,12 +52,6 @@ class LivenessStatus(StrEnum):
 class LivenessDecision:
     status: LivenessStatus
     message: str
-
-
-@dataclass(frozen=True, slots=True)
-class FaceMatch:
-    template: RegisteredFaceTemplate
-    similarity: float
 
 
 class FacePipelineStatus(StrEnum):
@@ -83,4 +68,5 @@ class FacePipelineStatus(StrEnum):
 class FacePipelineDecision:
     status: FacePipelineStatus
     message: str
-    identity: OperatorIdentity | None = None
+    # The API session of the identified employee; never a local-only identity.
+    identity: CredentialAuthenticationResult | None = None

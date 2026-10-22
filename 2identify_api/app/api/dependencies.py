@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -22,6 +23,7 @@ from app.repositories import (
     SafetyAlertRepository,
     UserRepository,
 )
+from app.repositories.face_identity_repository import FaceIdentityRepository
 from app.services import (
     ActiveOperationRegistry,
     AdminAlertsService,
@@ -38,12 +40,14 @@ from app.services import (
     SafetyStateAggregator,
     SessionLiveness,
 )
+from app.services.face_authentication import FaceAuthenticationService
 
 logger = logging.getLogger(__name__)
 _ADMIN_PROFILE = frozenset({"administrador"})
 _NO_STORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 _ADMIN_BEARER = HTTPBearer(auto_error=False, scheme_name="AdminBearer")
 _OPERATOR_BEARER = HTTPBearer(auto_error=False, scheme_name="OperatorBearer")
+_STATION_BEARER = HTTPBearer(auto_error=False, scheme_name="OperatorStationBearer")
 
 
 def get_runtime_settings(connection: HTTPConnection) -> Settings:
@@ -106,6 +110,50 @@ def get_authentication_service(
         tokens=AccessTokenService(settings),
         allowed_profiles=settings.auth_allowed_profiles,
     )
+
+
+def get_face_authentication_service(
+    session: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_runtime_settings)],
+) -> FaceAuthenticationService:
+    return FaceAuthenticationService(
+        FaceIdentityRepository(session),
+        AccessTokenService(settings),
+        model_id=settings.face_auth_model_id,
+        similarity_threshold=settings.face_auth_similarity_threshold,
+        ambiguity_margin=settings.face_auth_ambiguity_margin,
+        minimum_probes=settings.face_auth_min_probes,
+    )
+
+
+def require_operator_station(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(_STATION_BEARER),
+    ],
+    settings: Annotated[Settings, Depends(get_runtime_settings)],
+) -> None:
+    """The Operator workstation proves itself; it cannot name the employee."""
+
+    configured = settings.operator_station_token
+    if configured is None:
+        logger.error("operator_station_authentication_not_configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Face ID não configurado na API.",
+            headers=_NO_STORE_HEADERS,
+        )
+    if credentials is None or not secrets.compare_digest(
+        credentials.credentials.encode("utf-8"),
+        configured.get_secret_value().encode("utf-8"),
+    ):
+        logger.warning("operator_station_authorization_rejected")
+        # 403, not 401: the Operator must tell a misconfigured station from an unknown face.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Estação não autorizada.",
+            headers=_NO_STORE_HEADERS,
+        )
 
 
 def get_admin_authentication_service(
@@ -206,6 +254,7 @@ def get_operator_authorization_service(
         repository=UserRepository(session),
         tokens=AccessTokenService(settings),
         allowed_profiles=settings.auth_allowed_profiles,
+        employees=FaceIdentityRepository(session),
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -33,7 +34,7 @@ class ActiveOperationRegistry:
 
     def __init__(self, broker: RealtimeEventBroker) -> None:
         self._broker = broker
-        self._active: dict[tuple[int, object], ActiveOperationSnapshot] = {}
+        self._active: dict[tuple[Hashable, object], ActiveOperationSnapshot] = {}
         self._lock = asyncio.Lock()
 
     async def list_active(self) -> tuple[ActiveOperationSnapshot, ...]:
@@ -52,9 +53,10 @@ class ActiveOperationRegistry:
         operator_name: str,
         operation: OperationDetail,
         snapshot: OperatorSafetyStateSnapshot,
+        owner: Hashable | None = None,
     ) -> ActiveOperationSnapshot:
         self._validate_configuration(operation, snapshot)
-        key = (operator_id, snapshot.work_session_id)
+        key = (operator_id if owner is None else owner, snapshot.work_session_id)
         async with self._lock:
             previous = self._active.get(key)
             projected = self._project(

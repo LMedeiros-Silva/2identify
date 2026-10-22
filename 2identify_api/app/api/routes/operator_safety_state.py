@@ -59,9 +59,9 @@ async def update_operator_safety_state(
 
     # The snapshot is the Operator heartbeat: only reporting sessions drive the tower.
     if payload.session_status == "ended":
-        liveness_changed = liveness.end(principal.account_id, payload.work_session_id)
+        liveness_changed = liveness.end(principal.session_owner, payload.work_session_id)
     else:
-        liveness_changed = liveness.touch(principal.account_id, payload.work_session_id)
+        liveness_changed = liveness.touch(principal.session_owner, payload.work_session_id)
     try:
         if payload.started_at is not None:
             # Physical resolution never depends on the operation configuration: an ended
@@ -72,10 +72,11 @@ async def update_operator_safety_state(
                 payload.operation_id,
             )
             await registry.update(
-                operator_id=principal.account_id,
+                operator_id=principal.operator_id,
                 operator_name=principal.name,
                 operation=operation,
                 snapshot=payload,
+                owner=principal.session_owner,
             )
         if liveness_changed:
             await aggregator.refresh_after_commit(safety_alerts.active_conditions)
@@ -129,7 +130,7 @@ async def _resolve_orphaned_conditions(
         resolved = await run_in_threadpool(
             partial(
                 safety_alerts.resolve_session_conditions,
-                operator_id=principal.account_id,
+                owner=principal.session_owner,
                 work_session_id=payload.work_session_id,
                 session_ended=payload.session_status == "ended",
             )

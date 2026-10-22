@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.config import AppSettings
-from app.domain.auth import OperatorIdentity
+from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
 from app.ui.login.brand_panel import IndustrialBrandPanel
 from app.ui.login.credential_login_panel import CredentialLoginPanel
 from app.ui.login.face_login_panel import FaceLoginPanel, FaceLoginState
@@ -59,7 +59,7 @@ class LoginWindow(QMainWindow):
 
     def show_operator_recognized(
         self,
-        identity: OperatorIdentity,
+        identity: OperatorIdentity | CredentialAuthenticationResult,
         portrait: QImage | None = None,
     ) -> None:
         """Present the registered photo and welcome message after a valid match."""

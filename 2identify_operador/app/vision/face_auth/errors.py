@@ -12,3 +12,7 @@ class FaceAuthenticationUnavailableError(FaceAuthenticationError):
 class FaceAuthenticationProcessingError(FaceAuthenticationError):
     """A frame could not be processed by the configured biometric pipeline."""
 
+
+
+class FaceNotRecognizedError(FaceAuthenticationError):
+    """The API did not identify exactly one authorized employee in the probes."""

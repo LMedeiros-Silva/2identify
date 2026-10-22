@@ -13,6 +13,10 @@ from pydantic import SecretStr
 from app.core.config import Settings
 
 _JWT_ALGORITHM = "HS256"
+# Password accounts (usuarios) and Face ID employees (funcionarios) have separate id spaces.
+SUBJECT_ACCOUNT = "usuario"
+SUBJECT_EMPLOYEE = "funcionario"
+_SUBJECT_TYPES = frozenset({SUBJECT_ACCOUNT, SUBJECT_EMPLOYEE})
 _DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"2identify-dummy-password", bcrypt.gensalt())
 
 
@@ -42,6 +46,7 @@ class AccessTokenClaims:
     issued_at: datetime
     expires_at: datetime
     token_id: str
+    subject_type: str = SUBJECT_ACCOUNT
 
 
 class InvalidAccessTokenError(RuntimeError):
@@ -63,15 +68,28 @@ class AccessTokenService:
     def expires_in_seconds(self) -> int:
         return int(self._ttl.total_seconds())
 
-    def issue(self, *, subject: int, name: str, profile: str) -> str:
+    def issue(
+        self,
+        *,
+        subject: int,
+        name: str,
+        profile: str,
+        subject_type: str = SUBJECT_ACCOUNT,
+    ) -> str:
         normalized_name = name.strip()
         normalized_profile = profile.strip().casefold()
-        if subject <= 0 or not normalized_name or not normalized_profile:
+        if (
+            subject <= 0
+            or not normalized_name
+            or not normalized_profile
+            or subject_type not in _SUBJECT_TYPES
+        ):
             raise ValueError("identidade inválida para emissão do token")
 
         now = datetime.now(UTC)
         payload = {
             "sub": str(subject),
+            "sub_type": subject_type,
             "name": normalized_name,
             "profile": normalized_profile,
             "iat": now,
@@ -117,6 +135,8 @@ class AccessTokenService:
             expires_at = payload["exp"]
             not_before = payload["nbf"]
             token_id = payload["jti"]
+            # Tokens issued before Face ID existed carry no type: they are password accounts.
+            subject_type = payload.get("sub_type", SUBJECT_ACCOUNT)
             if (
                 type(subject) is not str
                 or not subject.isascii()
@@ -129,6 +149,7 @@ class AccessTokenService:
                 or type(profile) is not str
                 or not profile.strip()
                 or profile != profile.strip().casefold()
+                or subject_type not in _SUBJECT_TYPES
                 or type(token_id) is not str
                 or not token_id.strip()
                 or token_id != token_id.strip()
@@ -146,6 +167,7 @@ class AccessTokenService:
                 issued_at=datetime.fromtimestamp(issued_at, tz=UTC),
                 expires_at=datetime.fromtimestamp(expires_at, tz=UTC),
                 token_id=token_id,
+                subject_type=subject_type,
             )
         except (jwt.PyJWTError, KeyError, OSError, OverflowError, TypeError, ValueError) as error:
             raise InvalidAccessTokenError("token de acesso inválido") from error

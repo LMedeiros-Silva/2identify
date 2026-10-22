@@ -1,18 +1,12 @@
-"""Replaceable contracts for facial detection, encoding, liveness and templates."""
+"""Replaceable contracts for facial detection, encoding, liveness and identification."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Protocol
 
-from app.vision.face_auth.types import (
-    DetectedFace,
-    Embedding,
-    FaceMatch,
-    Frame,
-    LivenessDecision,
-    RegisteredFaceTemplate,
-)
+from app.domain.auth import CredentialAuthenticationResult
+from app.vision.face_auth.types import DetectedFace, Embedding, Frame, LivenessDecision
 
 
 class FaceDetector(Protocol):
@@ -29,10 +23,15 @@ class LivenessVerifier(Protocol):
     def reset(self) -> None: ...
 
 
-class FaceTemplateRepository(Protocol):
-    def load_templates(self, model_id: str) -> Sequence[RegisteredFaceTemplate]: ...
+class FaceIdentityAuthority(Protocol):
+    """The API: it owns the Admin templates and decides who the probes belong to.
 
+    Raises ``FaceNotRecognizedError`` when no single authorized employee matches and
+    ``FaceAuthenticationUnavailableError`` when it cannot give a trustworthy answer.
+    """
 
-class FaceMatcher(Protocol):
-    def match(self, embedding: Embedding) -> FaceMatch | None: ...
-
+    def authenticate(
+        self,
+        model_id: str,
+        probes: Sequence[Embedding],
+    ) -> CredentialAuthenticationResult: ...

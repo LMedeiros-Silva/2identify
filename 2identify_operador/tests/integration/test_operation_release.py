@@ -226,9 +226,10 @@ def test_pose_unavailable_is_explained_instead_of_waiting_silently(qtbot) -> Non
     _run(controller, (True,) * 10, pose=False)
 
     description = page.findChild(QLabel, "safetyReleaseDescription").text()
+    # Without pose nobody can be identified, so no PPE (helmet included) is confirmed.
     assert description == (
-        "Falta confirmar: Capacete: estimativa de postura indisponível, "
-        "o capacete não pode ser confirmado na cabeça."
+        "Falta confirmar: Pessoa: estimativa de postura indisponível, "
+        "não é possível confirmar uma única pessoa."
     )
     assert not page.findChild(QPushButton, "safetyStartOperationButton").isEnabled()
 

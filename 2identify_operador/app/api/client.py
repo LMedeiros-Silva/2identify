@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import unicodedata
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -43,6 +44,10 @@ from app.services.safety_state_service import (
     SafetyStateDeliveryUnavailableError,
     SafetyStateReason,
     SafetyStateSnapshot,
+)
+from app.vision.face_auth.errors import (
+    FaceAuthenticationUnavailableError,
+    FaceNotRecognizedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -236,6 +241,64 @@ class OperatorApiClient:
                 extra={"status_code": response.status_code, "error_type": type(error).__name__},
             )
             raise AuthenticationUnavailableError(
+                "O serviço de autenticação retornou uma resposta inválida."
+            ) from error
+
+    def authenticate_face(
+        self,
+        model_id: str,
+        probes: Sequence[Iterable[float]],
+        station_token: str,
+    ) -> CredentialAuthenticationResult:
+        """Ask the API who these live-frame embeddings belong to; never log them."""
+
+        try:
+            response = self._client.post(
+                "auth/face",
+                json={
+                    "model_id": model_id,
+                    "probes": [[float(value) for value in probe] for probe in probes],
+                },
+                headers={"Authorization": f"Bearer {station_token}"},
+            )
+        except httpx.RequestError as error:
+            logger.warning(
+                "face_authentication_api_unavailable",
+                extra={"error_type": type(error).__name__},
+            )
+            raise FaceAuthenticationUnavailableError(
+                "Serviço de autenticação indisponível. Use e-mail e senha ou tente novamente."
+            ) from error
+
+        if response.status_code == httpx.codes.UNAUTHORIZED:
+            logger.warning("face_authentication_rejected")
+            raise FaceNotRecognizedError("Rosto não reconhecido ou funcionário não autorizado.")
+        if response.status_code == httpx.codes.FORBIDDEN:
+            logger.error("face_authentication_station_rejected")
+            raise FaceAuthenticationUnavailableError(
+                "Estação não autorizada na API: verifique OPERATOR_STATION_TOKEN."
+            )
+        if response.status_code == httpx.codes.SERVICE_UNAVAILABLE:
+            logger.error("face_authentication_api_not_ready")
+            raise FaceAuthenticationUnavailableError(
+                "Face ID indisponível na API. Use e-mail e senha."
+            )
+        try:
+            response.raise_for_status()
+            payload = _CredentialLoginPayload.model_validate(response.json())
+            return CredentialAuthenticationResult(
+                operator_id=payload.operator.id,
+                name=payload.operator.name,
+                access_token=payload.access_token,
+                token_type=payload.token_type,
+                profile_photo_reference=None,
+            )
+        except (httpx.HTTPStatusError, ValidationError, ValueError) as error:
+            logger.error(
+                "face_authentication_invalid_api_response",
+                extra={"status_code": response.status_code, "error_type": type(error).__name__},
+            )
+            raise FaceAuthenticationUnavailableError(
                 "O serviço de autenticação retornou uma resposta inválida."
             ) from error
 

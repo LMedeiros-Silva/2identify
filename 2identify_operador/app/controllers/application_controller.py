@@ -16,7 +16,7 @@ from app.core.session import (
     OperatorSessionContext,
 )
 from app.domain import OperationStartAuthorization, SafetyAlert, SafetyAlertStatus
-from app.domain.auth import CredentialAuthenticationResult, OperatorIdentity
+from app.domain.auth import CredentialAuthenticationResult
 from app.engine import AlertEngineUpdate
 from app.services.alert_delivery_service import (
     AlertDeliveryError,
@@ -108,10 +108,11 @@ class ApplicationController(QObject):
 
     @Slot(object)
     def handle_face_authentication(self, result: object) -> None:
-        if not isinstance(result, OperatorIdentity):
-            logger.error("invalid_face_login_result_type")
+        # Only an API session counts: a local-only identity could not report alerts.
+        if not isinstance(result, CredentialAuthenticationResult):
+            logger.error("face_login_without_api_session_rejected")
             self._login_window.show_face_authentication_error(
-                "Não foi possível criar a sessão do operador."
+                "Face ID sem sessão válida da API. Tente novamente ou use e-mail e senha."
             )
             return
 
@@ -119,6 +120,7 @@ class ApplicationController(QObject):
             operator_id=result.operator_id,
             operator_name=result.name,
             authentication_method=AuthenticationMethod.FACE_ID,
+            access_token=result.access_token,
         )
 
     @Slot(object)

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Literal, cast
 from uuid import UUID
 
-from app.repositories.safety_alert_repository import SafetyAlertRepository, StoredAlert
+from app.repositories.safety_alert_repository import (
+    SafetyAlertRepository,
+    StoredAlert,
+    session_owner,
+)
 from app.schemas.operator_alerts import OperatorAlertCreate
 from app.schemas.realtime import AlertCreatedPayload, RealtimeEventEnvelope
 from app.schemas.safety_state import SafetyConditionSnapshot
@@ -39,12 +44,12 @@ class OperatorAlertService:
     def resolve_session_conditions(
         self,
         *,
-        operator_id: int,
+        owner: Hashable,
         work_session_id: UUID,
         session_ended: bool,
     ) -> int:
         return self._repository.resolve_session_conditions(
-            operator_id=operator_id,
+            owner=owner,
             work_session_id=work_session_id,
             session_ended=session_ended,
         )
@@ -53,7 +58,8 @@ class OperatorAlertService:
         self,
         payload: OperatorAlertCreate,
         *,
-        operator_id: int,
+        operator_id: int | None,
+        employee_id: int | None = None,
     ) -> OperatorAlertResult:
         legacy_payload_hash = sha256(
             payload.model_dump_json(exclude={"status", "resolved_at"}, exclude_none=False).encode(
@@ -68,13 +74,14 @@ class OperatorAlertService:
         ).hexdigest()
         if self._liveness is not None:
             # An alert proves the Operator session is alive (an ended one stays ended).
-            self._liveness.touch(operator_id, payload.work_session_id)
+            self._liveness.touch(session_owner(operator_id, employee_id), payload.work_session_id)
         stored = self._repository.store(
             event_id=payload.event_id,
             payload_hash=payload_hash,
             legacy_payload_hash=legacy_payload_hash,
             work_session_id=payload.work_session_id,
             operator_id=operator_id,
+            employee_id=employee_id,
             operation_id=payload.operation_id,
             camera_id=payload.camera_id,
             risk_area_id=payload.risk_area_id,

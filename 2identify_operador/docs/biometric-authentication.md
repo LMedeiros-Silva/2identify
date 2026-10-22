@@ -21,12 +21,14 @@ FaceAuthenticationWorker (QThread)
            ├── YuNetFaceDetector
            ├── MotionChallengeLivenessVerifier
            ├── SFaceEncoder
-           ├── CosineFaceMatcher
-           └── persistência de matches consecutivos
+           └── quadros consecutivos → POST /auth/face (token da estação)
     ↓
-OperatorIdentity
+API: compara com os templates do Admin, exige o mesmo funcionário em todos os quadros
+     e vantagem mínima sobre os demais, e emite o token do funcionário
     ↓
-LoginWindow → foto cadastrada + "Bem-vindo, Nome"
+CredentialAuthenticationResult (sessão da API)
+    ↓
+LoginWindow → "Funcionário identificado pela API"
     ↓
 OperatorSession → MainWindow
 ```
@@ -35,15 +37,13 @@ A UI não importa OpenCV e o worker nunca acessa widgets. A câmera e os modelos
 dentro do `QThread`. O encerramento é cooperativo e ocorre ao cancelar, fechar o programa,
 atingir timeout ou concluir o reconhecimento.
 
-## Cadastro atual
+## Cadastro e autorização
 
-`JsonFaceTemplateRepository` é uma ponte somente para `development/testing`. O comando
-`app.tools.enroll_operator_face` exige três imagens distintas, detecta exatamente um rosto por
-imagem, calcula a média normalizada dos embeddings e salva a foto pública de perfil.
-
-Templates são dados biométricos sensíveis. O JSON local fica em `var/face_auth`, é ignorado
-pelo Git e não é a persistência final. `FACE_AUTH_ALLOW_LOCAL_AUTHORIZATION=true` é rejeitado
-automaticamente quando `APP_ENVIRONMENT=production`.
+O cadastro facial é feito no Admin e gravado pela API em `funcionario_face_templates`. Os
+templates não saem da API: o Operator envia somente os embeddings dos quadros capturados,
+autenticado pelo `OPERATOR_STATION_TOKEN`, que identifica a estação e nunca a pessoa. Sem
+esse token, sem API ou com resposta inválida, o Face ID falha fechado e o login por senha
+continua disponível. Não existe mais autorização facial local.
 
 ## Prova de vida
 
@@ -63,26 +63,26 @@ FACE_AUTH_ENABLED=true
 FACE_AUTH_TIMEOUT_SECONDS=15
 FACE_DETECTOR_MODEL_PATH=models/face_detection_yunet_2023mar.onnx
 FACE_RECOGNITION_MODEL_PATH=models/face_recognition_sface_2021dec.onnx
-FACE_AUTH_TEMPLATE_STORE_PATH=var/face_auth/operators.json
+OPERATOR_STATION_TOKEN=
 FACE_AUTH_MODEL_ID=opencv_sface_2021dec
-FACE_AUTH_CONFIDENCE_THRESHOLD=0.50
 FACE_AUTH_DETECTION_THRESHOLD=0.90
 FACE_AUTH_INFERENCE_FPS=8
 FACE_AUTH_PREVIEW_FPS=20
 FACE_AUTH_MIN_CONSECUTIVE_MATCHES=3
 FACE_AUTH_LIVENESS_REQUIRED=true
-FACE_AUTH_ALLOW_LOCAL_AUTHORIZATION=true
 ```
 
-O limiar `0.50` é uma configuração inicial específica do SFace. Ele deverá ser calibrado com
+O limiar de similaridade (`FACE_AUTH_SIMILARITY_THRESHOLD=0.50`) e a margem contra o segundo
+funcionário (`FACE_AUTH_AMBIGUITY_MARGIN=0.05`) ficam na API. O limiar `0.50` é uma
+configuração inicial específica do SFace. Ele deverá ser calibrado com
 operadores, iluminação e câmeras representativos antes de qualquer implantação.
 
 ## Funcionamento sem câmera
 
-- modelos, repositório, matching, liveness, pipeline, QThread e UI são testáveis sem hardware;
+- modelos, liveness, pipeline, cliente da API, QThread e UI são testáveis sem hardware;
 - um arquivo de vídeo pode ser configurado em `LOGIN_CAMERA_SOURCE` durante desenvolvimento;
 - vídeo gravado não valida anti-spoofing;
-- sem cadastro, a tentativa encerra antes de abrir a câmera;
+- sem token da estação, a tentativa encerra antes de abrir a câmera;
 - sem câmera, o fallback por credenciais continua disponível.
 
 ## Requisitos antes de produção
@@ -98,7 +98,5 @@ operadores, iluminação e câmeras representativos antes de qualquer implantaç
 
 ## Próxima evolução
 
-1. substituir o repositório local de Face ID por autorização biométrica através da API;
-2. cadastrar operadores pelo Admin;
-3. substituir/validar prova de vida com a câmera escolhida;
-4. testar múltiplos rostos, câmera ausente, baixa luz, capacete, óculos e spoofing.
+1. substituir/validar prova de vida com a câmera escolhida;
+2. testar múltiplos rostos, câmera ausente, baixa luz, capacete, óculos e spoofing.

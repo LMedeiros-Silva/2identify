@@ -16,13 +16,14 @@ from app.schemas.authentication import (
     AdministratorPayload,
     CredentialLoginRequest,
     CredentialLoginResponse,
+    FaceLoginRequest,
     OperatorPayload,
 )
 from app.schemas.health import HealthResponse, RootResponse
 from app.schemas.operations import (
     AdminCameraItem,
-    CameraStreamSource,
     CameraCatalogItem,
+    CameraStreamSource,
     CameraWrite,
     EpiReference,
     OperationCatalog,
@@ -65,6 +66,7 @@ __all__ = [
     "AdministratorPayload",
     "CredentialLoginRequest",
     "CredentialLoginResponse",
+    "FaceLoginRequest",
     "HealthResponse",
     "HardwareSafetyState",
     "CameraCatalogItem",

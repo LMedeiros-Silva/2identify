@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
@@ -46,7 +47,14 @@ async def ingest_operator_alert(
     aggregator: Annotated[SafetyStateAggregator, Depends(get_safety_state_aggregator)],
 ) -> OperatorAlertReceipt:
     try:
-        result = await run_in_threadpool(service.ingest, payload, operator_id=principal.account_id)
+        result = await run_in_threadpool(
+            partial(
+                service.ingest,
+                payload,
+                operator_id=principal.account_id,
+                employee_id=principal.employee_id,
+            )
+        )
         await aggregator.refresh_after_commit(service.active_conditions)
     except AlertEventConflictError as error:
         raise HTTPException(

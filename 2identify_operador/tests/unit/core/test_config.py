@@ -159,9 +159,22 @@ def test_ppe_inference_runtime_settings_are_typed() -> None:
         AppSettings(_env_file=None, alert_cooldown_seconds=-1)
 
 
-def test_face_auth_threshold_is_validated() -> None:
+def test_face_auth_detection_threshold_is_validated() -> None:
     with pytest.raises(ValidationError):
-        AppSettings(_env_file=None, face_auth_confidence_threshold=1.01)
+        AppSettings(_env_file=None, face_auth_detection_threshold=1.01)
+
+
+def test_operator_station_token_is_masked_and_validated() -> None:
+    token = "station-token-with-at-least-thirty-two-bytes"
+    settings = AppSettings(_env_file=None, operator_station_token=token)
+
+    assert settings.operator_station_token is not None
+    assert settings.operator_station_token.get_secret_value() == token
+    assert token not in repr(settings)
+    with pytest.raises(ValidationError, match="OPERATOR_STATION_TOKEN"):
+        AppSettings(_env_file=None, operator_station_token="short")
+    with pytest.raises(ValidationError, match="placeholder"):
+        AppSettings(_env_file=None, operator_station_token="CHANGE_ME" + "x" * 40)
 
 
 def test_operator_catalog_token_is_masked_and_validated() -> None:
@@ -201,15 +214,6 @@ def test_pose_and_ergonomics_settings_are_typed_and_cross_validated() -> None:
             _env_file=None,
             ergonomics_knee_warning_degrees=90,
             ergonomics_knee_critical_degrees=100,
-        )
-
-
-def test_production_rejects_local_face_authorization() -> None:
-    with pytest.raises(ValidationError, match="autorização facial local"):
-        AppSettings(
-            _env_file=None,
-            app_environment="production",
-            face_auth_allow_local_authorization=True,
         )
 
 
