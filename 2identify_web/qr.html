@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0B1F3A">
+    <title>2Identify ao vivo: QR Code</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="qr.js"></script>
+  </head>
+  <body class="qr-page">
+    <main class="qr-stage">
+      <div class="qr-copy">
+        <div class="brand">
+          <img src="icon.svg" alt="" width="44" height="44">
+          <span class="brand-name">2Identify</span>
+        </div>
+        <h1 class="qr-title">Acompanhe os alertas da IA ao vivo</h1>
+        <p class="qr-lede">Aponte a câmera do celular para o código. O painel abre direto, sem login e sem cadastro.</p>
+        <p id="qr-url" class="qr-url"></p>
+        <p id="qr-local" class="qr-local" hidden>Este endereço só abre neste computador. Abra esta página pelo link público (túnel ou IP da rede) ou defina PUBLIC_PANEL_URL.</p>
+      </div>
+      <figure class="qr-frame">
+        <img id="qr-image" alt="QR Code do painel 2Identify ao vivo" width="440" height="440">
+      </figure>
+    </main>
+  </body>
+</html>

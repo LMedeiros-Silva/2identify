@@ -2,58 +2,128 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#07182d">
-    <title>2Identify — Alertas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0B1F3A">
+    <meta name="description" content="Alertas de segurança da IA do 2Identify, ao vivo.">
+    <title>2Identify ao vivo</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
+    <script type="module" src="app.js"></script>
   </head>
-  <body>
-    <main class="app-shell">
-      <section id="login-view" class="login-view" aria-labelledby="login-title">
-        <div class="brand-mark" aria-hidden="true">2I</div>
-        <p class="eyebrow">ACESSO ADMINISTRATIVO</p>
-        <h1 id="login-title">Alertas na palma da mão</h1>
-        <p class="intro">Entre com o mesmo usuário administrador do 2Identify.</p>
-        <form id="login-form" class="login-card">
-          <label for="username">Usuário</label>
-          <input id="username" name="username" autocomplete="username" required>
-          <label for="password">Senha</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" required>
-          <p id="login-error" class="error-message" role="alert" hidden></p>
-          <button id="login-button" class="primary-button" type="submit">Entrar</button>
-        </form>
-      </section>
+  <body data-state="connecting">
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-safe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="m7.5 12.4 3 3 6-6.4"/></symbol>
+      <symbol id="i-warning" viewBox="0 0 24 24"><path d="M10.3 3.8 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-critical" viewBox="0 0 24 24"><path d="M8.2 2.5h7.6l5.7 5.7v7.6l-5.7 5.7H8.2l-5.7-5.7V8.2Z"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></symbol>
+      <symbol id="i-inconclusive" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" stroke-dasharray="3 2.6"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-connecting" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></symbol>
+      <symbol id="i-offline" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 4.2-2.6"/><path d="M10.7 5.1A15 15 0 0 1 22 8.8"/><path d="M5 12.6a10 10 0 0 1 5.2-2.5"/><path d="M15.7 10.7A10 10 0 0 1 19 12.6"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/><path d="m3 3 18 18"/></symbol>
+      <symbol id="i-place" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h9A1.5 1.5 0 0 1 15 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 3 16.5Z"/><path d="m15 10.5 6-3.5v10l-6-3.5"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    </svg>
 
-      <section id="alerts-view" class="alerts-view" aria-labelledby="alerts-title" hidden>
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">2IDENTIFY</p>
-            <h1 id="alerts-title">Alertas</h1>
-          </div>
-          <button id="logout-button" class="icon-button" type="button">Sair</button>
-        </header>
+    <div id="arrival" class="arrival" role="alert" hidden>
+      <svg class="arrival-icon" aria-hidden="true"><use href="#i-critical"/></svg>
+      <div class="arrival-text">
+        <strong id="arrival-title"></strong>
+        <span id="arrival-place"></span>
+      </div>
+      <button id="arrival-close" class="arrival-close" type="button" aria-label="Fechar aviso">
+        <svg aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
 
-        <div class="summary-panel">
-          <div>
-            <span class="summary-label">Monitoramento</span>
-            <strong id="summary-count">0 ocorrências</strong>
+    <header class="bar">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="32" height="32">
+        <span class="brand-name">2Identify</span>
+        <span class="brand-tag">Segurança ao vivo</span>
+      </div>
+      <p id="link" class="link" data-link="connecting">
+        <span class="link-dot" aria-hidden="true"></span>
+        <span id="link-text">Conectando</span>
+      </p>
+    </header>
+
+    <main class="layout">
+      <div class="side">
+        <section id="now" class="now" aria-labelledby="now-word">
+          <p class="now-caption">Estado agora</p>
+          <div class="now-body">
+            <svg class="now-icon" aria-hidden="true"><use id="now-icon" href="#i-connecting"/></svg>
+            <div>
+              <h1 id="now-word" class="now-word">CONECTANDO</h1>
+              <p id="now-hint" class="now-hint">Buscando os alertas da IA</p>
+            </div>
           </div>
-          <button id="refresh-button" class="refresh-button" type="button">Atualizar</button>
+          <div id="now-lead" class="now-lead" hidden>
+            <strong id="now-lead-title"></strong>
+            <span id="now-lead-place"></span>
+          </div>
+          <p id="now-meta" class="now-meta"></p>
+        </section>
+
+        <aside id="share" class="share" hidden>
+          <img id="share-qr" class="share-qr" alt="QR Code para abrir este painel no celular" width="148" height="148">
+          <div>
+            <p class="share-title">Acompanhe no seu celular</p>
+            <p class="share-copy">Aponte a câmera para o código. Não precisa de cadastro.</p>
+            <p id="share-url" class="share-url"></p>
+          </div>
+        </aside>
+      </div>
+
+      <section class="feed" aria-labelledby="feed-title">
+        <div class="feed-head">
+          <h2 id="feed-title">Alertas da IA</h2>
+          <div class="filters" role="group" aria-label="Filtrar alertas">
+            <button type="button" class="filter" data-filter="all" aria-pressed="true">Todos <span data-count="all">0</span></button>
+            <button type="button" class="filter" data-filter="open" aria-pressed="false">Em aberto <span data-count="open">0</span></button>
+            <button type="button" class="filter" data-filter="critical" aria-pressed="false">Críticos <span data-count="critical">0</span></button>
+            <button type="button" class="filter" data-filter="closed" aria-pressed="false">Encerrados <span data-count="closed">0</span></button>
+          </div>
         </div>
 
-        <nav class="filters" aria-label="Filtros de alertas">
-          <button class="filter-button active" data-filter="all" type="button">Todos</button>
-          <button class="filter-button" data-filter="critical" type="button">Críticos</button>
-          <button class="filter-button" data-filter="attention" type="button">Atenção</button>
-          <button class="filter-button" data-filter="resolved" type="button">Resolvidos</button>
-        </nav>
+        <p id="notice" class="notice" role="status" hidden></p>
 
-        <p id="alerts-error" class="error-banner" role="alert" hidden></p>
-        <p id="loading-state" class="status-message" aria-live="polite" hidden>Atualizando alertas…</p>
-        <section id="alerts-list" class="alerts-list" aria-live="polite"></section>
-        <p id="last-updated" class="last-updated"></p>
+        <ol id="list" class="list" aria-live="polite" aria-relevant="additions"></ol>
+
+        <div id="loading" class="loading" aria-hidden="true">
+          <div class="ghost"></div><div class="ghost"></div><div class="ghost"></div>
+        </div>
+
+        <div id="empty" class="empty" hidden>
+          <svg aria-hidden="true"><use href="#i-safe"/></svg>
+          <p id="empty-title" class="empty-title">Nenhum alerta até agora</p>
+          <p id="empty-copy" class="empty-copy">Quando a IA detectar um risco, ele aparece aqui na hora.</p>
+        </div>
       </section>
     </main>
-    <script type="module" src="app.js"></script>
+
+    <footer class="foot">
+      Painel público somente leitura. Nenhum nome, foto ou dado pessoal é exibido.
+    </footer>
+
+    <template id="row">
+      <li class="alert">
+        <div class="alert-when">
+          <time class="alert-clock"></time>
+          <span class="alert-ago"></span>
+        </div>
+        <div class="alert-body">
+          <p class="alert-kind">
+            <svg class="alert-mark" aria-hidden="true"><use href="#i-warning"/></svg>
+            <span class="alert-severity"></span>
+            <span class="alert-category"></span>
+          </p>
+          <h3 class="alert-title"></h3>
+          <p class="alert-place" hidden>
+            <svg aria-hidden="true"><use href="#i-place"/></svg>
+            <span class="alert-place-text"></span>
+          </p>
+        </div>
+        <span class="alert-status"></span>
+      </li>
+    </template>
   </body>
 </html>

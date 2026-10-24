@@ -11,3 +11,4 @@ ruff==0.12.8
 mypy==1.17.1
 bcrypt==4.3.0
 PyJWT==2.13.0
+segno==1.6.1
