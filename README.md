@@ -13,9 +13,15 @@ ambientes virtuais, caches, logs e variáveis de ambiente não são versionados.
 ## Integrantes 
 
 - Arthur Bergamaço Alves
+    - Linkedin: https://www.linkedin.com/in/arthur-bergama%C3%A7o-alves-08948329b
 - Leonardo Medeiros da Silva
+    - Linkedin: https://www.linkedin.com/in/leonardo-medeiros-da-silva-152b4a372
 - Mateus de Souza Santos
+    - Linkedin: https://www.linkedin.com/in/mateus-souza18
 - Renan Melo Rosemberg
+    - Linkedin: https://www.linkedin.com/in/renan-rosemberg
 - Breno Barbosa Pereira
+    - Linkedin:
 - Pietro Rodriguez Medeiros
+    - Linkedin:
 
