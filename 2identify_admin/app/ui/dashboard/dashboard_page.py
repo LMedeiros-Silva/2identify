@@ -30,6 +30,7 @@ from app.ui.dashboard.chart_widgets import (
     ChartBar,
     ChartSegment,
 )
+from app.ui.safety_widgets import FlowLayout, PpeChip, StateChip
 from app.ui.theme import TOKENS
 
 _MAX_OPERATION_ROWS = 6
@@ -47,12 +48,22 @@ _STATUS_ORDER = {
     ActiveOperationOverallStatus.ATTENTION: 1,
     ActiveOperationOverallStatus.COMPLIANT: 2,
 }
+_PPE_CHIP = {
+    PpeLiveState.CONFIRMED: ("Confirmado", "safe"),
+    PpeLiveState.ABSENT: ("Ausente", "crit"),
+    PpeLiveState.COLLECTING: ("Verificando", "inc"),
+    PpeLiveState.UNSTABLE: ("Verificando", "inc"),
+    PpeLiveState.UNMAPPED: ("Sem mapeamento", "inc"),
+}
+# Ordem de "Alertas que pedem ação": não confirmados, depois confirmados, depois encerrados.
+_ACTION_ORDER = {"nao_lido": 0, "lido": 1, "encerrado": 2}
 _CATEGORY_LABELS = {
     "ppe": "EPI",
     "ergonomics": "Ergonomia",
     "risk_area": "Área de risco",
     "monitoring": "Monitoramento",
     "safety": "Segurança",
+    "fall": "Queda",
 }
 _ALERT_STATUS_LABELS = {
     "nao_lido": "Não confirmado",
@@ -105,6 +116,13 @@ class _ElidedLabel(QLabel):
         )
 
 
+def _initials(name: str) -> str:
+    parts = [part for part in name.split() if part]
+    if not parts:
+        return "?"
+    return (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper()
+
+
 def _refresh(widget: QWidget) -> None:
     widget.style().unpolish(widget)
     widget.style().polish(widget)
@@ -130,6 +148,8 @@ class DashboardPage(QWidget):
     navigate_requested = Signal(str)
     alert_open_requested = Signal(int)
     open_alerts_changed = Signal(object)
+    # (horário da resposta ou None, mensagem de erro) para a tela de Configurações.
+    api_status_changed = Signal(object, str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -138,6 +158,7 @@ class DashboardPage(QWidget):
         self._recent: tuple[_RecentAlert, ...] | None = None
         self._realtime_recent: list[_RecentAlert] = []
         self._timing_labels: list[tuple[ActiveOperationSnapshot, QLabel, QLabel]] = []
+        self._operation_count = 0
         self.setObjectName("dashboard_page")
         self.criar_interface()
         self._clock = QTimer(self)
@@ -178,7 +199,7 @@ class DashboardPage(QWidget):
         self.realtime_alert_banner.hide()
         layout_principal.addWidget(self.realtime_alert_banner)
 
-        layout_principal.addLayout(self._criar_indicadores())
+        layout_principal.addWidget(self._criar_indicadores())
 
         agora = QHBoxLayout()
         agora.setSpacing(16)
@@ -196,21 +217,11 @@ class DashboardPage(QWidget):
         topo = QHBoxLayout()
         topo.setSpacing(16)
 
-        titulos = QVBoxLayout()
-        titulos.setSpacing(2)
-        titulos.addWidget(_label("AGORA NA PLANTA", "dashboard_secao"))
-        subtitulo = _label(
-            "Operações em andamento, alertas e indicadores de segurança.", "pagina_subtitulo"
-        )
-        titulos.addWidget(subtitulo)
-        topo.addLayout(titulos, 1)
-
         self.status_label = _label("Aguardando atualização da API.", "dashboard_status", wrap=True)
         self.status_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self.status_label.setMaximumWidth(380)
-        topo.addWidget(self.status_label)
+        topo.addWidget(self.status_label, 1)
 
         self.retry_button = QPushButton("Tentar novamente")
         self.retry_button.setObjectName("dashboard_retry")
@@ -220,12 +231,20 @@ class DashboardPage(QWidget):
         topo.addWidget(self.retry_button)
         return topo
 
-    def _criar_indicadores(self) -> QGridLayout:
-        grade = QGridLayout()
-        grade.setHorizontalSpacing(14)
+    def _criar_indicadores(self) -> QFrame:
+        """Uma barra de instrumentos única, não cinco cartões soltos."""
+
+        faixa = QFrame()
+        faixa.setObjectName("dashboard_kpis")
+        grade = QGridLayout(faixa)
+        grade.setContentsMargins(0, 0, 0, 0)
+        grade.setHorizontalSpacing(0)
 
         self.card_operacoes = self.criar_card(
-            "Operações ativas", "—", "Aguardando operações ativas.", tom="hero"
+            "Operações em andamento", "—", "Aguardando operações ativas.", tom="hero"
+        )
+        self.card_operacoes.descricao_label.setTextFormat(  # type: ignore[attr-defined]
+            Qt.TextFormat.RichText
         )
         self.card_alertas = self.criar_card(
             "Alertas em aberto", "—", "Novos e confirmados, ainda não encerrados."
@@ -234,7 +253,7 @@ class DashboardPage(QWidget):
             "Alertas críticos", "—", "Registrados no histórico."
         )
         self.card_funcionarios = self.criar_card(
-            "Funcionários ativos", "—", "Funcionários ativos cadastrados"
+            "Funcionários ativos", "—", "Cadastrados no Admin"
         )
         self.card_conformidade = self.criar_card(
             "EPIs entregues", "—", "Os dados de entrega serão carregados pela API."
@@ -249,9 +268,10 @@ class DashboardPage(QWidget):
             self.card_conformidade,
         )
         for column, card in enumerate(cards):
+            card.setProperty("first", "true" if column == 0 else "false")
             grade.addWidget(card, 0, column)
-            grade.setColumnStretch(column, 1)
-        return grade
+            grade.setColumnStretch(column, 5 if column == 0 else 4)
+        return faixa
 
     def criar_card(
         self, titulo: str, valor: str, descricao: str, *, tom: str = "neutral"
@@ -263,7 +283,7 @@ class DashboardPage(QWidget):
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(2)
 
-        titulo_label = _label(titulo.upper(), "card_titulo")
+        titulo_label = _label(titulo, "card_titulo")
         layout.addWidget(titulo_label)
 
         valor_label = _label(valor, "card_valor")
@@ -279,6 +299,7 @@ class DashboardPage(QWidget):
 
     def _cabecalho_painel(self, titulo: str, descricao: str) -> tuple[QHBoxLayout, QVBoxLayout]:
         cabecalho = QHBoxLayout()
+        cabecalho.setContentsMargins(16, 0, 16, 0)
         cabecalho.setSpacing(10)
         textos = QVBoxLayout()
         textos.setSpacing(1)
@@ -298,30 +319,32 @@ class DashboardPage(QWidget):
         painel = QFrame()
         painel.setObjectName("dashboard_painel")
         layout = QVBoxLayout(painel)
-        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setContentsMargins(1, 14, 1, 4)
         layout.setSpacing(10)
 
         cabecalho, _ = self._cabecalho_painel(
             "Operações em andamento",
-            "Última observação de EPIs enviada por cada Operador.",
+            "Ordenadas pela gravidade, com a última observação de cada estação.",
         )
         self.realtime_status_label = _label("Canal em tempo real desconectado.", "realtime_status")
         self.realtime_status_label.setProperty("state", "offline")
         cabecalho.addWidget(self.realtime_status_label, 0, Qt.AlignmentFlag.AlignTop)
         cabecalho.addWidget(
-            self._botao_link("Gestão de EPIs", "epis"), 0, Qt.AlignmentFlag.AlignTop
+            self._botao_link("Abrir Gestão de EPIs", "epis"), 0, Qt.AlignmentFlag.AlignTop
         )
         layout.addLayout(cabecalho)
 
         self._operations_layout = QVBoxLayout()
-        self._operations_layout.setSpacing(8)
+        self._operations_layout.setSpacing(0)
         layout.addLayout(self._operations_layout)
 
         self.operations_empty = _label("", "dashboard_vazio", wrap=True)
         self.operations_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.operations_empty.setContentsMargins(16, 0, 16, 12)
         layout.addWidget(self.operations_empty, 1)
 
         self.operations_more = _label("", "grafico_descricao")
+        self.operations_more.setContentsMargins(16, 6, 16, 6)
         layout.addWidget(self.operations_more)
         layout.addStretch()
         return painel
@@ -330,21 +353,22 @@ class DashboardPage(QWidget):
         painel = QFrame()
         painel.setObjectName("dashboard_painel")
         layout = QVBoxLayout(painel)
-        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setContentsMargins(1, 14, 1, 4)
         layout.setSpacing(10)
 
         cabecalho, _ = self._cabecalho_painel(
-            "Alertas recentes", "Selecione um alerta para abrir os detalhes."
+            "Alertas que pedem ação", "Não confirmados primeiro; clique para abrir."
         )
         cabecalho.addWidget(self._botao_link("Ver todos", "alertas"), 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(cabecalho)
 
         self._alerts_layout = QVBoxLayout()
-        self._alerts_layout.setSpacing(8)
+        self._alerts_layout.setSpacing(0)
         layout.addLayout(self._alerts_layout)
 
         self.alerts_empty = _label("", "dashboard_vazio", wrap=True)
         self.alerts_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.alerts_empty.setContentsMargins(16, 0, 16, 12)
         layout.addWidget(self.alerts_empty, 1)
         layout.addStretch()
         return painel
@@ -354,7 +378,7 @@ class DashboardPage(QWidget):
         secao.setSpacing(10)
 
         cabecalho = QHBoxLayout()
-        cabecalho.addWidget(_label("HISTÓRICO DE ALERTAS", "dashboard_secao"))
+        cabecalho.addWidget(_label("Histórico de alertas", "dashboard_secao"))
         cabecalho.addStretch()
         self.texto_alertas = _label("Aguardando dados da API.", "painel_texto")
         cabecalho.addWidget(self.texto_alertas)
@@ -365,8 +389,8 @@ class DashboardPage(QWidget):
         self.alert_trend_chart = AlertTrendChart()
         graficos.addWidget(
             self._criar_painel_grafico(
-                "Evolução dos alertas",
-                "Ocorrências registradas nos últimos 7 dias",
+                "Alertas nos últimos 7 dias",
+                "Ocorrências registradas por dia",
                 self.alert_trend_chart,
             ),
             2,
@@ -374,7 +398,7 @@ class DashboardPage(QWidget):
         self.alert_category_chart = AlertCategoryBarChart()
         graficos.addWidget(
             self._criar_painel_grafico(
-                "Alertas por categoria",
+                "Por categoria",
                 "Origem das ocorrências registradas",
                 self.alert_category_chart,
             ),
@@ -441,18 +465,18 @@ class DashboardPage(QWidget):
         self.card_conformidade.valor_label.setText(percentage)  # type: ignore[attr-defined]
         self.texto_conformidade.setText(
             f"{summary.delivered_ppe} de {summary.ppe_assignments} "
-            "associações de EPI estão marcadas como entregues."
+            "associações entregues"
         )
         self.card_alertas.valor_label.setText(str(open_alerts))  # type: ignore[attr-defined]
         self.card_alertas.descricao_label.setText(  # type: ignore[attr-defined]
-            f"{status.new} novo(s) · {status.confirmed} confirmado(s)"
+            f"{status.new} novos, {status.confirmed} confirmados"
         )
         self._set_tone(self.card_alertas, "warn" if open_alerts else "neutral")
         self.card_criticos.valor_label.setText(  # type: ignore[attr-defined]
             str(summary.critical_alerts)
         )
         self.card_criticos.descricao_label.setText(  # type: ignore[attr-defined]
-            f"De {summary.alerts} alerta(s) registrado(s) no histórico."
+            f"de {summary.alerts} no histórico"
         )
         self._set_tone(self.card_criticos, "crit" if summary.critical_alerts else "neutral")
         self.open_alerts_changed.emit(open_alerts)
@@ -476,6 +500,7 @@ class DashboardPage(QWidget):
                 ChartBar("EPI", categories.ppe, TOKENS["brand_600"]),
                 ChartBar("Ergonomia", categories.ergonomics, TOKENS["brand_800"]),
                 ChartBar("Área de risco", categories.risk_area, TOKENS["brand_400"]),
+                ChartBar("Queda", categories.fall, TOKENS["crit_600"]),
                 ChartBar("Monitoramento", categories.monitoring, TOKENS["nav_500"]),
                 ChartBar("Outros", categories.other, TOKENS["ink_300"]),
             )
@@ -490,12 +515,15 @@ class DashboardPage(QWidget):
         )
 
         generated_at = summary.generated_at.astimezone()
-        self.status_label.setText(f"Atualizado pela API em {generated_at:%d/%m/%Y às %H:%M:%S}.")
+        self.status_label.setText(
+            f"Atualizado pela API às {generated_at:%H:%M:%S} de {generated_at:%d/%m/%Y}."
+        )
         self.status_label.setProperty("state", "ready")
         self.retry_button.setEnabled(True)
         self.retry_button.setText("Atualizar")
         self.retry_button.show()
         _refresh(self.status_label)
+        self.api_status_changed.emit(summary.generated_at, "")
 
     def show_error(self, message: str) -> None:
         if not self._has_data:
@@ -508,6 +536,7 @@ class DashboardPage(QWidget):
         self.retry_button.setText("Tentar novamente")
         self.retry_button.show()
         _refresh(self.status_label)
+        self.api_status_changed.emit(None, message)
 
     # ======================================================
     # TEMPO REAL
@@ -531,6 +560,7 @@ class DashboardPage(QWidget):
             "ergonomics": " ergonômico",
             "risk_area": " de área de risco",
             "monitoring": " de monitoramento",
+            "fall": " de queda",
         }.get(alert.category, "")
         self.realtime_alert_banner.setText(
             f"Novo alerta{category} {severity} #{alert.alert_id}: {alert.summary}"
@@ -589,17 +619,28 @@ class DashboardPage(QWidget):
             for item in operations
         )
         self.card_operacoes.valor_label.setText(str(len(operations)))  # type: ignore[attr-defined]
+        compliant = len(operations) - attention - non_compliant
         if not operations:
             description = "Nenhuma operação em andamento."
-        elif attention or non_compliant:
-            description = f"{non_compliant} não conforme(s) · {attention} em atenção"
         else:
-            description = "Todas conformes na última observação."
+            parts = []
+            for count, singular, plural, tone in (
+                (non_compliant, "não conforme", "não conformes", "crit_500"),
+                (attention, "em atenção", "em atenção", "warn_500"),
+                (compliant, "conforme", "conformes", "safe_500"),
+            ):
+                if count:
+                    parts.append(
+                        f'<span style="color:{TOKENS[tone]}">●</span> '
+                        f"{count} {singular if count == 1 else plural}"
+                    )
+            description = "&nbsp;&nbsp;".join(parts)
         self.card_operacoes.descricao_label.setText(description)  # type: ignore[attr-defined]
 
         ordered = sorted(
             operations, key=lambda item: (_STATUS_ORDER[item.overall_status], item.started_at)
         )
+        self._operation_count = 0
         for item in ordered[:_MAX_OPERATION_ROWS]:
             self._operations_layout.addWidget(self._operation_row(item))
 
@@ -620,12 +661,19 @@ class DashboardPage(QWidget):
         row = _ClickableFrame()
         row.setObjectName("dashboard_operacao")
         row.setProperty("tone", tone)
+        row.setProperty("first", "true" if self._operation_count == 0 else "false")
+        self._operation_count += 1
         row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.setToolTip("Abrir na Gestão de EPIs")
         row.clicked.connect(lambda: self.navigate_requested.emit("epis"))
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(14, 9, 12, 9)
-        layout.setSpacing(14)
+        layout.setContentsMargins(14, 10, 16, 10)
+        layout.setSpacing(12)
+
+        avatar = _label(_initials(item.operator_name), "linha_avatar")
+        avatar.setFixedSize(32, 32)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(avatar)
 
         who = QVBoxLayout()
         who.setSpacing(1)
@@ -636,55 +684,39 @@ class DashboardPage(QWidget):
                 "linha_texto",
             )
         )
-        layout.addLayout(who, 1)
+        layout.addLayout(who, 4)
 
-        ppe = QVBoxLayout()
-        ppe.setSpacing(1)
-        confirmed = sum(entry.state is PpeLiveState.CONFIRMED for entry in item.ppe)
-        ppe.addWidget(
-            _label(
-                f"EPIs {confirmed}/{len(item.ppe)}" if item.ppe else "Sem EPI exigido",
-                "linha_valor",
-            )
-        )
-        absent = [entry.name for entry in item.ppe if entry.state is PpeLiveState.ABSENT]
-        pending = [
-            entry.name
-            for entry in item.ppe
-            if entry.state in (PpeLiveState.COLLECTING, PpeLiveState.UNSTABLE)
-        ]
-        unmapped = [entry.name for entry in item.ppe if entry.state is PpeLiveState.UNMAPPED]
-        if absent:
-            detail = _ElidedLabel("Ausente: " + ", ".join(absent), "linha_alerta")
-        elif pending:
-            detail = _ElidedLabel("Em verificação: " + ", ".join(pending), "linha_texto")
-        elif unmapped:
-            detail = _ElidedLabel("Sem mapeamento: " + ", ".join(unmapped), "linha_texto")
+        chips = QWidget()
+        flow = FlowLayout(chips, spacing=6)
+        if item.ppe:
+            for entry in item.ppe:
+                state, chip_tone = _PPE_CHIP.get(entry.state, ("Verificando", "inc"))
+                flow.addWidget(PpeChip(f"{entry.name}: {state}", chip_tone))
         else:
-            detail = _ElidedLabel("Todos confirmados" if item.ppe else "—", "linha_texto")
-        ppe.addWidget(detail)
-        ppe_box = QWidget()
-        ppe_box.setLayout(ppe)
-        ppe_box.setFixedWidth(158)
-        layout.addWidget(ppe_box)
+            flow.addWidget(PpeChip("Sem EPI exigido", "neutral"))
+        chips.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout.addWidget(chips, 5)
 
         timing = QVBoxLayout()
         timing.setSpacing(1)
-        duration = _label("", "linha_valor")
+        duration = _label("", "linha_tempo")
         age = _label("", "linha_texto")
         timing.addWidget(duration)
         timing.addWidget(age)
         timing_box = QWidget()
         timing_box.setLayout(timing)
-        timing_box.setFixedWidth(96)
+        timing_box.setFixedWidth(104)
         layout.addWidget(timing_box)
         self._timing_labels.append((item, duration, age))
 
-        chip = _label(label, "status_chip")
-        chip.setProperty("tone", tone)
-        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        chip.setFixedWidth(104)
-        layout.addWidget(chip, 0, Qt.AlignmentFlag.AlignVCenter)
+        chip = StateChip(label, tone)
+        holder = QWidget()
+        holder_layout = QHBoxLayout(holder)
+        holder_layout.setContentsMargins(0, 0, 0, 0)
+        holder_layout.addStretch()
+        holder_layout.addWidget(chip)
+        holder.setFixedWidth(136)
+        layout.addWidget(holder, 0, Qt.AlignmentFlag.AlignVCenter)
         return row
 
     def _update_timing(self) -> None:
@@ -696,7 +728,7 @@ class DashboardPage(QWidget):
             )
             seconds = max(0, int((now - item.observed_at).total_seconds()))
             age.setText(
-                f"obs. há {seconds}s" if seconds < 60 else f"obs. há {seconds // 60} min"
+                f"visto há {seconds} s" if seconds < 60 else f"visto há {seconds // 60} min"
             )
             stale = "true" if seconds >= _STALE_OBSERVATION_SECONDS else "false"
             if age.property("stale") != stale:
@@ -708,7 +740,16 @@ class DashboardPage(QWidget):
     # ======================================================
 
     def set_recent_alerts(self, alerts: tuple[AdminAlert, ...]) -> None:
-        ordered = sorted(alerts, key=lambda alert: alert.occurrence.detected_at, reverse=True)
+        newest_first = sorted(
+            alerts, key=lambda alert: alert.occurrence.detected_at, reverse=True
+        )
+        ordered = sorted(
+            newest_first,
+            key=lambda alert: (
+                _ACTION_ORDER.get(alert.status, 1),
+                alert.level != "critical",
+            ),
+        )
         self._recent = tuple(
             _RecentAlert(
                 alert.id,
@@ -742,46 +783,41 @@ class DashboardPage(QWidget):
 
     def _alert_row(self, item: _RecentAlert) -> QFrame:
         level = "crit" if item.level == "critical" else "warn"
+        tone = "inc" if item.category == "monitoring" else level
         row = _ClickableFrame()
         row.setObjectName("dashboard_alerta")
-        row.setProperty("tone", level)
+        row.setProperty("tone", tone)
         row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.setToolTip("Abrir na Central de alertas")
         row.clicked.connect(lambda: self.alert_open_requested.emit(item.alert_id))
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(14, 8, 12, 8)
-        layout.setSpacing(3)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(14, 9, 16, 9)
+        layout.setSpacing(10)
 
-        top = QHBoxLayout()
-        top.setSpacing(8)
-        chip = _label("Crítico" if level == "crit" else "Atenção", "status_chip")
-        chip.setProperty("tone", level)
-        top.addWidget(chip)
-        top.addWidget(
-            _label(
-                f"{_CATEGORY_LABELS.get(item.category, 'Segurança')} · #{item.alert_id}",
-                "linha_valor",
-            )
-        )
-        top.addStretch()
+        texts = QVBoxLayout()
+        texts.setSpacing(2)
+        title = _label(item.summary, "linha_titulo", wrap=True)
+        texts.addWidget(title)
+        meta = [f"{_CATEGORY_LABELS.get(item.category, 'Segurança')} · #{item.alert_id}"]
+        if item.employee:
+            meta.append(item.employee)
+        texts.addWidget(_ElidedLabel(" · ".join(meta), "linha_texto"))
+        layout.addLayout(texts, 1)
+
+        right = QVBoxLayout()
+        right.setSpacing(4)
+        chip = StateChip("Crítico" if level == "crit" else "Atenção", tone)
+        right.addWidget(chip, 0, Qt.AlignmentFlag.AlignRight)
         when = item.detected_at.astimezone()
         today = datetime.now().astimezone().date()
-        top.addWidget(
-            _label(
-                f"{when:%H:%M}" if when.date() == today else f"{when:%d/%m %H:%M}",
-                "linha_texto",
-            )
-        )
-        layout.addLayout(top)
-
-        layout.addWidget(_ElidedLabel(item.summary, "linha_titulo"))
-
-        details = [_ALERT_STATUS_LABELS.get(item.status, item.status)]
-        if item.employee:
-            details.append(item.employee)
+        stamp = f"{when:%H:%M}" if when.date() == today else f"{when:%d/%m %H:%M}"
+        status = _ALERT_STATUS_LABELS.get(item.status, item.status)
         if item.realtime:
-            details.append("recebido agora")
-        layout.addWidget(_label(" · ".join(details), "linha_texto"))
+            status = "Recebido agora"
+        info = _label(f"{status} · {stamp}", "linha_texto")
+        info.setAlignment(Qt.AlignmentFlag.AlignRight)
+        right.addWidget(info, 0, Qt.AlignmentFlag.AlignRight)
+        layout.addLayout(right)
         return row
 
     # ======================================================

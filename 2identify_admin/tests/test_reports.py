@@ -122,7 +122,9 @@ def test_reports_page_is_real_route_and_emits_selected_filters(qapp) -> None:
     window.trocar_pagina("relatorios")
     assert window.stack.currentWidget() is window.reports
     spy = QSignalSpy(window.reports.export_requested)
-    window.reports.camera_id.setValue(8)
+    window.reports.set_cameras(((8, "Câmera Linha B"), (3, "Câmera Solda")))
+    window.reports.camera.setCurrentIndex(window.reports.camera.findData(8))
+    assert "Câmera Linha B" in window.reports.summary_label.text()
     window.reports.export_button.click()
     assert spy.count() == 1
     assert spy.at(0)[0].camera_id == 8

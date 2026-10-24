@@ -48,6 +48,9 @@ from app.ui.components import (
     CameraRiskZone,
     ExpandedCameraDialog,
 )
+from app.ui.icons import line_icon
+from app.ui.safety_widgets import StateChip, state_pixmap
+from app.ui.theme import TOKENS
 from app.vision.pose import PoseDetectionBatch
 from app.vision.ppe import PpeTrackingBatch
 
@@ -62,10 +65,10 @@ _TILE_STATUS_TEXT = {
 _TILE_PLACEHOLDER_TEXT = {
     CameraStatus.CONNECTING: "Conectando à câmera…",
     CameraStatus.ONLINE: "Aguardando o primeiro quadro…",
-    CameraStatus.OFFLINE: "Câmera offline\nAs demais câmeras seguem monitorando.",
+    CameraStatus.OFFLINE: "Câmera offline\nAs outras câmeras seguem monitorando.",
     CameraStatus.RECONNECTING: "Reconectando à câmera…",
 }
-_EVIDENCE_TEXT = {"present": "PRESENTE", "absent": "AUSENTE", "unknown": "INCONCLUSIVO"}
+_EVIDENCE_TEXT = {"present": "confirmado", "absent": "ausente", "unknown": "inconclusivo"}
 _HELMET_TEXT = {
     "na_cabeca": "NA CABEÇA",
     "na_mao": "NA MÃO",
@@ -94,12 +97,38 @@ _MAX_ALERT_ROWS = 4
 # Smallest tile width (px) that keeps a camera readable on a projector.
 _MIN_GRID_TILE_WIDTH = 400
 _ALERT_TYPE_TEXT = {
-    SafetyViolationType.PPE_ABSENT: "EPI AUSENTE",
-    SafetyViolationType.PERSON_IN_RISK_AREA: "ÁREA DE RISCO",
-    SafetyViolationType.MONITORING_INTERRUPTED: "MONITORAMENTO INTERROMPIDO",
-    SafetyViolationType.ERGONOMIC_RISK: "ERGONOMIA",
-    SafetyViolationType.FALL_DETECTED: "QUEDA",
+    SafetyViolationType.PPE_ABSENT: "EPI ausente",
+    SafetyViolationType.PERSON_IN_RISK_AREA: "Entrada na área de risco",
+    SafetyViolationType.MONITORING_INTERRUPTED: "Monitoramento interrompido",
+    SafetyViolationType.ERGONOMIC_RISK: "Postura de risco",
+    SafetyViolationType.FALL_DETECTED: "Queda detectada",
 }
+# Overall state -> shape tone used by the state band (colour + shape + word).
+_OVERALL_TONE = {
+    "idle": "neutral",
+    "waiting": "inc",
+    "safe": "safe",
+    "inconclusive": "inc",
+    "attention": "warn",
+    "critical": "crit",
+    "offline": "inc",
+}
+_STATE_MARK = {
+    "safe": TOKENS["safe_600"],
+    "attention": TOKENS["warn_600"],
+    "critical": TOKENS["crit_600"],
+}
+_PPE_STATE_TONE = {
+    "confirmed": "safe",
+    "absent": "crit",
+    "unstable": "inc",
+    "collecting": "inc",
+    "waiting": "neutral",
+    "unmapped": "neutral",
+}
+# Up to this many cameras one featured camera spans a 2x2 block and the others
+# fit around it without scrolling; more cameras use the scrolling grid.
+_MAX_FEATURED_LAYOUT = 6
 
 
 class ActiveOperationPage(QWidget):
@@ -125,6 +154,7 @@ class ActiveOperationPage(QWidget):
         self._pose_keypoint_confidence_threshold = 0.50
         self._ppe_rows: list[QFrame] = []
         self._ppe_state_labels: dict[int, QLabel] = {}
+        self._ppe_state_icons: dict[int, QLabel] = {}
         self._ppe_alert_labels: dict[int, QLabel] = {}
         self._active_alert_count = 0
         self._active_alerts: tuple = ()
@@ -143,6 +173,9 @@ class ActiveOperationPage(QWidget):
         self._tile_stacks: dict[int, QStackedWidget] = {}
         self._tile_placeholders: dict[int, QLabel] = {}
         self._tile_expand_buttons: dict[int, QPushButton] = {}
+        self._tile_tags: dict[int, QLabel] = {}
+        self._tile_alarms: dict[int, StateChip] = {}
+        self._featured_camera_id: int | None = None
         self._focused_camera_id: int | None = None
         self._arranging = False
         self._elapsed_timer = QTimer(self)
@@ -192,6 +225,9 @@ class ActiveOperationPage(QWidget):
         self._tile_stacks.clear()
         self._tile_placeholders.clear()
         self._tile_expand_buttons.clear()
+        self._tile_tags.clear()
+        self._tile_alarms.clear()
+        self._featured_camera_id = None
         self._focused_camera_id = None
         self._selected_cameras = tuple(cameras)
         for camera in cameras:
@@ -236,18 +272,28 @@ class ActiveOperationPage(QWidget):
         name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         name.setToolTip(camera.name)
         header_layout.addWidget(name, 1)
+        tag = self._label("Área de risco", "activeCameraTileTag")
+        tag.hide()
+        header_layout.addWidget(tag)
+        alarm = StateChip("", "crit", solid=True)
+        alarm.setObjectName(f"activeCameraTileAlarm_{camera_id}")
+        alarm.hide()
+        header_layout.addWidget(alarm)
         status = self._label(
             _TILE_STATUS_TEXT[CameraStatus.CONNECTING], f"activeCameraTileStatus_{camera_id}"
         )
         status.setProperty("role", "tileStatus")
         status.setProperty("state", "connecting")
-        status.setFixedHeight(20)
+        status.setFixedHeight(22)
         header_layout.addWidget(status)
-        expand = QPushButton("EXPANDIR")
+        expand = QPushButton()
         expand.setObjectName(f"activeCameraTileExpand_{camera_id}")
         expand.setProperty("role", "tileButton")
         expand.setCursor(Qt.CursorShape.PointingHandCursor)
-        expand.setAccessibleName(f"Expandir {camera.name}")
+        expand.setFixedSize(30, 30)
+        expand.setIcon(line_icon("expand", TOKENS["nav_text"], size=16))
+        expand.setToolTip("Ampliar esta câmera")
+        expand.setAccessibleName(f"Ampliar {camera.name}")
         expand.clicked.connect(lambda: self._toggle_tile_focus(camera_id))
         header_layout.addWidget(expand)
         tile_layout.addWidget(header)
@@ -267,7 +313,7 @@ class ActiveOperationPage(QWidget):
         stack.addWidget(view)
         tile_layout.addWidget(stack, 1)
 
-        ppe_status = self._label("EPI: AGUARDANDO EVIDÊNCIA", f"activeCameraTilePpe_{camera_id}")
+        ppe_status = self._label("EPI: aguardando evidência", f"activeCameraTilePpe_{camera_id}")
         ppe_status.setProperty("role", "tilePpe")
         ppe_status.setProperty("state", "waiting")
         ppe_status.setFixedHeight(_TILE_FOOTER_HEIGHT)
@@ -282,6 +328,8 @@ class ActiveOperationPage(QWidget):
         self._tile_stacks[camera_id] = stack
         self._tile_placeholders[camera_id] = placeholder
         self._tile_expand_buttons[camera_id] = expand
+        self._tile_tags[camera_id] = tag
+        self._tile_alarms[camera_id] = alarm
 
     @Slot(int, object)
     def update_camera_tile(self, camera_id: int, value: object) -> None:
@@ -299,6 +347,8 @@ class ActiveOperationPage(QWidget):
             return
         self._tile_status_values[camera_id] = value
         status.setText(_TILE_STATUS_TEXT[value])
+        # An online camera needs no badge; only problems are called out.
+        status.setVisible(value is not CameraStatus.ONLINE)
         self._set_state(status, value.value.casefold())
         view = self._camera_tiles[camera_id]
         self._tile_placeholders[camera_id].setText(_TILE_PLACEHOLDER_TEXT[value])
@@ -307,12 +357,12 @@ class ActiveOperationPage(QWidget):
             view.clear_overlay()
             view.clear_pose_overlay()
             self._tile_stacks[camera_id].setCurrentWidget(self._tile_placeholders[camera_id])
-            self._set_tile_ppe(camera_id, "EPI: INCONCLUSIVO · OFFLINE", "unknown")
+            self._set_tile_ppe(camera_id, "EPI: inconclusivo nesta câmera", "unknown")
         elif not view.has_frame:
             self._tile_stacks[camera_id].setCurrentWidget(self._tile_placeholders[camera_id])
         online = sum(item is CameraStatus.ONLINE for item in self._tile_status_values.values())
         total = len(self._tile_status_values)
-        self._camera_status.setText(f"{online}/{total} ONLINE")
+        self._camera_status.setText(f"{online} de {total} online")
         self._set_state(
             self._camera_status,
             "active" if online == total else "unavailable" if online == 0 else "partial",
@@ -330,8 +380,9 @@ class ActiveOperationPage(QWidget):
             if item.detection_class == "capacete" and helmet_placement is not None:
                 text = _HELMET_TEXT.get(helmet_placement.value, "VERIFICANDO")
                 evidences.add("unknown" if text == "VERIFICANDO" else item.evidence.value)
+                text = text.lower()
             else:
-                text = _EVIDENCE_TEXT.get(item.evidence.value, item.evidence.value.upper())
+                text = _EVIDENCE_TEXT.get(item.evidence.value, item.evidence.value)
                 evidences.add(item.evidence.value)
             parts.append(f"{item.name}: {text}")
         if "absent" in evidences:
@@ -342,13 +393,13 @@ class ActiveOperationPage(QWidget):
             state = "present"
         else:
             state = "waiting"
-        self._set_tile_ppe(camera_id, ", ".join(parts) or "EPI: AGUARDANDO EVIDÊNCIA", state)
+        self._set_tile_ppe(camera_id, ", ".join(parts) or "EPI: aguardando evidência", state)
         if len(self._selected_cameras) == 1:
             self.update_monitoring_assessment(assessment)
 
     def mark_camera_ppe_unknown(self, camera_id: int, reason: str) -> None:
         if camera_id in self._tile_ppe_statuses:
-            self._set_tile_ppe(camera_id, f"EPI: INCONCLUSIVO · {reason}", "unknown")
+            self._set_tile_ppe(camera_id, f"EPI: inconclusivo · {reason}", "unknown")
 
     def focus_camera(self, camera_id: int | None) -> None:
         """Expand one grid camera in place, or return to the grid with ``None``."""
@@ -357,7 +408,11 @@ class ActiveOperationPage(QWidget):
             return
         self._focused_camera_id = camera_id
         for tile_id, button in self._tile_expand_buttons.items():
-            button.setText("GRADE" if tile_id == camera_id else "EXPANDIR")
+            focused = tile_id == camera_id
+            button.setIcon(
+                line_icon("shrink" if focused else "expand", TOKENS["nav_text"], size=16)
+            )
+            button.setToolTip("Voltar à grade" if focused else "Ampliar esta câmera")
             button.setVisible(len(self._selected_cameras) > 1)
         self._camera_back_button.setVisible(camera_id is not None)
         self._arrange_camera_tiles()
@@ -389,19 +444,34 @@ class ActiveOperationPage(QWidget):
             while self._camera_grid.count():
                 self._camera_grid.takeAt(0)
             focused = self._focused_camera_id
+            featured = self._featured_camera() if focused is None else None
+            self._featured_camera_id = featured
+            risk_camera = self._risk_camera_id()
+            for camera_id, tag in self._tile_tags.items():
+                tag.setVisible(camera_id == featured and camera_id == risk_camera)
             visible = [
                 camera
                 for camera in self._selected_cameras
                 if focused is None or camera.camera_id == focused
             ]
+            if featured is not None:
+                visible.sort(key=lambda camera: camera.camera_id != featured)
             for camera in self._selected_cameras:
-                self._tile_containers[camera.camera_id].setVisible(camera in visible)
+                tile = self._tile_containers[camera.camera_id]
+                tile.setVisible(camera in visible)
+                self._set_state(tile, "featured" if camera.camera_id == featured else "grid")
             if not visible:
                 return
             scrollbar = self._camera_grid_scroll.verticalScrollBar().sizeHint().width()
-            width = max(240, self._camera_grid_scroll.width() - scrollbar)
             height = max(200, self._camera_grid_scroll.height())
             count = len(visible)
+            for column in range(3):
+                self._camera_grid.setColumnStretch(column, 0)
+            if featured is not None and count >= 3:
+                self._arrange_featured(visible, height)
+                self._camera_count.setText("A câmera com alerta crítico vai para o destaque")
+                return
+            width = max(240, self._camera_grid_scroll.width() - scrollbar)
             chrome = _TILE_HEADER_HEIGHT + _TILE_FOOTER_HEIGHT
             if count == 1:
                 # One camera (or an expanded one) uses all the room it has.
@@ -416,19 +486,97 @@ class ActiveOperationPage(QWidget):
                 tile = self._tile_containers[camera.camera_id]
                 tile.setFixedHeight(tile_height)
                 self._camera_grid.addWidget(tile, index // columns, index % columns)
-            for column in range(3):
-                self._camera_grid.setColumnStretch(column, 1 if column < columns else 0)
+            for column in range(columns):
+                self._camera_grid.setColumnStretch(column, 1)
             rows = math.ceil(count / columns)
             needs_scroll = rows * tile_height + (rows - 1) * _GRID_SPACING > height
-            total = len(self._selected_cameras)
-            text = f"{total} selecionada(s)"
             if focused is not None:
-                text += " · câmera expandida"
+                text = "Câmera ampliada · as outras seguem monitorando"
             elif needs_scroll:
-                text += " · role para ver todas"
+                text = f"{len(self._selected_cameras)} câmeras · role para ver todas"
+            else:
+                text = ""
             self._camera_count.setText(text)
         finally:
             self._arranging = False
+
+    def _arrange_featured(self, visible: list[CameraSource], height: int) -> None:
+        """Featured camera over a 2x2 block; the others around it, without scrolling.
+
+        Cells share one size, so 16:9 video keeps its proportion in both the
+        featured camera and the small ones.
+        """
+
+        rows = 2 if len(visible) == 3 else 3
+        cell = (height - (rows - 1) * _GRID_SPACING) // rows
+        self._camera_grid.setContentsMargins(0, 0, 0, 0)
+        featured_tile = self._tile_containers[visible[0].camera_id]
+        featured_tile.setFixedHeight(2 * cell + _GRID_SPACING)
+        self._camera_grid.addWidget(featured_tile, 0, 0, 2, 2)
+        slots = ((0, 2), (1, 2), (2, 0), (2, 1), (2, 2))
+        for camera, (row, column) in zip(visible[1:], slots, strict=False):
+            tile = self._tile_containers[camera.camera_id]
+            tile.setFixedHeight(cell)
+            self._camera_grid.addWidget(tile, row, column)
+        for column in range(3):
+            self._camera_grid.setColumnStretch(column, 1)
+
+    def _featured_camera(self) -> int | None:
+        """Camera with the newest critical alert, else the risk-area camera."""
+
+        count = len(self._selected_cameras)
+        if count < 2 or count > _MAX_FEATURED_LAYOUT:
+            return None
+        alarm = self._alarm_camera()
+        if alarm is not None:
+            return alarm[0]
+        risk_camera = self._risk_camera_id()
+        if risk_camera in self._tile_containers:
+            return risk_camera
+        return self._selected_cameras[0].camera_id
+
+    def _risk_camera_id(self) -> int | None:
+        operation = self._operation
+        if operation is None or operation.risk_area is None:
+            return None
+        return operation.risk_area.camera_id
+
+    def _alarm_camera(self) -> tuple[int, object] | None:
+        critical = sorted(
+            (
+                alert
+                for alert in self._active_alerts
+                if alert.violation.severity is SafetyAlertSeverity.CRITICAL
+            ),
+            key=lambda alert: alert.raised_at,
+            reverse=True,
+        )
+        for alert in critical:
+            camera_id = alert.violation.camera_id or alert.violation.evidence_camera_id
+            if camera_id in self._tile_containers:
+                return camera_id, alert
+        return None
+
+    def _refresh_alarm_tiles(self) -> None:
+        """Red border and alarm tag on the camera behind the newest critical alert."""
+
+        alarm = self._alarm_camera()
+        for camera_id, chip in self._tile_alarms.items():
+            alarmed = alarm is not None and alarm[0] == camera_id
+            if alarmed:
+                chip.set_state(_ALERT_TYPE_TEXT[alarm[1].violation.violation_type], "crit")
+            chip.setVisible(alarmed)
+            tile = self._tile_containers[camera_id]
+            if tile.property("alarm") != alarmed:
+                tile.setProperty("alarm", alarmed)
+                # Inset the content so the thick alarm border stays visible.
+                inset = 3 if alarmed else 0
+                tile.layout().setContentsMargins(inset, inset, inset, inset)
+                self._refresh_style(tile)
+        if self._focused_camera_id is None and self._featured_camera() != (
+            self._featured_camera_id
+        ):
+            self._arrange_camera_tiles()
 
     @staticmethod
     def _grid_geometry(count: int, width: int, height: int) -> tuple[int, int]:
@@ -505,7 +653,7 @@ class ActiveOperationPage(QWidget):
         self._operation = operation
         self._operation_name.setText(operation.name)
         self._operation_name.setToolTip(operation.name)
-        self._operation_code.setText(f"OPERAÇÃO #{operation.operation_id}")
+        self._operation_code.setText(f"#{operation.operation_id}")
         self._operator_name.setText(self._operator_session.operator_name)
         self._operator_code.setText(f"Operador #{self._operator_session.operator_id}")
         self._risk_area.setText(
@@ -525,11 +673,12 @@ class ActiveOperationPage(QWidget):
             f"{count} EPI confirmado" if count == 1 else f"{count} EPIs confirmados"
         )
         self._set_finish_error("")
-        self._finish_button.setText("ENCERRAR OPERAÇÃO")
+        self._finish_button.setText("Encerrar operação")
         self._finish_button.setEnabled(True)
         self._render_required_ppe(operation)
         self._reset_monitoring_presentation()
         self._configure_risk_zone(operation)
+        self._arrange_camera_tiles()
         self._update_elapsed()
         self._elapsed_timer.start()
 
@@ -539,7 +688,7 @@ class ActiveOperationPage(QWidget):
         if not self.is_active or self._monitoring_active:
             return
         self._monitoring_active = True
-        self._camera_status.setText("INICIALIZANDO")
+        self._camera_status.setText("Iniciando câmeras")
         self._set_state(self._camera_status, "starting")
         self._monitoring_status.setText("INICIANDO MONITORAMENTO DE EPIs")
         self._set_state(self._monitoring_status, "pending")
@@ -565,7 +714,7 @@ class ActiveOperationPage(QWidget):
         self._camera_preview.clear_risk_zones()
         self._elapsed.setText("00:00:00")
         self._set_finish_error("")
-        self._finish_button.setText("ENCERRAR OPERAÇÃO")
+        self._finish_button.setText("Encerrar operação")
         self._finish_button.setEnabled(False)
 
     # ======================================================
@@ -576,7 +725,7 @@ class ActiveOperationPage(QWidget):
     def show_monitoring_camera_ready(self) -> None:
         if not self._monitoring_active:
             return
-        self._camera_status.setText("ATIVA")
+        self._camera_status.setText("Câmera ativa")
         self._set_state(self._camera_status, "active")
         self._camera_retry_button.hide()
         if self._monitoring_failed and self._camera_failure:
@@ -593,14 +742,14 @@ class ActiveOperationPage(QWidget):
         if self._camera_stack.currentWidget() is not self._camera_preview:
             self._camera_stack.setCurrentWidget(self._camera_preview)
         self._camera_expand_button.setEnabled(True)
-        if self._camera_status.text() != "ATIVA":
+        if self._camera_status.text() != "Câmera ativa":
             self.show_monitoring_camera_ready()
 
     @Slot(str, bool)
     def show_monitoring_camera_failure(self, message: str, unavailable: bool) -> None:
         if not self._monitoring_active:
             return
-        self._camera_status.setText("INDISPONÍVEL" if unavailable else "FALHA")
+        self._camera_status.setText("Câmera indisponível" if unavailable else "Falha na câmera")
         self._set_state(self._camera_status, "unavailable" if unavailable else "error")
         self._camera_placeholder_title.setText(
             "Câmera indisponível" if unavailable else "Falha na câmera"
@@ -626,7 +775,7 @@ class ActiveOperationPage(QWidget):
     def show_monitoring_inference_loading(self) -> None:
         if not self._monitoring_active:
             return
-        self._inference_status.setText("CARREGANDO MODELO")
+        self._inference_status.setText("Carregando IA")
         self._set_state(self._inference_status, "loading")
         self._set_all_ppe_state("AGUARDANDO EVIDÊNCIA", "collecting")
 
@@ -638,7 +787,7 @@ class ActiveOperationPage(QWidget):
             or not all(isinstance(item, str) for item in value)
         ):
             return
-        self._inference_status.setText("IA ATIVA · COLETANDO AMOSTRAS")
+        self._inference_status.setText("IA monitorando")
         self._set_state(self._inference_status, "active")
 
     @Slot(str, bool)
@@ -650,7 +799,7 @@ class ActiveOperationPage(QWidget):
         del unavailable
         if not self._monitoring_active:
             return
-        self._inference_status.setText("IA INDISPONÍVEL")
+        self._inference_status.setText("IA indisponível")
         self._set_state(self._inference_status, "error")
         self._monitoring_status.setText(message)
         self._set_state(self._monitoring_status, "blocked")
@@ -905,8 +1054,9 @@ class ActiveOperationPage(QWidget):
             if requirement.detection_class == "capacete" and value.helmet_placement is not None:
                 text = _HELMET_TEXT[value.helmet_placement.value]
             self._set_ppe_state(requirement.ppe_id, text, state)
-        self._inference_status.setText(
-            f"IA ATIVA · {value.sample_count}/{value.window_size} AMOSTRAS"
+        self._inference_status.setText("IA monitorando")
+        self._inference_status.setToolTip(
+            f"{value.sample_count} de {value.window_size} quadros na janela de confirmação"
         )
         if value.status is PpeSafetyStatus.COMPLIANT:
             self._monitoring_status.setText("EPIs CONFIRMADOS")
@@ -941,13 +1091,14 @@ class ActiveOperationPage(QWidget):
         self._refresh_ppe_inconclusive_flags()
         self._refresh_fall_presentation()
         self._refresh_overall_state()
+        self._refresh_alarm_tiles()
         if value.active_alerts:
-            latest = value.active_alerts[-1]
             count = len(value.active_alerts)
-            suffix = "ALERTA LOCAL ATIVO" if count == 1 else "ALERTAS LOCAIS ATIVOS"
-            self._alert_badge.setText(f"{count} {suffix}")
+            self._alert_badge.setText("1 ativo" if count == 1 else f"{count} ativos")
             self._set_state(self._alert_badge, "active")
-            self._alert_message.setText(f"{latest.violation.summary} · NÃO SINCRONIZADO")
+            if value.raised_alerts or value.escalated_alerts:
+                # Delivery outcome replaces this line when the Admin answers.
+                self._alert_message.setText("Enviando o alerta ao Admin…")
             critical = any(
                 alert.violation.severity is SafetyAlertSeverity.CRITICAL
                 for alert in value.active_alerts
@@ -956,10 +1107,11 @@ class ActiveOperationPage(QWidget):
             self._set_state(self._alert_badge, state)
         elif value.resolved_alerts:
             latest = value.resolved_alerts[-1]
-            self._alert_badge.setText("0 ALERTAS LOCAIS ATIVOS")
+            self._alert_badge.setText("nenhum")
             self._set_state(self._alert_badge, "resolved")
             self._alert_message.setText(
-                f"Condição normalizada: {latest.violation.summary} · registro local"
+                f"Condição normalizada: {latest.violation.summary}. "
+                "O registro continua no Admin."
             )
             state = "resolved"
         else:
@@ -971,9 +1123,7 @@ class ActiveOperationPage(QWidget):
     def show_alert_delivery_succeeded(self, event_id: str, alert_id: int) -> None:
         if not self._monitoring_active or not event_id or alert_id <= 0:
             return
-        self._alert_message.setText(
-            f"Alerta #{alert_id} registrado e enviado ao Admin em tempo real."
-        )
+        self._alert_message.setText(f"Alerta #{alert_id} enviado ao Admin.")
 
     @Slot(str, str)
     def show_alert_delivery_failure(self, event_id: str, message: str) -> None:
@@ -981,13 +1131,13 @@ class ActiveOperationPage(QWidget):
             return
         normalized = message.strip()
         self._alert_message.setText(
-            normalized or "Alerta mantido localmente; envio ao Admin não confirmado."
+            normalized or "O Admin ainda não confirmou o alerta; ele segue salvo nesta estação."
         )
 
     @Slot(str)
     def show_finish_failure(self, message: str) -> None:
         self._set_finish_error(message)
-        self._finish_button.setText("TENTAR ENCERRAR NOVAMENTE")
+        self._finish_button.setText("Tentar encerrar de novo")
         self._finish_button.setEnabled(self.is_active)
 
     def _render_alert_rows(self) -> None:
@@ -1020,19 +1170,27 @@ class ActiveOperationPage(QWidget):
         row.setObjectName("activeAlertRow")
         row.setProperty("state", state)
         layout = QVBoxLayout(row)
-        layout.setContentsMargins(10, 8 if critical else 6, 10, 8 if critical else 6)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(3)
         top = QHBoxLayout()
         top.setSpacing(8)
-        chip = self._label("CRÍTICO" if critical else "ATENÇÃO", "activeAlertSeverity")
-        chip.setProperty("state", state)
-        top.addWidget(chip)
+        inconclusive = violation.subject_key.startswith("ppe_inconclusive:")
+        icon = QLabel()
+        icon.setObjectName("activeAlertIcon")
+        if critical:
+            icon.setPixmap(state_pixmap("crit", 18, color="#fff", mark=TOKENS["crit_600"]))
+        else:
+            icon.setPixmap(state_pixmap("inc" if inconclusive else "warn", 18))
+        top.addWidget(icon)
         risk_type = _ALERT_TYPE_TEXT[violation.violation_type]
-        if violation.subject_key.startswith("ppe_inconclusive:"):
-            risk_type = "EPI INCONCLUSIVO"
+        if inconclusive:
+            risk_type = "EPI inconclusivo"
         kind = self._label(risk_type, "activeAlertType")
         kind.setProperty("state", state)
         top.addWidget(kind, 1)
+        chip = self._label("CRÍTICO" if critical else "ATENÇÃO", "activeAlertSeverity")
+        chip.setProperty("state", state)
+        top.addWidget(chip)
         layout.addLayout(top)
         reason = self._label(violation.summary, "activeAlertRowText")
         reason.setProperty("state", state)
@@ -1042,7 +1200,7 @@ class ActiveOperationPage(QWidget):
         camera_id = violation.camera_id or violation.evidence_camera_id
         if camera_id is not None:
             origin.append(self._camera_name(camera_id))
-        origin.append(f"desde {alert.raised_at.astimezone().strftime('%H:%M:%S')}")
+        origin.insert(0, f"Desde {alert.raised_at.astimezone().strftime('%H:%M:%S')}")
         meta = self._label(" · ".join(origin), "activeAlertMeta")
         meta.setProperty("state", state)
         layout.addWidget(meta)
@@ -1096,6 +1254,17 @@ class ActiveOperationPage(QWidget):
         self._overall_label.setText(_OVERALL_TEXT[state])
         self._set_state(self._overall_label, state)
         self._set_state(self._header_bar, state)
+        if self._state_block.property("state") != state:
+            self._set_state(self._state_block, state)
+            # Descendant selectors need the child repolished too.
+            self._refresh_style(self._state_caption)
+        mark = _STATE_MARK.get(state)
+        tone = _OVERALL_TONE[state]
+        self._overall_icon.setPixmap(
+            state_pixmap(tone, 26, color="#fff", mark=mark)
+            if mark is not None
+            else state_pixmap(tone, 26)
+        )
         # EPI conformity never speaks for the whole operation: say so when
         # another active risk keeps the overall state below SEGURO.
         other_risk = (
@@ -1130,64 +1299,52 @@ class ActiveOperationPage(QWidget):
         bar = QFrame()
         bar.setObjectName("activeHeaderBar")
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(18)
+        layout.setContentsMargins(0, 0, 18, 0)
+        layout.setSpacing(0)
         self._header_bar = bar
 
-        overall = QVBoxLayout()
-        overall.setSpacing(3)
-        overall.addWidget(self._label("ESTADO GERAL", "activeHeaderCaption"))
+        # State band: the one thing readable from across the room.
+        block = QFrame()
+        block.setObjectName("activeStateBlock")
+        block.setMinimumWidth(236)
+        block_layout = QVBoxLayout(block)
+        block_layout.setContentsMargins(20, 12, 24, 12)
+        block_layout.setSpacing(2)
+        self._state_caption = self._label("Estado geral", "activeStateCaption")
+        block_layout.addWidget(self._state_caption)
+        word = QHBoxLayout()
+        word.setSpacing(10)
+        self._overall_icon = QLabel()
+        self._overall_icon.setObjectName("activeOverallIcon")
+        word.addWidget(self._overall_icon)
         self._overall_label = self._label(_OVERALL_TEXT["idle"], "activeOverallState")
-        self._overall_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._overall_label.setMinimumWidth(176)
-        overall.addWidget(self._overall_label)
-        layout.addLayout(overall)
-        layout.addWidget(self._divider())
+        word.addWidget(self._overall_label)
+        word.addStretch(1)
+        block_layout.addLayout(word)
+        self._state_block = block
+        layout.addWidget(block)
 
-        operation = QVBoxLayout()
-        operation.setSpacing(1)
-        self._operation_code = self._label("", "activeHeaderCaption")
-        operation.addWidget(self._operation_code)
         self._operation_name = self._label("—", "activeOperationName")
-        self._operation_name.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
-        )
-        operation.addWidget(self._operation_name)
-        layout.addLayout(operation, 3)
-
-        operator = QVBoxLayout()
-        operator.setSpacing(1)
-        operator.addWidget(self._label("FUNCIONÁRIO", "activeHeaderCaption"))
-        self._operator_name = self._label("—", "activeDetailValue")
-        operator.addWidget(self._operator_name)
-        self._operator_code = self._label("", "activeMetadata")
-        operator.addWidget(self._operator_code)
-        layout.addLayout(operator, 2)
-
-        area = QVBoxLayout()
-        area.setSpacing(1)
-        area.addWidget(self._label("ÁREA DE RISCO", "activeHeaderCaption"))
-        self._risk_area = self._label("—", "activeHeaderValue")
-        self._risk_area.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        area.addWidget(self._risk_area)
-        self._risk_area_camera = self._label("", "activeMetadata")
-        self._risk_area_camera.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
-        )
-        area.addWidget(self._risk_area_camera)
-        layout.addLayout(area, 2)
-
-        duration = QVBoxLayout()
-        duration.setSpacing(1)
-        duration.addWidget(self._label("DURAÇÃO", "activeHeaderCaption"))
-        self._elapsed = self._label("00:00:00", "activeElapsed")
-        duration.addWidget(self._elapsed)
-        layout.addLayout(duration)
+        self._operation_code = self._label("", "activeMetadata")
+        layout.addWidget(self._fact("Operação", self._operation_name, self._operation_code), 3)
         layout.addWidget(self._divider())
+        self._operator_name = self._label("—", "activeDetailValue")
+        self._operator_code = self._label("", "activeMetadata")
+        layout.addWidget(self._fact("Funcionário", self._operator_name, self._operator_code), 2)
+        layout.addWidget(self._divider())
+        self._risk_area = self._label("—", "activeHeaderValue")
+        self._risk_area_camera = self._label("", "activeMetadata")
+        layout.addWidget(self._fact("Área de risco", self._risk_area, self._risk_area_camera), 2)
+        layout.addWidget(self._divider())
+        self._elapsed = self._label("00:00:00", "activeElapsed")
+        layout.addWidget(self._fact("Em operação há", self._elapsed, fixed=True))
+        layout.addStretch(1)
 
         finish = QVBoxLayout()
+        finish.setContentsMargins(12, 0, 0, 0)
         finish.setSpacing(3)
-        self._finish_button = QPushButton("ENCERRAR OPERAÇÃO")
+        finish.addStretch(1)
+        self._finish_button = QPushButton("Encerrar operação")
         self._finish_button.setObjectName("activeFinishButton")
         self._finish_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._finish_button.clicked.connect(self._request_finish)
@@ -1198,8 +1355,30 @@ class ActiveOperationPage(QWidget):
         self._finish_error.setMaximumWidth(260)
         self._finish_error.hide()
         finish.addWidget(self._finish_error)
+        finish.addStretch(1)
         layout.addLayout(finish)
         return bar
+
+    def _fact(
+        self, caption: str, value: QLabel, detail: QLabel | None = None, *, fixed: bool = False
+    ) -> QWidget:
+        fact = QWidget()
+        fact.setObjectName("activeFact")
+        column = QVBoxLayout(fact)
+        column.setContentsMargins(18, 10, 18, 10)
+        column.setSpacing(1)
+        column.addStretch(1)
+        column.addWidget(self._label(caption, "activeHeaderCaption"))
+        value.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        column.addWidget(value)
+        if detail is not None:
+            detail.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            column.addWidget(detail)
+        column.addStretch(1)
+        if fixed:
+            fact.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+            value.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        return fact
 
     def _build_camera_panel(self) -> QFrame:
         panel = QFrame()
@@ -1211,33 +1390,35 @@ class ActiveOperationPage(QWidget):
         toolbar = QFrame()
         toolbar.setObjectName("activeCameraToolbar")
         bar = QHBoxLayout(toolbar)
-        bar.setContentsMargins(14, 8, 10, 8)
-        bar.setSpacing(8)
-        bar.addWidget(self._label("CÂMERAS", "activeMonitoringTitle"))
+        bar.setContentsMargins(16, 8, 10, 8)
+        bar.setSpacing(10)
+        bar.addWidget(self._label("Câmeras", "activeMonitoringTitle"))
         self._camera_count = self._label("", "activeMetadata")
         bar.addWidget(self._camera_count)
         bar.addStretch(1)
+        # Detection counts are technical; kept for diagnostics, not shown.
         self._overlay_status = self._label("0 TRACKS", "activeOverlayStatus")
+        self._overlay_status.hide()
         bar.addWidget(self._overlay_status)
-        self._inference_status = self._label("IA NÃO INICIALIZADA", "activeInferenceStatus")
+        self._inference_status = self._label("IA não iniciada", "activeInferenceStatus")
         self._inference_status.setProperty("state", "idle")
         bar.addWidget(self._inference_status)
-        self._camera_status = self._label("NÃO INICIALIZADA", "activeCameraStatus")
+        self._camera_status = self._label("Câmera não iniciada", "activeCameraStatus")
         self._camera_status.setProperty("state", "idle")
         bar.addWidget(self._camera_status)
-        self._camera_back_button = QPushButton("VOLTAR À GRADE")
+        self._camera_back_button = QPushButton("Voltar à grade")
         self._camera_back_button.setObjectName("activeCameraBackButton")
         self._camera_back_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._camera_back_button.clicked.connect(lambda: self.focus_camera(None))
         self._camera_back_button.hide()
         bar.addWidget(self._camera_back_button)
-        self._camera_expand_button = QPushButton("EXPANDIR CÂMERA")
+        self._camera_expand_button = QPushButton("Ampliar câmera")
         self._camera_expand_button.setObjectName("activeCameraExpandButton")
         self._camera_expand_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._camera_expand_button.setEnabled(False)
         self._camera_expand_button.clicked.connect(self._toggle_expanded_camera)
         bar.addWidget(self._camera_expand_button)
-        self._camera_retry_button = QPushButton("TENTAR CÂMERA NOVAMENTE")
+        self._camera_retry_button = QPushButton("Tentar a câmera de novo")
         self._camera_retry_button.setObjectName("activeCameraRetryButton")
         self._camera_retry_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._camera_retry_button.clicked.connect(self._request_camera_retry)
@@ -1246,7 +1427,7 @@ class ActiveOperationPage(QWidget):
         layout.addWidget(toolbar)
 
         content = QVBoxLayout()
-        content.setContentsMargins(10, 10, 10, 10)
+        content.setContentsMargins(12, 12, 12, 12)
         content.setSpacing(0)
         self._camera_stack = QStackedWidget()
         self._camera_stack.setObjectName("activeCameraStack")
@@ -1321,12 +1502,15 @@ class ActiveOperationPage(QWidget):
         self._alert_strip.setObjectName("activeAlertStrip")
         self._alert_strip.setProperty("state", "idle")
         alert_layout = QVBoxLayout(self._alert_strip)
-        alert_layout.setContentsMargins(14, 12, 14, 12)
-        alert_layout.setSpacing(6)
-        alert_layout.addWidget(self._label("RISCOS ATIVOS", "activeSectionLabel"))
-        self._alert_badge = self._label("0 ALERTAS LOCAIS ATIVOS", "activeAlertBadge")
+        alert_layout.setContentsMargins(16, 14, 16, 14)
+        alert_layout.setSpacing(8)
+        title = QHBoxLayout()
+        title.addWidget(self._label("Riscos ativos", "activeSectionLabel"))
+        title.addStretch(1)
+        self._alert_badge = self._label("nenhum", "activeAlertBadge")
         self._alert_badge.setProperty("state", "idle")
-        alert_layout.addWidget(self._alert_badge)
+        title.addWidget(self._alert_badge)
+        alert_layout.addLayout(title)
         self._alert_rows_layout = QVBoxLayout()
         self._alert_rows_layout.setSpacing(6)
         alert_layout.addLayout(self._alert_rows_layout)
@@ -1334,15 +1518,15 @@ class ActiveOperationPage(QWidget):
         self._alert_more.hide()
         alert_layout.addWidget(self._alert_more)
         self._alert_message = self._label(
-            "Nenhuma ocorrência local · SEM ENVIO À API", "activeAlertMessage"
+            "Nenhum alerta em aberto nesta operação.", "activeAlertMessage"
         )
         self._alert_message.setWordWrap(True)
         alert_layout.addWidget(self._alert_message)
         layout.addWidget(self._alert_strip)
 
         # EPIs: conformidade dos EPIs, separada do estado geral da operação.
-        ppe_panel, ppe_layout = self._card("activePpePanel", "EPIs OBRIGATÓRIOS")
-        ppe_layout.addWidget(self._label("CONFORMIDADE DOS EPIs", "activeHeaderCaption"))
+        ppe_panel, ppe_layout = self._card("activePpePanel", "EPIs obrigatórios")
+        self._ppe_count = ppe_panel.findChild(QLabel, "activeCardCount")
         self._monitoring_status = self._label(
             "MONITORAMENTO NÃO INICIADO", "activeMonitoringStatus"
         )
@@ -1366,8 +1550,7 @@ class ActiveOperationPage(QWidget):
         self._ppe_layout.setSpacing(6)
         ppe_layout.addWidget(self._ppe_container)
         self._ppe_multicamera_notice = self._label(
-            "Cada quadro mostra a evidência da própria câmera; "
-            "INCONCLUSIVO não significa ausente.",
+            "Cada câmera mostra só o que ela vê; inconclusivo não significa ausente.",
             "activeMetadata",
         )
         self._ppe_multicamera_notice.setWordWrap(True)
@@ -1376,7 +1559,7 @@ class ActiveOperationPage(QWidget):
         layout.addWidget(ppe_panel)
 
         # Riscos monitorados
-        risk_panel, risk_layout = self._card("activeRiskPanel", "RISCOS MONITORADOS")
+        risk_panel, risk_layout = self._card("activeRiskPanel", "Riscos monitorados")
         self._ergonomics_status, self._ergonomics_detail = self._risk_row(
             risk_layout, "Ergonomia", "activeErgonomicsStatus", "activeErgonomicsDetail"
         )
@@ -1389,7 +1572,7 @@ class ActiveOperationPage(QWidget):
         layout.addWidget(risk_panel)
 
         # Detalhes da sessão (recolhível)
-        self._details_toggle = QPushButton("DETALHES DA SESSÃO  ▸")
+        self._details_toggle = QPushButton("Detalhes da sessão  ▸")
         self._details_toggle.setObjectName("activeDetailsToggle")
         self._details_toggle.setCheckable(True)
         self._details_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1399,21 +1582,21 @@ class ActiveOperationPage(QWidget):
         details_layout = QVBoxLayout(details)
         details_layout.setContentsMargins(14, 12, 14, 12)
         details_layout.setSpacing(2)
-        self._started_at = self._detail_row(details_layout, "INÍCIO", "activeHeaderValue")
+        self._started_at = self._detail_row(details_layout, "Início", "activeHeaderValue")
         self._verified_ppe = self._detail_row(
-            details_layout, "SEGURANÇA INICIAL", "activeSafetyValue"
+            details_layout, "Liberação inicial", "activeSafetyValue"
         )
         self._session_cameras = self._detail_row(
-            details_layout, "CÂMERAS", "activeHeaderValue"
+            details_layout, "Câmeras", "activeHeaderValue"
         )
         self._session_cameras.setText("Câmera da estação")
-        self._session_code = self._detail_row(details_layout, "SESSÃO LOCAL", "activeSessionCode")
+        self._session_code = self._detail_row(details_layout, "Sessão local", "activeSessionCode")
         details.hide()
         self._details_toggle.toggled.connect(
             lambda checked: (
                 details.setVisible(checked),
                 self._details_toggle.setText(
-                    "DETALHES DA SESSÃO  ▾" if checked else "DETALHES DA SESSÃO  ▸"
+                    "Detalhes da sessão  ▾" if checked else "Detalhes da sessão  ▸"
                 ),
             )
         )
@@ -1426,9 +1609,13 @@ class ActiveOperationPage(QWidget):
         card.setObjectName(object_name)
         card.setProperty("role", "sideCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setContentsMargins(16, 14, 16, 12)
         layout.setSpacing(8)
-        layout.addWidget(self._label(title, "activeSectionLabel"))
+        header = QHBoxLayout()
+        header.addWidget(self._label(title, "activeSectionLabel"))
+        header.addStretch(1)
+        header.addWidget(self._label("", "activeCardCount"))
+        layout.addLayout(header)
         return card, layout
 
     def _risk_row(
@@ -1443,7 +1630,7 @@ class ActiveOperationPage(QWidget):
         header.setSpacing(8)
         header.addWidget(self._label(title, "activePpeName"))
         header.addStretch(1)
-        status = self._label("NÃO INICIALIZADA", status_name)
+        status = self._label("NÃO INICIADA", status_name)
         status.setProperty("state", "idle")
         status.setProperty("role", "riskStatus")
         header.addWidget(status)
@@ -1475,8 +1662,12 @@ class ActiveOperationPage(QWidget):
             row = QFrame()
             row.setObjectName("activePpeRow")
             layout = QHBoxLayout(row)
-            layout.setContentsMargins(10, 8, 10, 8)
-            layout.setSpacing(8)
+            layout.setContentsMargins(0, 8, 0, 8)
+            layout.setSpacing(10)
+            icon = QLabel()
+            icon.setObjectName("activePpeIcon")
+            icon.setPixmap(state_pixmap("neutral", 16))
+            layout.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
             names = QVBoxLayout()
             names.setSpacing(1)
             name = self._label(requirement.name, "activePpeName")
@@ -1493,7 +1684,10 @@ class ActiveOperationPage(QWidget):
             self._ppe_layout.addWidget(row)
             self._ppe_rows.append(row)
             self._ppe_state_labels[requirement.ppe_id] = state
+            self._ppe_state_icons[requirement.ppe_id] = icon
             self._ppe_alert_labels[requirement.ppe_id] = flag
+        count = len(operation.required_ppe)
+        self._ppe_count.setText("1 item" if count == 1 else f"{count} itens")
         if not operation.required_ppe:
             empty = self._label("Nenhum EPI obrigatório nesta operação.", "activeMetadata")
             self._ppe_layout.addWidget(empty)
@@ -1537,15 +1731,16 @@ class ActiveOperationPage(QWidget):
                 widget.deleteLater()
         self._ppe_rows.clear()
         self._ppe_state_labels.clear()
+        self._ppe_state_icons.clear()
         self._ppe_alert_labels.clear()
 
     def _reset_monitoring_presentation(self) -> None:
         self._close_expanded_camera()
         self._camera_preview.clear_frame()
         self._camera_stack.setCurrentWidget(self._camera_placeholder)
-        self._camera_status.setText("NÃO INICIALIZADA")
+        self._camera_status.setText("Câmera não iniciada")
         self._set_state(self._camera_status, "idle")
-        self._inference_status.setText("IA NÃO INICIALIZADA")
+        self._inference_status.setText("IA não iniciada")
         self._set_state(self._inference_status, "idle")
         self._overlay_status.setText("0 TRACKS")
         self._monitoring_status.setText("MONITORAMENTO NÃO INICIADO")
@@ -1555,12 +1750,12 @@ class ActiveOperationPage(QWidget):
             "Aguardando captura para o monitoramento contínuo."
         )
         self._camera_retry_button.hide()
-        self._camera_expand_button.setText("EXPANDIR CÂMERA")
+        self._camera_expand_button.setText("Ampliar câmera")
         self._camera_expand_button.setEnabled(False)
-        self._ergonomics_status.setText("NÃO INICIALIZADA")
+        self._ergonomics_status.setText("NÃO INICIADA")
         self._set_state(self._ergonomics_status, "idle")
         self._ergonomics_detail.setText("Aguardando o monitoramento.")
-        self._risk_area_status.setText("NÃO INICIALIZADA")
+        self._risk_area_status.setText("NÃO INICIADA")
         self._set_state(self._risk_area_status, "idle")
         self._risk_area_detail.setText("Aguardando o monitoramento.")
         self._ppe_status = None
@@ -1579,9 +1774,11 @@ class ActiveOperationPage(QWidget):
         self._render_alert_rows()
         self._refresh_ppe_inconclusive_flags()
         self._set_state(self._alert_strip, "idle")
-        self._alert_badge.setText("0 ALERTAS LOCAIS ATIVOS")
+        self._alert_badge.setText("nenhum")
         self._set_state(self._alert_badge, "idle")
-        self._alert_message.setText("Nenhuma ocorrência local · SEM ENVIO À API")
+        self._alert_message.setText("Nenhum alerta em aberto nesta operação.")
+        if hasattr(self, "_tile_alarms"):
+            self._refresh_alarm_tiles()
         if hasattr(self, "_fall_status"):
             self._refresh_fall_presentation()
             self._refresh_overall_state()
@@ -1595,6 +1792,10 @@ class ActiveOperationPage(QWidget):
         if label is None:
             return
         label.setText(text)
+        if label.property("state") != state:
+            icon = self._ppe_state_icons.get(ppe_id)
+            if icon is not None:
+                icon.setPixmap(state_pixmap(_PPE_STATE_TONE.get(state, "neutral"), 16))
         self._set_state(label, state)
 
     def _set_finish_error(self, message: str) -> None:
@@ -1624,14 +1825,14 @@ class ActiveOperationPage(QWidget):
         self._camera_preview.copy_presentation_to(dialog.camera_view)
         dialog.closed.connect(self._handle_expanded_camera_closed)
         self._expanded_camera_dialog = dialog
-        self._camera_expand_button.setText("RESTAURAR CÂMERA")
+        self._camera_expand_button.setText("Restaurar câmera")
         dialog.showFullScreen()
 
     @Slot()
     def _handle_expanded_camera_closed(self) -> None:
         dialog = self._expanded_camera_dialog
         self._expanded_camera_dialog = None
-        self._camera_expand_button.setText("EXPANDIR CÂMERA")
+        self._camera_expand_button.setText("Ampliar câmera")
         self._camera_expand_button.setEnabled(
             self._monitoring_active and self._camera_preview.has_frame
         )
@@ -1662,7 +1863,7 @@ class ActiveOperationPage(QWidget):
     def _request_camera_retry(self) -> None:
         if not self._monitoring_active:
             return
-        self._camera_status.setText("REINICIANDO")
+        self._camera_status.setText("Reiniciando câmera")
         self._set_state(self._camera_status, "starting")
         self._camera_retry_button.hide()
         self.monitoring_start_requested.emit()
@@ -1673,7 +1874,7 @@ class ActiveOperationPage(QWidget):
         if session is None or not session.is_active:
             return
         self._finish_button.setEnabled(False)
-        self._finish_button.setText("ENCERRANDO...")
+        self._finish_button.setText("Encerrando…")
         self._set_finish_error("")
         self.finish_requested.emit(str(session.session_id))
 

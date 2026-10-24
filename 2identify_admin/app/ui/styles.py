@@ -317,18 +317,14 @@ QMainWindow,
 }
 
 #sidebar_subtitulo {
-    color: {{brand_400}};
-    font-size: {{font_badge}};
-    font-weight: 700;
-    letter-spacing: 1px;
+    color: #8FB4E2;
+    font-size: {{font_label}};
 }
 
 #sidebar_secao {
     color: {{nav_muted}};
-    font-size: {{font_badge}};
-    font-weight: 700;
-    letter-spacing: 1px;
-    padding-left: 12px;
+    font-size: {{font_label}};
+    padding-left: 10px;
 }
 
 #sidebar_separador {
@@ -357,7 +353,7 @@ QMainWindow,
 }
 
 #menu_botao:checked {
-    background-color: {{nav_700}};
+    background-color: {{nav_800}};
     border-left: 3px solid {{brand_400}};
     color: {{surface_1}};
     font-weight: 700;
@@ -391,16 +387,14 @@ QMainWindow,
 }
 
 #header_contexto {
-    color: {{brand_600}};
-    font-size: {{font_badge}};
-    font-weight: 700;
-    letter-spacing: 1px;
+    color: {{ink_500}};
+    font-size: {{font_small}};
 }
 
 #header_titulo {
     color: {{ink_900}};
-    font-size: {{font_section}};
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 600;
 }
 
 #header_conexao {
@@ -455,6 +449,7 @@ QMainWindow,
 #dashboard_conteudo,
 QScrollArea > #qt_scrollarea_viewport > #dashboard_conteudo,
 #alerts_page,
+#settings_page,
 #operations_page,
 #employees_page,
 #reports_page {
@@ -545,23 +540,23 @@ QScrollArea > #qt_scrollarea_viewport > #dashboard_conteudo,
 }
 
 #alert_close {
-    color: {{surface_1}};
-    background-color: {{crit_600}};
-    border: 1px solid {{crit_600}};
+    color: {{ink_900}};
+    background-color: {{surface_1}};
+    border: 1px solid {{line_300}};
     border-radius: {{radius_md}};
     min-height: 36px;
-    padding: 0 18px;
+    padding: 0 16px;
     font-size: {{font_small}};
-    font-weight: 700;
+    font-weight: 600;
 }
 
 #alert_close:hover {
-    background-color: {{crit_700}};
-    border-color: {{crit_700}};
+    background-color: {{brand_50}};
+    border-color: {{brand_300}};
 }
 
 #alert_close:focus {
-    border: 2px solid {{crit_800}};
+    border: 2px solid {{brand_500}};
 }
 
 #primary_action:disabled,
@@ -672,8 +667,7 @@ QScrollArea > #qt_scrollarea_viewport > #dashboard_conteudo,
 #dashboard_painel,
 #dashboard_grafico_painel,
 #alerts_list_panel,
-#alert_detail_container,
-QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
+#alert_detail_scroll,
 #operations_panel {
     background-color: {{surface_1}};
     border: 1px solid {{line_200}};
@@ -688,15 +682,33 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
     min-height: 240px;
 }
 
-/* Dashboard: KPI tones */
+/* Dashboard: one KPI instrument strip */
 
-#dashboard_card[tone="hero"] {
-    background-color: {{nav_900}};
-    border: 1px solid {{nav_900}};
+#dashboard_kpis {
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-radius: {{radius_lg}};
+}
+
+#dashboard_kpis #dashboard_card {
+    background-color: transparent;
+    border: none;
+    border-left: 1px solid {{line_100}};
+    border-radius: 0;
+}
+
+#dashboard_kpis #dashboard_card[first="true"] {
+    border-left: none;
+}
+
+#dashboard_kpis #dashboard_card[tone="hero"] {
+    background-color: {{nav_950}};
+    border-top-left-radius: {{radius_lg}};
+    border-bottom-left-radius: {{radius_lg}};
 }
 
 #dashboard_card[tone="hero"] #card_titulo {
-    color: {{brand_300}};
+    color: #A9C3E6;
 }
 
 #dashboard_card[tone="hero"] #card_valor {
@@ -704,46 +716,37 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
 }
 
 #dashboard_card[tone="hero"] #card_descricao {
-    color: {{nav_text}};
-}
-
-#dashboard_card[tone="warn"] {
-    border-top: 3px solid {{warn_500}};
+    color: #C7D6EC;
 }
 
 #dashboard_card[tone="warn"] #card_valor {
-    color: {{warn_700}};
-}
-
-#dashboard_card[tone="crit"] {
-    border-top: 3px solid {{crit_600}};
+    color: {{ink_900}};
 }
 
 #dashboard_card[tone="crit"] #card_valor {
-    color: {{crit_700}};
+    color: {{crit_600}};
 }
 
 #dashboard_secao {
-    color: {{ink_600}};
-    font-size: {{font_label}};
-    font-weight: 700;
-    letter-spacing: 1px;
+    color: {{ink_900}};
+    font-size: {{font_panel}};
+    font-weight: 600;
 }
 
 #dashboard_link {
-    color: {{brand_700}};
-    background-color: {{brand_50}};
-    border: 1px solid {{brand_200}};
+    color: {{ink_900}};
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
     border-radius: {{radius_md}};
-    min-height: 30px;
+    min-height: 32px;
     padding: 0 12px;
-    font-size: {{font_label}};
-    font-weight: 700;
+    font-size: {{font_small}};
+    font-weight: 600;
 }
 
 #dashboard_link:hover {
-    background-color: {{brand_100}};
-    border-color: {{brand_400}};
+    background-color: {{brand_50}};
+    border-color: {{brand_200}};
 }
 
 #dashboard_link:focus {
@@ -759,24 +762,24 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
     font-size: {{font_small}};
 }
 
-/* Dashboard: live rows */
+/* Dashboard: live rows separated by hairlines, state stripe on the left */
 
 #dashboard_operacao,
 #dashboard_alerta {
-    background-color: {{surface_2}};
-    border: 1px solid {{line_100}};
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid {{line_100}};
     border-left: 4px solid {{line_300}};
-    border-radius: {{radius_md}};
+    border-radius: 0;
 }
 
 #dashboard_operacao:hover,
 #dashboard_alerta:hover {
-    background-color: {{brand_50}};
-    border-color: {{brand_200}};
+    background-color: {{surface_2}};
 }
 
 #dashboard_operacao[tone="safe"] {
-    border-left: 4px solid {{safe_500}};
+    border-left: 4px solid {{safe_700}};
 }
 
 #dashboard_operacao[tone="warn"],
@@ -789,21 +792,43 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
     border-left: 4px solid {{crit_600}};
 }
 
+#dashboard_alerta[tone="inc"] {
+    border-left: 4px solid {{inc_700}};
+}
+
 #dashboard_operacao QWidget,
 #dashboard_alerta QWidget {
     background: transparent;
 }
 
+#linha_avatar {
+    color: {{surface_1}};
+    background-color: {{nav_900}};
+    border-radius: 16px;
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#dashboard_operacao #linha_avatar {
+    background-color: {{nav_900}};
+}
+
 #linha_titulo {
     color: {{ink_900}};
     font-size: {{font_body}};
-    font-weight: 700;
+    font-weight: 600;
 }
 
 #linha_valor {
     color: {{ink_800}};
     font-size: {{font_small}};
     font-weight: 700;
+}
+
+#linha_tempo {
+    color: {{ink_900}};
+    font-size: 17px;
+    font-weight: 600;
 }
 
 #linha_texto {
@@ -822,30 +847,11 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
     font-weight: 700;
 }
 
-#dashboard_operacao #status_chip,
-#dashboard_alerta #status_chip,
 #status_chip {
     border-radius: 11px;
     padding: 3px 10px;
     font-size: {{font_label}};
     font-weight: 700;
-}
-
-#dashboard_operacao #status_chip[tone="safe"] {
-    color: {{safe_700}};
-    background-color: {{safe_100}};
-}
-
-#dashboard_operacao #status_chip[tone="warn"],
-#dashboard_alerta #status_chip[tone="warn"] {
-    color: {{warn_800}};
-    background-color: {{warn_100}};
-}
-
-#dashboard_operacao #status_chip[tone="crit"],
-#dashboard_alerta #status_chip[tone="crit"] {
-    color: {{crit_800}};
-    background-color: {{crit_100}};
 }
 
 #dashboard_painel #realtime_status {
@@ -887,13 +893,13 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
 }
 
 #dashboard_page #card_titulo {
-    font-size: {{font_label}};
-    font-weight: 700;
-    letter-spacing: 1px;
+    font-size: {{font_small}};
+    font-weight: 500;
 }
 
 #dashboard_page #card_valor {
-    font-size: 30px;
+    font-size: 32px;
+    font-weight: 600;
     margin-top: 2px;
 }
 
@@ -936,39 +942,125 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
 
 /* Alerts */
 
-#alert_list,
 #employees_list {
     padding: 4px;
 }
 
-#alert_detail_scroll {
+#alert_list {
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid {{line_100}};
+    border-radius: 0;
+    padding: 0;
+}
+
+#alert_list::item {
+    border: none;
+    padding: 0;
+}
+
+#alert_list::item:hover,
+#alert_list::item:selected {
     background-color: transparent;
 }
 
-#alert_detail_header {
-    background-color: {{surface_2}};
+#alert_row {
+    background-color: {{surface_1}};
+    border: none;
+    border-bottom: 1px solid {{line_100}};
+    border-left: 4px solid {{line_300}};
+}
+
+#alert_row[tone="crit"] {
+    border-left: 4px solid {{crit_600}};
+}
+
+#alert_row[tone="warn"] {
+    border-left: 4px solid {{warn_500}};
+}
+
+#alert_row[tone="inc"] {
+    border-left: 4px solid {{inc_700}};
+}
+
+#alert_row[selected="true"] {
+    background-color: {{brand_50}};
+}
+
+#alert_row QLabel {
+    background: transparent;
+}
+
+#alert_row_title {
+    color: {{ink_900}};
+    font-size: {{font_body}};
+    font-weight: 600;
+}
+
+#alert_row_meta {
+    color: {{ink_500}};
+    font-size: {{font_label}};
+}
+
+#alert_filter {
+    color: {{ink_600}};
+    background-color: {{surface_1}};
     border: 1px solid {{line_200}};
-    border-radius: {{radius_md}};
+    border-radius: 15px;
+    min-height: 28px;
+    padding: 0 11px;
+    font-size: {{font_small}};
+    font-weight: 500;
+}
+
+#alert_filter:checked {
+    color: {{surface_1}};
+    background-color: {{nav_900}};
+    border-color: {{nav_900}};
+    font-weight: 600;
+}
+
+#alerts_list_panel #alerts_refresh {
+    color: {{ink_900}};
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    min-height: 32px;
+    padding: 0 12px;
+}
+
+#alerts_list_panel #alerts_refresh:hover {
+    background-color: {{brand_50}};
+    border-color: {{brand_200}};
+}
+
+#alert_detail_container,
+QScrollArea > #qt_scrollarea_viewport > #alert_detail_container {
+    background-color: {{surface_1}};
+    border: none;
+    border-radius: {{radius_lg}};
+}
+
+#alert_detail_header {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {{line_100}};
+}
+
+#alert_detail_kicker {
+    color: {{ink_600}};
+    font-size: {{font_small}};
+    font-weight: 600;
 }
 
 #alert_detail_title {
     color: {{ink_900}};
     font-size: {{font_page}};
-    font-weight: 800;
+    font-weight: 600;
 }
 
 #alert_detail_status {
-    color: {{warn_700}};
-    font-size: {{font_small}};
-    font-weight: 700;
-}
-
-#alert_detail_status[status="lido"] {
-    color: {{brand_700}};
-}
-
-#alert_detail_status[status="encerrado"] {
     color: {{ink_500}};
+    font-size: {{font_small}};
 }
 
 #alert_detail_summary {
@@ -977,20 +1069,436 @@ QScrollArea > #qt_scrollarea_viewport > #alert_detail_container,
 }
 
 #alert_detail_section {
-    background-color: {{surface_1}};
-    border: 1px solid {{line_200}};
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {{line_100}};
+    border-radius: 0;
+}
+
+#alert_detail_section[column="left"] {
+    border-right: 1px solid {{line_100}};
+}
+
+#alert_detail_section[last="true"] {
+    border-bottom: none;
+}
+
+#alert_detail_section QFrame,
+#alert_detail_section QWidget {
+    background: transparent;
+}
+
+#alert_detail_section #alert_section_title {
+    font-size: {{font_body}};
+    font-weight: 600;
+}
+
+#alert_why {
+    color: {{ink_900}};
+    font-size: 15px;
+}
+
+#alert_no_evidence {
+    color: {{ink_500}};
+    border: 1px dashed {{line_300}};
     border-radius: {{radius_md}};
+    padding: 10px 12px;
+    font-size: {{font_small}};
 }
 
 #alert_detail_key {
     color: {{ink_500}};
-    font-size: {{font_label}};
-    font-weight: 600;
+    font-size: {{font_small}};
 }
 
 #alert_detail_value {
     color: {{ink_900}};
     font-size: {{font_small}};
+    font-weight: 500;
+}
+
+/* Gestão de EPIs: filter chips and one card per active operation */
+
+#ppe_page,
+#ppe_cards,
+QScrollArea > #qt_scrollarea_viewport > #ppe_cards {
+    background-color: {{surface_0}};
+}
+
+#ppe_filter {
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-radius: 17px;
+    min-height: 34px;
+    max-height: 34px;
+}
+
+#ppe_filter[checked="true"] {
+    background-color: {{nav_900}};
+    border-color: {{nav_900}};
+}
+
+#ppe_filter:focus {
+    border: 2px solid {{brand_500}};
+}
+
+#ppe_filter QLabel {
+    background: transparent;
+}
+
+#ppe_filter_text {
+    color: {{ink_600}};
+    font-size: {{font_small}};
+    font-weight: 500;
+}
+
+#ppe_filter_count {
+    color: {{ink_900}};
+    font-size: {{font_small}};
+    font-weight: 700;
+}
+
+#ppe_filter[checked="true"] #ppe_filter_text,
+#ppe_filter[checked="true"] #ppe_filter_count {
+    color: {{surface_1}};
+}
+
+#ppe_filter_dot {
+    border-radius: 4px;
+    background-color: {{ink_400}};
+}
+
+#ppe_filter_dot[tone="crit"] {
+    background-color: {{crit_600}};
+}
+
+#ppe_filter_dot[tone="warn"] {
+    background-color: {{warn_500}};
+}
+
+#ppe_filter_dot[tone="safe"] {
+    background-color: {{safe_700}};
+}
+
+#ppe_search {
+    min-height: 22px;
+}
+
+#ppe_refresh {
+    min-height: 34px;
+}
+
+#ppe_card {
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-left: 4px solid {{line_300}};
+    border-radius: {{radius_lg}};
+}
+
+#ppe_card[tone="crit"] {
+    border-color: {{crit_300}};
+    border-left: 4px solid {{crit_600}};
+}
+
+#ppe_card[tone="warn"] {
+    border-color: {{warn_300}};
+    border-left: 4px solid {{warn_500}};
+}
+
+#ppe_card[tone="safe"] {
+    border-left: 4px solid {{safe_700}};
+}
+
+#ppe_card QFrame,
+#ppe_card QLabel {
+    background: transparent;
+}
+
+#ppe_card #ppe_card_head {
+    border: none;
+    border-bottom: 1px solid {{line_100}};
+}
+
+#ppe_card #ppe_card_foot {
+    border: none;
+    border-top: 1px solid {{line_100}};
+}
+
+#ppe_card #linha_avatar {
+    background-color: {{nav_900}};
+    border-radius: 17px;
+}
+
+#ppe_card_name {
+    color: {{ink_900}};
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#ppe_item_name {
+    color: {{ink_900}};
+    font-size: {{font_body}};
+}
+
+#ppe_card_foot_text {
+    color: {{ink_500}};
+    font-size: {{font_label}};
+}
+
+#ppe_card_foot_text[stale="true"] {
+    color: {{warn_700}};
+    font-weight: 700;
+}
+
+/* Relatórios */
+
+#reports_panel {
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-radius: {{radius_lg}};
+}
+
+#reports_panel QLabel {
+    background: transparent;
+}
+
+#reports_panel_title {
+    color: {{ink_900}};
+    font-size: {{font_panel}};
+    font-weight: 600;
+    padding-bottom: 6px;
+}
+
+#reports_field_label {
+    color: {{ink_600}};
+    font-size: {{font_small}};
+    font-weight: 600;
+    padding-top: 8px;
+}
+
+#reports_choice {
+    color: {{ink_600}};
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-radius: 15px;
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: {{font_small}};
+    font-weight: 500;
+}
+
+#reports_choice:checked {
+    color: {{surface_1}};
+    background-color: {{nav_900}};
+    border-color: {{nav_900}};
+    font-weight: 600;
+}
+
+#reports_summary {
+    color: {{ink_900}};
+    font-size: 17px;
+    font-weight: 500;
+}
+
+#reports_column {
+    color: {{ink_600}};
+    font-size: {{font_small}};
+}
+
+#reports_hint {
+    color: {{ink_500}};
+    font-size: {{font_label}};
+}
+
+#reports_panel #reports_export_button {
+    min-height: 42px;
+    font-size: {{font_body}};
+}
+
+#reports_panel #reports_status {
+    border-radius: {{radius_md}};
+    padding: 10px 12px;
+    background-color: {{brand_50}};
+    border: 1px solid {{brand_200}};
+}
+
+#reports_panel #reports_status[state="error"] {
+    color: {{crit_800}};
+    background-color: {{crit_100}};
+    border: 1px solid {{crit_300}};
+}
+
+#reports_panel #reports_status[state="success"] {
+    color: {{safe_800}};
+    background-color: {{safe_100}};
+    border: 1px solid {{safe_300}};
+}
+
+/* Configurações */
+
+#settings_panel {
+    background-color: {{surface_1}};
+    border: 1px solid {{line_200}};
+    border-radius: {{radius_lg}};
+}
+
+#settings_panel QLabel {
+    background: transparent;
+}
+
+#settings_row {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid {{line_100}};
+}
+
+#settings_title {
+    color: {{ink_900}};
+    font-size: {{font_panel}};
+    font-weight: 600;
+}
+
+#settings_key {
+    color: {{ink_500}};
+    font-size: {{font_small}};
+}
+
+#settings_value {
+    color: {{ink_900}};
+    font-size: {{font_body}};
+}
+
+#settings_muted {
+    color: {{ink_500}};
+    font-size: {{font_body}};
+}
+
+#settings_code {
+    color: {{ink_900}};
+    background-color: {{surface_3}};
+    border: 1px solid {{line_200}};
+    border-radius: {{radius_sm}};
+    padding: 4px 8px;
+    font-family: "Cascadia Mono", "Consolas", monospace;
+    font-size: {{font_small}};
+}
+
+#settings_button {
+    min-height: 32px;
+}
+
+#settings_logout {
+    color: {{crit_600}};
+    border-color: {{crit_300}};
+    min-height: 32px;
+}
+
+#settings_logout:hover {
+    background-color: {{crit_50}};
+    border-color: {{crit_600}};
+}
+
+/* Safety state language: colour + shape + word */
+
+#state_chip {
+    border: 1px solid {{line_300}};
+    border-radius: 12px;
+    min-height: 24px;
+    max-height: 24px;
+    background-color: {{surface_3}};
+}
+
+#state_chip[size="big"] {
+    border-radius: 17px;
+    min-height: 34px;
+    max-height: 34px;
+}
+
+#state_chip QLabel {
+    background: transparent;
+    border: none;
+}
+
+#state_chip_text {
+    color: {{ink_600}};
+    font-size: {{font_label}};
+    font-weight: 700;
+}
+
+#state_chip[size="big"] #state_chip_text {
+    font-size: {{font_body}};
+}
+
+#state_chip[tone="crit"] {
+    background-color: {{crit_100}};
+    border-color: {{crit_300}};
+}
+
+#state_chip[tone="crit"] #state_chip_text {
+    color: {{crit_600}};
+}
+
+#state_chip[tone="warn"] {
+    background-color: {{warn_100}};
+    border-color: {{warn_300}};
+}
+
+#state_chip[tone="warn"] #state_chip_text {
+    color: {{warn_700}};
+}
+
+#state_chip[tone="safe"] {
+    background-color: {{safe_100}};
+    border-color: {{safe_300}};
+}
+
+#state_chip[tone="safe"] #state_chip_text {
+    color: {{safe_700}};
+}
+
+#state_chip[tone="inc"] {
+    background-color: {{inc_100}};
+    border: 1px dashed {{inc_300}};
+}
+
+#state_chip[tone="inc"] #state_chip_text {
+    color: {{inc_700}};
+}
+
+#ppe_chip {
+    max-height: 26px;
+    color: {{ink_600}};
+    background-color: {{surface_3}};
+    border: 1px solid {{line_300}};
+    border-radius: {{radius_sm}};
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: {{font_label}};
+    font-weight: 600;
+}
+
+#ppe_chip[tone="safe"] {
+    color: {{safe_700}};
+    background-color: {{safe_100}};
+    border-color: {{safe_300}};
+}
+
+#ppe_chip[tone="crit"] {
+    color: {{crit_600}};
+    background-color: {{crit_100}};
+    border-color: {{crit_300}};
+}
+
+#ppe_chip[tone="warn"] {
+    color: {{warn_700}};
+    background-color: {{warn_100}};
+    border-color: {{warn_300}};
+}
+
+#ppe_chip[tone="inc"] {
+    color: {{inc_700}};
+    background-color: {{inc_100}};
+    border: 1px dashed {{inc_300}};
 }
 """
 

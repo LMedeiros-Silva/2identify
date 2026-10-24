@@ -75,10 +75,8 @@ def test_safety_page_does_not_invent_missing_risk_area_or_ppe(qtbot) -> None:
 
     page.set_operation(Operation(41, "Inspeção de segurança"))
 
-    assert page.findChild(QLabel, "safetyRiskAreaName").text() == (
-        "Área de risco não configurada"
-    )
-    assert page.findChild(QLabel, "safetyPpeCount").text() == "0 ITENS"
+    assert page.findChild(QLabel, "safetyRiskAreaName").text() == "Não configurada"
+    assert page.findChild(QLabel, "safetyPpeCount").text() == "Nenhum item"
     assert page.findChild(QLabel, "safetyPpeEmptyState").isVisibleTo(page)
     assert page.findChildren(QLabel, "safetyPpeState") == []
 

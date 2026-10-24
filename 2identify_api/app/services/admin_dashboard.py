@@ -28,6 +28,7 @@ class AdminDashboardData:
     other_category_alerts: int
     daily_alerts: tuple[tuple[date, int], ...]
     generated_at: datetime
+    fall_alerts: int = 0
 
 
 class AdminDashboardService:
@@ -73,4 +74,5 @@ class AdminDashboardService:
                 (item.day, item.alerts) for item in counts.daily_alerts
             ),
             generated_at=generated_at,
+            fall_alerts=counts.fall_alerts,
         )

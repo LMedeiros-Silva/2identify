@@ -21,13 +21,24 @@ from app.ui.main.sidebar import Sidebar
 from app.ui.operations import OperationsPage
 from app.ui.ppe import PpeManagementPage
 from app.ui.reports import ReportsPage
+from app.ui.settings import SettingsPage
 from app.ui.styles import main_window_stylesheet
+
+_PAGE_SUBTITLES = {
+    "dashboard": "Operações, alertas e indicadores da planta",
+    "epis": "Última observação enviada por cada estação Operator",
+    "alertas": "Confirme os alertas recebidos e encerre os tratados",
+    "operacoes": "Operações, câmeras e áreas de risco",
+    "relatorios": "Exporte alertas e ocorrências em Excel",
+    "funcionarios": "Cadastro, EPIs e Face ID",
+    "configuracoes": "Conexões e sessão deste Admin",
+}
 
 _PAGE_TITLES = {
     "dashboard": "Central de segurança",
     "epis": "Gestão de EPIs",
     "alertas": "Alertas",
-    "operacoes": "Operações e Áreas",
+    "operacoes": "Operações e áreas",
     "relatorios": "Relatórios",
     "funcionarios": "Funcionários",
     "configuracoes": "Configurações",
@@ -147,24 +158,16 @@ class MainWindow(QMainWindow):
 
         layout_header.setSpacing(12)
 
-        titulos_header = QVBoxLayout()
-        titulos_header.setSpacing(0)
-        titulos_header.addStretch()
-
-        contexto_header = QLabel("MONITORAMENTO DE SEGURANÇA")
-
-        contexto_header.setObjectName("header_contexto")
-
-        titulos_header.addWidget(contexto_header)
-
         self.titulo_header = QLabel(_PAGE_TITLES["dashboard"])
 
         self.titulo_header.setObjectName("header_titulo")
 
-        titulos_header.addWidget(self.titulo_header)
-        titulos_header.addStretch()
+        layout_header.addWidget(self.titulo_header, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        layout_header.addLayout(titulos_header)
+        self.subtitulo_header = QLabel(_PAGE_SUBTITLES["dashboard"])
+        self.subtitulo_header.setObjectName("header_contexto")
+        layout_header.addSpacing(4)
+        layout_header.addWidget(self.subtitulo_header, 0, Qt.AlignmentFlag.AlignVCenter)
 
         layout_header.addStretch()
 
@@ -222,6 +225,15 @@ class MainWindow(QMainWindow):
         self.ppe_management = PpeManagementPage()
         self.reports = ReportsPage()
         self.employees = EmployeesPage(self._settings)
+        self.settings_page = SettingsPage(
+            str(self._settings.api_url),
+            self.administrator.name,
+            self.administrator.username,
+            self.administrator.profile,
+        )
+        self.settings_page.test_requested.connect(self.dashboard.refresh_requested.emit)
+        self.settings_page.logout_requested.connect(lambda: self.sidebar.selecionar("sair"))
+        self.dashboard.api_status_changed.connect(self._update_api_status)
 
 
         self.stack.addWidget(self.dashboard)
@@ -237,11 +249,14 @@ class MainWindow(QMainWindow):
         )
 
         self.stack.addWidget(self.alerts)
+        self.operations.catalog_changed.connect(self._update_report_catalog)
+        self.employees.directory_changed.connect(self._update_report_directory)
 
         self.stack.addWidget(self.operations)
         self.stack.addWidget(self.ppe_management)
         self.stack.addWidget(self.reports)
         self.stack.addWidget(self.employees)
+        self.stack.addWidget(self.settings_page)
 
         layout_direita.addWidget(self.stack)
 
@@ -258,6 +273,7 @@ class MainWindow(QMainWindow):
 
         if pagina in _PAGE_TITLES:
             self.titulo_header.setText(_PAGE_TITLES[pagina])
+            self.subtitulo_header.setText(_PAGE_SUBTITLES[pagina])
 
         if pagina == "dashboard":
             self.stack.setCurrentWidget(self.dashboard)
@@ -278,35 +294,24 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.employees)
 
         elif pagina == "configuracoes":
-            self.mostrar_placeholder("Configurações")
+            self.stack.setCurrentWidget(self.settings_page)
 
         elif pagina == "sair":
             self.logout_requested.emit()
 
-    # ======================================================
-    # PLACEHOLDER TEMPORÁRIO
-    # ======================================================
+    def _update_report_catalog(self, operations: object, cameras: object) -> None:
+        self.reports.set_operations(operations)  # type: ignore[arg-type]
+        self.reports.set_cameras(cameras)  # type: ignore[arg-type]
 
-    def mostrar_placeholder(
-        self,
-        titulo: str,
-    ) -> None:
+    def _update_report_directory(self, employees: object, sectors: object) -> None:
+        self.reports.set_employees(employees)  # type: ignore[arg-type]
+        self.reports.set_sectors(sectors)  # type: ignore[arg-type]
 
-        pagina = QWidget()
-
-        layout = QVBoxLayout(pagina)
-
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        label = QLabel(titulo)
-
-        label.setObjectName("placeholder")
-
-        layout.addWidget(label)
-
-        self.stack.addWidget(pagina)
-
-        self.stack.setCurrentWidget(pagina)
+    def _update_api_status(self, generated_at: object, message: str) -> None:
+        if generated_at is None:
+            self.settings_page.show_api_error(message)
+        else:
+            self.settings_page.show_api_ok(generated_at)  # type: ignore[arg-type]
 
     def abrir_alerta(self, alert_id: int) -> None:
         self.sidebar.selecionar("alertas")
@@ -315,7 +320,7 @@ class MainWindow(QMainWindow):
     def set_realtime_status(self, message: str, *, state: str) -> None:
         self.header_conexao.setText(
             {
-                "connected": "● Tempo real ativo",
+                "connected": "● Tempo real conectado",
                 "connecting": "● Conectando ao tempo real",
             }.get(state, "● Tempo real offline")
         )
@@ -326,6 +331,7 @@ class MainWindow(QMainWindow):
         self.dashboard.set_realtime_status(message, state=state)
         self.alerts.set_connection_status(message, state=state)
         self.ppe_management.set_connection_status(message, state=state)
+        self.settings_page.set_realtime_status(message, state=state)
 
     def show_ppe_update(self, snapshot: ActiveOperationSnapshot) -> None:
         self.ppe_management.apply_update(snapshot)

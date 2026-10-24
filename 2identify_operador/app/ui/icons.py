@@ -17,6 +17,14 @@ _PATHS = {
         '<path d="m16 17 5-5-5-5"/>'
         '<path d="M21 12H9"/>'
     ),
+    "expand": (
+        '<path d="M4 9V4h5"/><path d="M15 4h5v5"/>'
+        '<path d="M20 15v5h-5"/><path d="M9 20H4v-5"/>'
+    ),
+    "shrink": (
+        '<path d="M9 4v5H4"/><path d="M20 9h-5V4"/>'
+        '<path d="M15 20v-5h5"/><path d="M4 15h5v5"/>'
+    ),
 }
 
 

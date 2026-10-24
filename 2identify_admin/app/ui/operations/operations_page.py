@@ -39,6 +39,8 @@ class OperationsPage(QWidget):
     camera_update_requested = Signal(object, int)
     risk_area_configuration_requested = Signal(object, object)
     operation_save_requested = Signal(object, object)
+    # (operações, câmeras) como pares (id, nome), para os filtros de Relatórios.
+    catalog_changed = Signal(object, object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -198,6 +200,10 @@ class OperationsPage(QWidget):
                 "success",
             )
         self.reset_form()
+        self.catalog_changed.emit(
+            tuple((item.id, item.name) for item in operations),
+            tuple((item.id, item.name) for item in catalog.cameras),
+        )
 
     def upsert_risk_area(self, area: RiskArea) -> None:
         self._risk_areas[area.id] = area

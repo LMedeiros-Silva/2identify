@@ -88,6 +88,7 @@ def get_admin_dashboard_summary(
             "ergonomics": summary.ergonomics_alerts,
             "risk_area": summary.risk_area_alerts,
             "monitoring": summary.monitoring_alerts,
+            "fall": summary.fall_alerts,
             "other": summary.other_category_alerts,
         },
         alert_trend=tuple(

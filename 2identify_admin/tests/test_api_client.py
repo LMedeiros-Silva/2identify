@@ -92,6 +92,7 @@ def test_dashboard_summary_contract_and_authorization_header() -> None:
                     "ergonomics": 1,
                     "risk_area": 2,
                     "monitoring": 0,
+                    "fall": 3,
                     "other": 0,
                 },
                 "alert_trend": [
@@ -115,6 +116,7 @@ def test_dashboard_summary_contract_and_authorization_header() -> None:
     assert summary.active_employees == 3
     assert summary.delivered_ppe == 9
     assert summary.alert_categories.risk_area == 2
+    assert summary.alert_categories.fall == 3
     assert tuple(item.alerts for item in summary.alert_trend) == (0, 1, 0, 2, 0, 0, 1)
     assert summary.generated_at.tzinfo is not None
 

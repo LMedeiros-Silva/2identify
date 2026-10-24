@@ -1,0 +1,75 @@
+/* Safety state language: colour + shape + word (shared by all screens). */
+
+QFrame[chip="state"] {
+  border: 1px solid {{line_300}};
+  border-radius: 12px;
+  min-height: 24px;
+  max-height: 24px;
+  background-color: {{surface_3}};
+}
+
+QFrame[chip="state"][size="big"] {
+  border-radius: 17px;
+  min-height: 34px;
+  max-height: 34px;
+}
+
+QFrame[chip="state"] QLabel {
+  background: transparent;
+  border: none;
+}
+
+QLabel#state_chip_text {
+  color: {{ink_600}};
+  font-size: {{font_label}};
+  font-weight: 700;
+}
+
+QFrame[chip="state"][size="big"] QLabel#state_chip_text {
+  font-size: {{font_body}};
+}
+
+QFrame[chip="state"][tone="crit"] {
+  background-color: {{crit_100}};
+  border-color: {{crit_300}};
+}
+
+QFrame[chip="state"][tone="crit"] QLabel#state_chip_text {
+  color: {{crit_600}};
+}
+
+QFrame[chip="state"][tone="warn"] {
+  background-color: {{warn_100}};
+  border-color: {{warn_300}};
+}
+
+QFrame[chip="state"][tone="warn"] QLabel#state_chip_text {
+  color: {{warn_700}};
+}
+
+QFrame[chip="state"][tone="safe"] {
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
+}
+
+QFrame[chip="state"][tone="safe"] QLabel#state_chip_text {
+  color: {{safe_700}};
+}
+
+QFrame[chip="state"][tone="inc"] {
+  background-color: {{inc_100}};
+  border: 1px dashed {{inc_300}};
+}
+
+QFrame[chip="state"][tone="inc"] QLabel#state_chip_text {
+  color: {{inc_700}};
+}
+
+QFrame[chip="state"][fill="solid"][tone="crit"] {
+  background-color: {{crit_600}};
+  border-color: {{crit_700}};
+}
+
+QFrame[chip="state"][fill="solid"] QLabel#state_chip_text {
+  color: {{surface_1}};
+}

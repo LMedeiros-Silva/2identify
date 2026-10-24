@@ -19,6 +19,7 @@ class AdminAlertCategoryBreakdown(BaseModel):
     ergonomics: int = Field(ge=0)
     risk_area: int = Field(ge=0)
     monitoring: int = Field(ge=0)
+    fall: int = Field(default=0, ge=0)
     other: int = Field(ge=0)
 
 

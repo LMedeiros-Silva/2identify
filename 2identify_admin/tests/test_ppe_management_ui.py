@@ -39,11 +39,12 @@ def test_page_renders_cards_filters_and_keeps_snapshot_when_offline(qapp) -> Non
 
     assert page.online_count_label.text() == "1"
     assert page.compliant_count_label.text() == "0"
-    assert page.alert_count_label.text() == "1"
+    assert page.non_compliant_count_label.text() == "1"
+    assert page.attention_count_label.text() == "0"
     assert page.card_count == 1
     assert "Breno Barbosa" in page.cards_text()
     assert "Capacete" in page.cards_text()
-    assert "AUSENTE" in page.cards_text()
+    assert "Ausente" in page.cards_text()
 
     page.set_connection_status("Tempo real indisponível.", state="offline")
     assert page.card_count == 1

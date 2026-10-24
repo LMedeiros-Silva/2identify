@@ -41,6 +41,7 @@ class DashboardCounts:
     monitoring_alerts: int
     other_category_alerts: int
     daily_alerts: tuple[DailyAlertCount, ...]
+    fall_alerts: int = 0
 
 
 class DashboardRepository:
@@ -99,6 +100,9 @@ class DashboardRepository:
         monitoring_alerts = _category_count_where(
             normalized_type.in_(("monitoring_interrupted", "monitoring"))
         )
+        fall_alerts = _category_count_where(
+            normalized_type.in_(("fall_detected", "fall", "queda"))
+        )
         known_types = (
             "ppe_absent",
             "ppe",
@@ -111,6 +115,9 @@ class DashboardRepository:
             "area_risco",
             "monitoring_interrupted",
             "monitoring",
+            "fall_detected",
+            "fall",
+            "queda",
         )
         other_category_alerts = _category_count_where(
             normalized_type.not_in(known_types)
@@ -129,6 +136,7 @@ class DashboardRepository:
             ergonomics_alerts.label("ergonomics_alerts"),
             risk_area_alerts.label("risk_area_alerts"),
             monitoring_alerts.label("monitoring_alerts"),
+            fall_alerts.label("fall_alerts"),
             other_category_alerts.label("other_category_alerts"),
         )
         row = self._session.execute(statement).mappings().one()
@@ -149,6 +157,7 @@ class DashboardRepository:
             monitoring_alerts=int(row["monitoring_alerts"] or 0),
             other_category_alerts=int(row["other_category_alerts"] or 0),
             daily_alerts=daily_alerts,
+            fall_alerts=int(row["fall_alerts"] or 0),
         )
 
     def _daily_alerts(

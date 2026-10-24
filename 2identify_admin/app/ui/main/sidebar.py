@@ -56,7 +56,7 @@ class Sidebar(QFrame):
         logo = QLabel("2Identify")
         logo.setObjectName("sidebar_logo")
         nomes.addWidget(logo)
-        subtitulo = QLabel("INDUSTRIAL SAFETY")
+        subtitulo = QLabel("Segurança industrial")
         subtitulo.setObjectName("sidebar_subtitulo")
         nomes.addWidget(subtitulo)
         marca.addLayout(nomes, 1)
@@ -68,16 +68,16 @@ class Sidebar(QFrame):
         # MENU
         # ==================================================
 
-        self.adicionar_secao(layout, "MONITORAMENTO")
+        self.adicionar_secao(layout, "Monitoramento")
         self.adicionar_botao(layout, "dashboard", "Central de segurança")
         self.adicionar_botao(layout, "alertas", "Alertas")
         self.adicionar_botao(layout, "epis", "Gestão de EPIs")
 
-        self.adicionar_secao(layout, "CADASTROS")
-        self.adicionar_botao(layout, "operacoes", "Operações e Áreas")
+        self.adicionar_secao(layout, "Cadastros")
+        self.adicionar_botao(layout, "operacoes", "Operações e áreas")
         self.adicionar_botao(layout, "funcionarios", "Funcionários")
 
-        self.adicionar_secao(layout, "ANÁLISE")
+        self.adicionar_secao(layout, "Análise")
         self.adicionar_botao(layout, "relatorios", "Relatórios")
 
         layout.addStretch()

@@ -243,7 +243,7 @@ def test_active_grid_keeps_frames_status_and_risk_zone_on_own_camera(
     assert all(view.has_frame for view in views[1:])
     assert page.findChild(QLabel, "activeCameraTileStatus_1").text() == "OFFLINE"
     assert page.findChild(QLabel, "activeCameraTileStatus_2").text() == "ONLINE"
-    assert page.findChild(QLabel, "activeCameraStatus").text() == f"1/{camera_count} ONLINE"
+    assert page.findChild(QLabel, "activeCameraStatus").text() == f"1 de {camera_count} online"
     page.clear()
 
 
@@ -280,12 +280,12 @@ def test_ppe_stability_is_independent_for_each_camera_and_offline_becomes_unknow
             )
     assert controller._assessment_by_camera[1].requirements[0].evidence is PpeEvidenceState.UNKNOWN
     assert controller._assessment_by_camera[2].requirements[0].evidence is PpeEvidenceState.UNKNOWN
-    assert page.findChild(QLabel, "activeCameraTilePpe_1").text() == "Capacete: VERIFICANDO"
-    assert page.findChild(QLabel, "activeCameraTilePpe_2").text() == "Capacete: VERIFICANDO"
+    assert page.findChild(QLabel, "activeCameraTilePpe_1").text() == "Capacete: verificando"
+    assert page.findChild(QLabel, "activeCameraTilePpe_2").text() == "Capacete: verificando"
     assert page.active_alert_count == 0
     camera.status_changed.emit(1, CameraStatus.OFFLINE)
     assert 1 not in controller._assessment_by_camera
-    assert "INCONCLUSIVO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
+    assert "inconclusivo" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller._handle_detections(
         PpeDetectionBatch(
             present, 48, 32, 1.0, camera_id=1, generation=2, captured_at=datetime.now(UTC)
@@ -316,9 +316,9 @@ def test_inference_failure_invalidates_camera_ppe_evidence(qtbot) -> None:
             48, 32, 1.0, camera_id=1, generation=2, captured_at=datetime.now(UTC),
         )
     )
-    assert "VERIFICANDO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
+    assert "verificando" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller._handle_failure("Modelo indisponível", True)
-    assert "INCONCLUSIVO" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
+    assert "inconclusivo" in page.findChild(QLabel, "activeCameraTilePpe_1").text()
     controller.shutdown()
     page.clear()
 

@@ -197,7 +197,8 @@ class MainWindow(QMainWindow):
         self._page_stack.setCurrentWidget(self._safety_verification_page)
         self._page_title.setText("Verificação de segurança")
         self._page_context.setText("Preparação para liberação")
-        self._set_monitoring_layout(False)
+        # The verification band carries operation and employee, like monitoring.
+        self._set_monitoring_layout(True)
         self._safety_verification_page.activate()
 
     def show_active_operation(

@@ -181,7 +181,7 @@ def test_update_of_other_operator_preserves_card_text_selection(qapp):
     page.show_snapshot((first, second))
     name = next(label for label in page.findChildren(QLabel) if "Breno" in label.text())
     name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    name.setSelection(3, 5)
+    name.setSelection(0, 5)
     assert name.selectedText() == "Breno"
     page.apply_update(replace(second, observed_at=second.observed_at + timedelta(seconds=1)))
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -195,5 +195,5 @@ def test_summary_counts_operator_once_across_two_sessions(qapp):
     first = _snapshot()
     page.show_snapshot((first, replace(first, work_session_id=uuid4())))
     assert page.online_count_label.text() == "1"
-    assert page.alert_count_label.text() == "1"
+    assert page.non_compliant_count_label.text() == "1"
     page.close()

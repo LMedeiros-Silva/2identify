@@ -7,94 +7,128 @@ QWidget#activeOperationPage {
 QFrame#activeHeaderBar {
   background-color: {{surface_1}};
   border: 1px solid {{line_200}};
-  border-left: 5px solid {{line_300}};
   border-radius: {{radius_lg}};
 }
 
 QFrame#activeHeaderBar[state="safe"] {
-  border-left: 5px solid {{safe_500}};
+  border-color: {{safe_300}};
 }
 
-QFrame#activeHeaderBar[state="waiting"] {
-  border-left: 5px solid {{brand_500}};
+QFrame#activeHeaderBar[state="attention"] {
+  border-color: {{warn_300}};
 }
 
-QFrame#activeHeaderBar[state="attention"],
-QFrame#activeHeaderBar[state="inconclusive"] {
-  border-left: 5px solid {{warn_500}};
+QFrame#activeHeaderBar[state="critical"] {
+  border: 2px solid {{crit_600}};
 }
 
-QFrame#activeHeaderBar[state="critical"],
-QFrame#activeHeaderBar[state="offline"] {
-  border-left: 5px solid {{crit_600}};
+/* State band: colour + shape + word, readable from across the room. */
+QFrame#activeStateBlock {
+  background-color: {{surface_3}};
+  border: none;
+  border-right: 1px solid {{line_200}};
+  border-top-left-radius: {{radius_lg}};
+  border-bottom-left-radius: {{radius_lg}};
+}
+
+QFrame#activeStateBlock[state="waiting"],
+QFrame#activeStateBlock[state="inconclusive"],
+QFrame#activeStateBlock[state="offline"] {
+  background-color: {{inc_100}};
+}
+
+QFrame#activeStateBlock[state="safe"] {
+  background-color: {{safe_600}};
+  border-right-color: {{safe_600}};
+}
+
+QFrame#activeStateBlock[state="attention"] {
+  background-color: {{warn_500}};
+  border-right-color: {{warn_500}};
+}
+
+QFrame#activeStateBlock[state="critical"] {
+  background-color: {{crit_600}};
+  border-right-color: {{crit_600}};
+}
+
+QFrame#activeStateBlock QLabel {
+  background: transparent;
+  border: none;
+}
+
+QLabel#activeStateCaption {
+  color: {{ink_600}};
+  font-size: {{font_label}};
+  font-weight: 700;
+}
+
+QLabel#activeOverallState {
+  color: {{inc_700}};
+  font-size: {{font_kpi}};
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+QLabel#activeOverallState[state="idle"] {
+  color: {{ink_600}};
+}
+
+QFrame#activeStateBlock[state="safe"] QLabel#activeStateCaption,
+QFrame#activeStateBlock[state="critical"] QLabel#activeStateCaption,
+QLabel#activeOverallState[state="safe"],
+QLabel#activeOverallState[state="critical"] {
+  color: {{surface_1}};
+}
+
+QFrame#activeStateBlock[state="attention"] QLabel#activeStateCaption,
+QLabel#activeOverallState[state="attention"] {
+  color: {{warn_800}};
+}
+
+QWidget#activeFact {
+  background: transparent;
 }
 
 QFrame#activeHeaderDivider {
   background-color: {{line_200}};
   border: none;
+  margin: 14px 0;
 }
 
-QLabel#activeHeaderCaption,
-QLabel#activeSectionLabel {
+QLabel#activeHeaderCaption {
   color: {{ink_500}};
   font-size: {{font_label}};
+  font-weight: 600;
+}
+
+QLabel#activeSectionLabel {
+  color: {{ink_900}};
+  font-size: {{font_panel}};
   font-weight: 700;
-  letter-spacing: 1px;
 }
 
-QLabel#activeOverallState {
-  color: {{ink_600}};
-  background-color: {{surface_3}};
-  border: 1px solid {{line_200}};
-  border-radius: {{radius_md}};
-  padding: 6px 12px;
-  font-size: {{font_body}};
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-
-QLabel#activeOverallState[state="waiting"] {
-  color: {{brand_700}};
-  background-color: {{brand_50}};
-  border-color: {{brand_300}};
-}
-
-QLabel#activeOverallState[state="safe"] {
-  color: {{surface_1}};
-  background-color: {{safe_600}};
-  border-color: {{safe_700}};
-}
-
-QLabel#activeOverallState[state="attention"] {
-  color: {{warn_800}};
-  background-color: {{warn_100}};
-  border-color: {{warn_500}};
-}
-
-QLabel#activeOverallState[state="inconclusive"] {
-  color: {{warn_800}};
-  background-color: {{warn_50}};
-  border: 1px dashed {{warn_500}};
-}
-
-QLabel#activeOverallState[state="critical"],
-QLabel#activeOverallState[state="offline"] {
-  color: {{surface_1}};
-  background-color: {{crit_600}};
-  border-color: {{crit_700}};
+QLabel#activeCardCount {
+  color: {{ink_500}};
+  font-size: {{font_label}};
+  font-weight: 600;
 }
 
 QLabel#activeOperationName {
   color: {{ink_900}};
   font-size: {{font_section}};
-  font-weight: 800;
+  font-weight: 700;
 }
 
 QLabel#activeDetailValue,
 QLabel#activeHeaderValue {
-  color: {{ink_800}};
-  font-size: {{font_body}};
+  color: {{ink_900}};
+  font-size: {{font_panel}};
   font-weight: 700;
+}
+
+QFrame#activeSessionCard QLabel#activeHeaderValue {
+  font-size: {{font_body}};
 }
 
 QLabel#activeMetadata {
@@ -104,9 +138,8 @@ QLabel#activeMetadata {
 
 QLabel#activeElapsed {
   color: {{brand_600}};
-  font-size: {{font_page}};
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-size: {{font_kpi}};
+  font-weight: 700;
 }
 
 QLabel#activeSafetyValue {
@@ -129,13 +162,12 @@ QLabel#activeFinishError {
 QPushButton#activeFinishButton {
   min-height: 40px;
   color: {{crit_700}};
-  background-color: {{crit_50}};
+  background-color: {{surface_1}};
   border: 1px solid {{crit_300}};
   border-radius: {{radius_md}};
   padding: 0 18px;
-  font-size: {{font_small}};
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-size: {{font_body}};
+  font-weight: 700;
 }
 
 QPushButton#activeFinishButton:hover {
@@ -172,9 +204,8 @@ QFrame#activeCameraToolbar {
 
 QLabel#activeMonitoringTitle {
   color: {{surface_1}};
-  font-size: {{font_small}};
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-size: {{font_body}};
+  font-weight: 700;
 }
 
 QFrame#activeCameraToolbar QLabel#activeMetadata {
@@ -185,37 +216,32 @@ QLabel#activeCameraStatus,
 QLabel#activeInferenceStatus,
 QLabel#activeOverlayStatus {
   color: {{nav_text}};
-  background-color: {{nav_800}};
+  background-color: {{nav_850}};
   border: 1px solid {{nav_700}};
   border-radius: 11px;
-  padding: 3px 9px;
-  font-size: {{font_badge}};
-  font-weight: 700;
-  letter-spacing: 1px;
+  padding: 3px 10px;
+  font-size: {{font_label}};
+  font-weight: 600;
 }
 
 QLabel#activeCameraStatus[state="starting"],
 QLabel#activeInferenceStatus[state="loading"] {
-  color: {{brand_300}};
-  border-color: {{brand_700}};
+  color: {{brand_200}};
 }
 
 QLabel#activeCameraStatus[state="active"],
 QLabel#activeInferenceStatus[state="active"] {
   color: {{safe_300}};
-  border-color: {{safe_700}};
 }
 
 QLabel#activeCameraStatus[state="partial"] {
   color: {{warn_300}};
-  border-color: {{warn_700}};
 }
 
 QLabel#activeCameraStatus[state="unavailable"],
 QLabel#activeCameraStatus[state="error"],
 QLabel#activeInferenceStatus[state="error"] {
   color: {{crit_300}};
-  border-color: {{crit_700}};
 }
 
 QPushButton#activeCameraRetryButton,
@@ -306,6 +332,20 @@ QFrame[role="cameraTile"] {
   border-radius: {{radius_md}};
 }
 
+QFrame[role="cameraTile"][alarm="true"] {
+  border: 3px solid {{crit_500}};
+}
+
+QLabel#activeCameraTileTag {
+  color: {{warn_300}};
+  background-color: {{nav_800}};
+  border: 1px solid {{warn_700}};
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: {{font_label}};
+  font-weight: 600;
+}
+
 QFrame[role="tileHeader"] {
   background-color: {{nav_900}};
   border: none;
@@ -316,18 +356,17 @@ QFrame[role="tileHeader"] {
 
 QLabel#activeCameraTileName {
   color: {{surface_1}};
-  font-size: {{font_small}};
+  font-size: {{font_body}};
   font-weight: 700;
 }
 
 QLabel[role="tileStatus"] {
   color: {{brand_300}};
   background-color: {{nav_800}};
-  border-radius: 9px;
-  padding: 0 8px;
-  font-size: {{font_badge}};
-  font-weight: 800;
-  letter-spacing: 1px;
+  border-radius: 11px;
+  padding: 0 9px;
+  font-size: {{font_label}};
+  font-weight: 700;
 }
 
 QLabel[role="tileStatus"][state="online"] {
@@ -344,14 +383,10 @@ QLabel[role="tileStatus"][state="reconnecting"] {
 }
 
 QPushButton[role="tileButton"] {
-  min-height: 24px;
-  color: {{nav_text}};
-  background-color: transparent;
+  background-color: {{nav_850}};
   border: 1px solid {{nav_600}};
   border-radius: {{radius_sm}};
-  padding: 0 8px;
-  font-size: {{font_badge}};
-  font-weight: 700;
+  padding: 0;
 }
 
 QPushButton[role="tileButton"]:hover {
@@ -385,7 +420,7 @@ QLabel[role="tilePpe"] {
   border-bottom-right-radius: {{radius_md}};
   padding: 0 12px;
   font-size: {{font_label}};
-  font-weight: 700;
+  font-weight: 600;
 }
 
 QLabel[role="tilePpe"][state="present"] {
@@ -461,9 +496,15 @@ QWidget#activePpeContainer {
 }
 
 QFrame#activePpeRow {
-  background-color: {{surface_2}};
-  border: 1px solid {{line_100}};
-  border-radius: {{radius_md}};
+  background-color: transparent;
+  border: none;
+  border-top: 1px solid {{line_100}};
+}
+
+QLabel#activePpeIcon,
+QLabel#activeAlertIcon {
+  background: transparent;
+  border: none;
 }
 
 QFrame#activeRiskRow {
@@ -472,9 +513,9 @@ QFrame#activeRiskRow {
 }
 
 QLabel#activePpeName {
-  color: {{ink_800}};
-  font-size: {{font_small}};
-  font-weight: 700;
+  color: {{ink_900}};
+  font-size: {{font_body}};
+  font-weight: 600;
 }
 
 QLabel#activePpeFlag {
@@ -488,33 +529,28 @@ QLabel#activePpeState {
   background-color: {{surface_3}};
   border: 1px solid {{line_200}};
   border-radius: 11px;
-  padding: 3px 8px;
-  font-size: {{font_badge}};
-  font-weight: 800;
+  padding: 3px 9px;
+  font-size: {{font_label}};
+  font-weight: 700;
 }
 
 QLabel#activePpeState[state="confirmed"] {
-  color: {{surface_1}};
-  background-color: {{safe_600}};
-  border-color: {{safe_700}};
+  color: {{safe_700}};
+  background-color: {{safe_100}};
+  border-color: {{safe_300}};
 }
 
-QLabel#activePpeState[state="collecting"] {
-  color: {{brand_700}};
-  background-color: {{brand_50}};
-  border-color: {{brand_300}};
+QLabel#activePpeState[state="collecting"],
+QLabel#activePpeState[state="unstable"] {
+  color: {{inc_700}};
+  background-color: {{inc_100}};
+  border: 1px dashed {{inc_300}};
 }
 
 QLabel#activePpeState[state="absent"] {
-  color: {{surface_1}};
-  background-color: {{crit_600}};
-  border-color: {{crit_700}};
-}
-
-QLabel#activePpeState[state="unstable"] {
-  color: {{warn_800}};
-  background-color: {{warn_100}};
-  border: 1px dashed {{warn_500}};
+  color: {{crit_600}};
+  background-color: {{crit_100}};
+  border-color: {{crit_300}};
 }
 
 QLabel#activePpeState[state="unmapped"] {
@@ -528,9 +564,9 @@ QLabel[role="riskStatus"] {
   background-color: {{surface_3}};
   border: 1px solid {{line_200}};
   border-radius: 11px;
-  padding: 3px 8px;
-  font-size: {{font_badge}};
-  font-weight: 800;
+  padding: 3px 9px;
+  font-size: {{font_label}};
+  font-weight: 700;
 }
 
 QLabel[role="riskStatus"][state="loading"] {
@@ -552,9 +588,9 @@ QLabel[role="riskStatus"][state="warning"] {
 }
 
 QLabel[role="riskStatus"][state="error"] {
-  color: {{surface_1}};
-  background-color: {{crit_600}};
-  border-color: {{crit_700}};
+  color: {{crit_600}};
+  background-color: {{crit_100}};
+  border-color: {{crit_300}};
 }
 
 QLabel[role="riskDetail"] {
@@ -569,35 +605,31 @@ QFrame#activeAlertStrip {
 }
 
 QFrame#activeAlertStrip[state="active"] {
-  background-color: {{warn_50}};
   border: 1px solid {{warn_300}};
-  border-left: 4px solid {{warn_500}};
 }
 
 QFrame#activeAlertStrip[state="critical"] {
-  background-color: {{crit_50}};
   border: 2px solid {{crit_600}};
-  border-left: 6px solid {{crit_600}};
 }
 
 QFrame#activeAlertStrip[state="resolved"] {
-  background-color: {{safe_50}};
   border-color: {{safe_300}};
 }
 
 QLabel#activeAlertBadge {
   color: {{ink_500}};
   font-size: {{font_label}};
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 QLabel#activeAlertBadge[state="active"] {
-  color: {{warn_800}};
+  color: {{warn_700}};
+  font-weight: 700;
 }
 
 QLabel#activeAlertBadge[state="critical"] {
-  color: {{crit_700}};
+  color: {{crit_600}};
+  font-weight: 700;
 }
 
 QLabel#activeAlertBadge[state="resolved"] {
@@ -607,57 +639,57 @@ QLabel#activeAlertBadge[state="resolved"] {
 QLabel#activeAlertMessage {
   color: {{ink_500}};
   font-size: {{font_label}};
-  font-weight: 600;
 }
 
 QFrame#activeAlertRow {
-  background-color: {{surface_1}};
+  background-color: {{warn_50}};
   border: 1px solid {{warn_300}};
-  border-left: 4px solid {{warn_500}};
-  border-radius: {{radius_sm}};
+  border-radius: {{radius_md}};
 }
 
 QFrame#activeAlertRow[state="critical"] {
   background-color: {{crit_600}};
   border: 1px solid {{crit_700}};
-  border-left: 4px solid {{crit_800}};
 }
 
-QLabel#activeAlertSeverity {
+QFrame#activeAlertRow QLabel {
+  background: transparent;
+  border: none;
+}
+
+QFrame#activeAlertRow QLabel#activeAlertSeverity {
   color: {{warn_800}};
   background-color: {{warn_100}};
-  border-radius: 9px;
-  padding: 2px 7px;
-  font-size: {{font_badge}};
-  font-weight: 800;
+  border: 1px solid {{warn_300}};
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: {{font_label}};
+  font-weight: 700;
 }
 
-QLabel#activeAlertSeverity[state="critical"] {
+QFrame#activeAlertRow QLabel#activeAlertSeverity[state="critical"] {
   color: {{crit_700}};
   background-color: {{surface_1}};
+  border-color: {{surface_1}};
 }
 
 QLabel#activeAlertType {
   color: {{warn_800}};
-  font-size: {{font_label}};
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  font-size: {{font_panel}};
+  font-weight: 700;
 }
 
 QLabel#activeAlertType[state="critical"] {
   color: {{surface_1}};
-  font-size: {{font_body}};
 }
 
 QLabel#activeAlertRowText {
   color: {{ink_800}};
-  font-size: {{font_label}};
-  font-weight: 600;
+  font-size: {{font_small}};
 }
 
 QLabel#activeAlertRowText[state="critical"] {
   color: {{surface_1}};
-  font-size: {{font_body}};
 }
 
 QLabel#activeAlertMeta {
@@ -677,9 +709,8 @@ QPushButton#activeDetailsToggle {
   border-radius: {{radius_md}};
   padding: 0 12px;
   text-align: left;
-  font-size: {{font_label}};
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: {{font_small}};
+  font-weight: 600;
 }
 
 QPushButton#activeDetailsToggle:hover,

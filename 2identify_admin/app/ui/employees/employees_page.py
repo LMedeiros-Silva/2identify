@@ -30,6 +30,8 @@ from app.ui.employees.face_enrollment_dialog import FaceEnrollmentDialog
 class EmployeesPage(QWidget):
     refresh_requested = Signal()
     save_requested = Signal(object, object, object)
+    # (funcionários, setores) como pares (id, nome), para os filtros de Relatórios.
+    directory_changed = Signal(object, object)
 
     def __init__(
         self,
@@ -133,6 +135,10 @@ class EmployeesPage(QWidget):
             self.new_employee()
         self.save_button.setEnabled(True)
         self._set_feedback(f"{len(records)} funcionário(s) carregado(s).")
+        self.directory_changed.emit(
+            tuple((item.id, item.name) for item in records),
+            tuple((item.id, item.name) for item in sectors),
+        )
 
     def _render_list(self) -> None:
         self.employee_list.blockSignals(True)

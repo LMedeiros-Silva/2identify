@@ -46,18 +46,45 @@ def _overall(page: ActiveOperationPage) -> str:
     return page.findChild(QLabel, "activeOverallState").text()
 
 
-def test_tiles_keep_video_proportion_and_five_cameras_scroll(qtbot) -> None:
+def test_five_cameras_fit_with_risk_camera_featured_and_no_scroll(qtbot) -> None:
     page = _page(qtbot, 5)
     page.show()
     qtbot.waitExposed(page)
-    tiles = [page._tile_containers[camera_id] for camera_id in range(1, 6)]
-    heights = {tile.height() for tile in tiles}
-    assert len(heights) == 1
-    tile = tiles[0]
-    video_height = tile.height() - 38 - 30
-    assert abs(video_height / tile.width() - 9 / 16) < 0.05
     scroll = page._camera_grid_scroll
-    assert page._camera_grid_host.minimumSizeHint().height() > scroll.viewport().height()
+    featured = page._tile_containers[1]
+    others = [page._tile_containers[camera_id] for camera_id in range(2, 6)]
+    # The risk-area camera leads over a 2x2 block; the others fit around it.
+    assert page._camera_grid.getItemPosition(page._camera_grid.indexOf(featured)) == (
+        0, 0, 2, 2
+    )
+    assert featured.height() > 2 * others[0].height()
+    assert len({tile.height() for tile in others}) == 1
+    assert all(tile.isVisible() for tile in others)
+    assert page._camera_grid_host.minimumSizeHint().height() <= scroll.viewport().height()
+    page.clear()
+
+
+def test_critical_alert_moves_its_camera_to_the_featured_slot(qtbot) -> None:
+    page = _page(qtbot, 5)
+    page.show()
+    qtbot.waitExposed(page)
+    _alerts(
+        page,
+        SafetyViolation(
+            SafetyViolationType.FALL_DETECTED,
+            "fall:3",
+            "Queda detectada",
+            SafetyAlertSeverity.CRITICAL,
+            camera_id=3,
+            escalate=False,
+        ),
+    )
+    tile = page._tile_containers[3]
+    assert page._camera_grid.getItemPosition(page._camera_grid.indexOf(tile))[:2] == (0, 0)
+    assert tile.property("alarm") is True
+    alarm = tile.findChild(QFrame, "activeCameraTileAlarm_3")
+    assert not alarm.isHidden() and alarm.text() == "Queda detectada"
+    assert page._tile_containers[1].property("alarm") is False
     page.clear()
 
 
@@ -161,9 +188,9 @@ def test_critical_alert_leads_the_active_risks_with_type_and_reason(qtbot) -> No
     )
     rows = page.findChildren(QFrame, "activeAlertRow")
     assert [row.property("state") for row in rows] == ["critical", "warning"]
-    assert rows[0].findChild(QLabel, "activeAlertType").text() == "QUEDA"
+    assert rows[0].findChild(QLabel, "activeAlertType").text() == "Queda detectada"
     assert rows[0].findChild(QLabel, "activeAlertRowText").text() == "Queda detectada"
-    assert rows[1].findChild(QLabel, "activeAlertType").text() == "EPI INCONCLUSIVO"
+    assert rows[1].findChild(QLabel, "activeAlertType").text() == "EPI inconclusivo"
     assert rows[1].findChild(QLabel, "activeAlertSeverity").text() == "ATENÇÃO"
     assert page._alert_strip.property("state") == "critical"
     page.clear()

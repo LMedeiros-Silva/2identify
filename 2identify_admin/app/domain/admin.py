@@ -82,6 +82,7 @@ class DashboardAlertCategories:
     risk_area: int = 0
     monitoring: int = 0
     other: int = 0
+    fall: int = 0
 
     def __post_init__(self) -> None:
         if any(value < 0 for value in self.values):
@@ -94,6 +95,7 @@ class DashboardAlertCategories:
             self.ergonomics,
             self.risk_area,
             self.monitoring,
+            self.fall,
             self.other,
         )
 

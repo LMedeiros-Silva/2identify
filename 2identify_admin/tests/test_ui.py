@@ -88,6 +88,7 @@ def test_dashboard_renders_alert_trend_categories_and_status(qapp) -> None:
                 ergonomics=2,
                 risk_area=3,
                 monitoring=1,
+                fall=2,
             ),
             alert_trend=tuple(
                 DashboardAlertTrendPoint(
@@ -100,7 +101,8 @@ def test_dashboard_renders_alert_trend_categories_and_status(qapp) -> None:
     )
 
     assert page.alert_trend_chart.values == (0, 1, 2, 0, 3, 1, 3)
-    assert page.alert_category_chart.values == (4, 2, 3, 1, 0)
+    # Queda tem barra própria em vez de cair em "Outros".
+    assert page.alert_category_chart.values == (4, 2, 3, 2, 1, 0)
     assert page.alert_status_chart.values == (3, 2, 5, 0)
 
 

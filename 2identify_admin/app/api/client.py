@@ -137,6 +137,8 @@ class _DashboardAlertCategoriesDto(BaseModel):
     ergonomics: int = Field(ge=0)
     risk_area: int = Field(ge=0)
     monitoring: int = Field(ge=0)
+    # Older APIs fold falls into "other"; absent means none were counted apart.
+    fall: int = Field(default=0, ge=0)
     other: int = Field(ge=0)
 
 
@@ -184,6 +186,7 @@ class _DashboardSummaryDto(BaseModel):
                 ergonomics=self.alert_categories.ergonomics,
                 risk_area=self.alert_categories.risk_area,
                 monitoring=self.alert_categories.monitoring,
+                fall=self.alert_categories.fall,
                 other=self.alert_categories.other,
             ),
             alert_trend=tuple(

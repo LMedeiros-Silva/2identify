@@ -365,6 +365,7 @@ def test_dashboard_returns_zero_safe_metrics(isolated_admin_api) -> None:
             "ergonomics": 0,
             "risk_area": 0,
             "monitoring": 0,
+            "fall": 0,
             "other": 0,
         },
         "alert_trend": [
@@ -397,6 +398,7 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
                 {"id": 1, "tipo": "ppe_absent"},
                 {"id": 2, "tipo": "person_in_risk_area"},
                 {"id": 3, "tipo": "ergonomic_risk"},
+                {"id": 4, "tipo": "fall_detected"},
             ],
         )
         generated_at = datetime.now(UTC)
@@ -421,6 +423,12 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
                     "status": "encerrado",
                     "criado_em": generated_at,
                 },
+                {
+                    "ocorrencia_id": 4,
+                    "nivel": "aviso",
+                    "status": "encerrado",
+                    "criado_em": generated_at,
+                },
             ],
         )
 
@@ -437,12 +445,12 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
     assert payload["ppe_assignments"] == 3
     assert payload["delivered_ppe"] == 2
     assert payload["ppe_delivery_percentage"] == 66.7
-    assert payload["alerts"] == 3
+    assert payload["alerts"] == 4
     assert payload["critical_alerts"] == 2
     assert payload["alert_status"] == {
         "new": 1,
         "confirmed": 1,
-        "closed": 1,
+        "closed": 2,
         "other": 0,
     }
     assert payload["alert_categories"] == {
@@ -450,10 +458,11 @@ def test_dashboard_returns_read_only_operational_metrics(isolated_admin_api) -> 
         "ergonomics": 1,
         "risk_area": 1,
         "monitoring": 0,
+        "fall": 1,
         "other": 0,
     }
     assert len(payload["alert_trend"]) == 7
-    assert sum(item["alerts"] for item in payload["alert_trend"]) == 3
+    assert sum(item["alerts"] for item in payload["alert_trend"]) == 4
 
 
 def test_admin_login_database_failure_is_sanitized(isolated_admin_api) -> None:

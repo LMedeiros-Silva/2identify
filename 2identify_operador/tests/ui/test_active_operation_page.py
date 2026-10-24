@@ -117,7 +117,7 @@ def test_active_operation_page_emits_matching_finish_intent(qtbot) -> None:
 
     assert emitted.args == [str(_SESSION_ID)]
     assert not finish_button.isEnabled()
-    assert finish_button.text() == "ENCERRANDO..."
+    assert finish_button.text() == "Encerrando…"
 
 
 def test_active_operation_page_rejects_mismatched_context() -> None:
@@ -210,7 +210,7 @@ def test_active_operation_page_presents_continuous_ppe_monitoring(qtbot) -> None
     assert camera_stack.minimumHeight() == 420
     assert preview.overlay_box_count == 1
     assert preview.overlay_labels == ("#1 capacete",)
-    assert page.findChild(QLabel, "activeCameraStatus").text() == "ATIVA"
+    assert page.findChild(QLabel, "activeCameraStatus").text() == "Câmera ativa"
     assert page.findChild(QLabel, "activePpeState").text() == "CONFIRMADO"
     assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
         "EPIs CONFIRMADOS"
@@ -287,7 +287,7 @@ def test_active_operation_page_expands_live_camera_with_overlays(qtbot) -> None:
 
     close_button = dialog.findChild(QPushButton, "expandedCameraCloseButton")
     qtbot.mouseClick(close_button, Qt.MouseButton.LeftButton)
-    qtbot.waitUntil(lambda: expand_button.text() == "EXPANDIR CÂMERA")
+    qtbot.waitUntil(lambda: expand_button.text() == "Ampliar câmera")
 
 
 def test_active_operation_page_exposes_camera_failure_and_retry(qtbot) -> None:
@@ -299,7 +299,7 @@ def test_active_operation_page_exposes_camera_failure_and_retry(qtbot) -> None:
 
     page.show_monitoring_camera_failure("Câmera ocupada.", True)
 
-    assert page.findChild(QLabel, "activeCameraStatus").text() == "INDISPONÍVEL"
+    assert page.findChild(QLabel, "activeCameraStatus").text() == "Câmera indisponível"
     assert page.findChild(QLabel, "activeMonitoringStatus").text() == (
         "MONITORAMENTO DE EPIs INTERROMPIDO"
     )
@@ -308,7 +308,7 @@ def test_active_operation_page_exposes_camera_failure_and_retry(qtbot) -> None:
     with qtbot.waitSignal(page.monitoring_start_requested, timeout=1_000):
         qtbot.mouseClick(retry, Qt.MouseButton.LeftButton)
 
-    assert page.findChild(QLabel, "activeCameraStatus").text() == "REINICIANDO"
+    assert page.findChild(QLabel, "activeCameraStatus").text() == "Reiniciando câmera"
 
 
 def test_active_operation_page_presents_local_alert_lifecycle(qtbot) -> None:
@@ -336,9 +336,9 @@ def test_active_operation_page_presents_local_alert_lifecycle(qtbot) -> None:
     page.update_local_alerts(raised)
 
     assert page.active_alert_count == 1
-    assert page.findChild(QLabel, "activeAlertBadge").text() == ("1 ALERTA LOCAL ATIVO")
+    assert page.findChild(QLabel, "activeAlertBadge").text() == "1 ativo"
     assert (
-        "NÃO SINCRONIZADO"
+        "Enviando o alerta ao Admin"
         in page.findChild(
             QLabel,
             "activeAlertMessage",
@@ -358,5 +358,5 @@ def test_active_operation_page_presents_local_alert_lifecycle(qtbot) -> None:
     )
     page.deactivate_monitoring()
     assert page.findChild(QLabel, "activeAlertMessage").text() == (
-        "Nenhuma ocorrência local · SEM ENVIO À API"
+        "Nenhum alerta em aberto nesta operação."
     )

@@ -369,7 +369,7 @@ def test_active_pose_monitoring_raises_ergonomic_alert(qtbot) -> None:
         timeout=2_000,
     )
     assert "tronco inclinado" in detail.text()
-    assert page.findChild(QLabel, "activeAlertBadge").text() == ("1 ALERTA LOCAL ATIVO")
+    assert page.findChild(QLabel, "activeAlertBadge").text() == "1 ativo"
 
     page.deactivate_monitoring()
     ergonomics_controller.shutdown()

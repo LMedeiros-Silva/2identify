@@ -48,10 +48,11 @@ def test_dashboard_lists_active_operations_with_ppe_state(qapp) -> None:
 
     assert page.card_operacoes.valor_label.text() == "2"  # type: ignore[attr-defined]
     description = page.card_operacoes.descricao_label.text()  # type: ignore[attr-defined]
-    assert "1 não conforme(s)" in description
+    assert "1 não conforme" in description
+    assert "1 conforme" in description
     text = _texts(page)
     assert "Breno Barbosa" in text
-    assert "Ausente: Luvas" in text
+    assert "Luvas: Ausente" in text
     assert "Não conforme" in text
     assert "Conforme" in text
 
