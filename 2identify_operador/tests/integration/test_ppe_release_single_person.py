@@ -162,3 +162,40 @@ def test_multicamera_release_uses_one_person_of_the_risk_area_camera(qtbot) -> N
     for _ in range(7):
         _frame(controller, (ANA,), ("capacete", _HEAD), ("luva", _BOX["luva"]))
     assert len(authorized) == 1
+
+
+def _behind(person: PersonPose, dx: float = 300, scale: float = 0.5) -> PersonPose:
+    """Someone further back: smaller in the image and off to the side."""
+
+    return PersonPose(
+        person.confidence,
+        tuple(
+            PoseKeypoint(item.x * scale + dx, item.y * scale + 40, item.confidence)
+            for item in person.keypoints
+        ),
+    )
+
+
+PASSER_BY = _behind(_person())
+
+
+def test_people_passing_behind_do_not_block_the_operator_in_front(qtbot) -> None:
+    page, controller, authorized = _setup(qtbot, "capacete", "luva", "bota")
+    for _ in range(7):
+        _frame(
+            controller,
+            (ANA, PASSER_BY),
+            ("capacete", _HEAD),
+            ("luva", _BOX["luva"]),
+            ("bota", _BOX["bota"]),
+        )
+    assert len(authorized) == 1
+    assert set(authorized[0].verified_ppe_ids) == {1, 2, 3}
+
+
+def test_helmet_of_someone_behind_does_not_count_for_the_operator(qtbot) -> None:
+    helmet_behind = (305.0, 30.0, 360.0, 60.0)
+    page, controller, authorized = _setup(qtbot, "capacete")
+    for _ in range(16):
+        _frame(controller, (ANA, PASSER_BY), ("capacete", helmet_behind))
+    assert "Capacete" in _blocked(page, authorized)

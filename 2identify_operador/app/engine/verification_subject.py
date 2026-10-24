@@ -1,9 +1,10 @@
-"""Who a release verification is about: exactly one reliably observed person.
+"""Who a release verification is about: the one person clearly in front of the camera.
 
 PPE boxes are per-frame observations with no owner. Before they feed the stability
-window they must belong to the person being released: frames with nobody, with
-several people, or with an unreliable skeleton never count as evidence, and boxes
-outside that person's body region are ignored.
+window they must belong to the person being released. People passing further back
+(clearly smaller in the image) are ignored; frames with nobody, with two people at
+the same distance, or with an unreliable skeleton never count as evidence, and boxes
+outside the released person's body region are ignored.
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ _KEYPOINT_CONFIDENCE = 0.5
 # Margins in shoulder widths: arms and sleeves to the sides, helmet above the head.
 _SIDE_MARGIN = 0.75
 _TOP_MARGIN = 1.0
+# Anyone whose shoulders measure at least this share of the front person's is treated
+# as standing beside them, so the frame stays ambiguous; smaller people are background.
+_SAME_DISTANCE_RATIO = 0.85
 
 
 class SubjectIssue(StrEnum):
@@ -34,6 +38,7 @@ class VerificationSubject:
     issue: SubjectIssue | None
     people: int = 0
     region: tuple[float, float, float, float] | None = None
+    person: PersonPose | None = None
 
     @property
     def identified(self) -> bool:
@@ -52,12 +57,27 @@ def identify_subject(
     people = tuple(item for item in pose.poses if item.confidence >= _PERSON_CONFIDENCE)
     if not people:
         return VerificationSubject(SubjectIssue.NENHUMA_PESSOA)
-    if len(people) > 1:
-        return VerificationSubject(SubjectIssue.VARIAS_PESSOAS, people=len(people))
-    region = _body_region(people[0], batch.frame_height)
+    if len(people) == 1:
+        front = people[0]
+    else:
+        # Facing people ranked by shoulder width: the widest is the closest to the camera.
+        measured = sorted(
+            (
+                (geometry[1], index)
+                for index, item in enumerate(people)
+                if (geometry := person_geometry(item)) is not None
+            ),
+            reverse=True,
+        )
+        if not measured:
+            return VerificationSubject(SubjectIssue.PESSOA_INCERTA, people=len(people))
+        if len(measured) > 1 and measured[1][0] >= _SAME_DISTANCE_RATIO * measured[0][0]:
+            return VerificationSubject(SubjectIssue.VARIAS_PESSOAS, people=len(people))
+        front = people[measured[0][1]]
+    region = _body_region(front, batch.frame_height)
     if region is None:
-        return VerificationSubject(SubjectIssue.PESSOA_INCERTA, people=1)
-    return VerificationSubject(None, people=1, region=region)
+        return VerificationSubject(SubjectIssue.PESSOA_INCERTA, people=len(people))
+    return VerificationSubject(None, people=len(people), region=region, person=front)
 
 
 def subject_detections(

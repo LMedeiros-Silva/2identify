@@ -462,8 +462,8 @@ class SafetyVerificationPage(QWidget):
                 "A operação está apta para iniciar."
             )
             self._set_release_banner_state("compliant")
-            # The gate only confirms EPIs on exactly one identified person.
-            self._set_person("ok", "OK", "Só o operador no quadro.")
+            # The gate only confirms EPIs on the person in front of the camera.
+            self._set_person("ok", "OK", "Operador identificado à frente da câmera.")
             self._set_operation_start_enabled(True)
         elif value.status is PpeSafetyStatus.BLOCKED:
             self._show_blocked_assessment(value)
@@ -488,7 +488,7 @@ class SafetyVerificationPage(QWidget):
         if person is not None:
             self._set_person("waiting", "AGUARDANDO", _sentence(person.removeprefix("Pessoa: ")))
         else:
-            self._set_person("ok", "OK", "Só o operador no quadro.")
+            self._set_person("ok", "OK", "Operador identificado à frente da câmera.")
         for reason in reasons:
             name, _, detail = reason.partition(": ")
             ppe_id = self._ppe_names.get(name)
@@ -768,7 +768,7 @@ class SafetyVerificationPage(QWidget):
             self._person_icon,
             self._person_detail,
             self._person_state,
-        ) = self._checklist_row("Uma pessoa na câmera", "safetyPerson")
+        ) = self._checklist_row("Operador à frente da câmera", "safetyPerson")
         checklist_layout.addWidget(self._person_row)
 
         self._ppe_container = QWidget()
@@ -794,8 +794,8 @@ class SafetyVerificationPage(QWidget):
         how_layout.addWidget(self._label("Como funciona", "safetyPanelTitle"))
         how_text = self._label(
             "Cada EPI precisa aparecer em vários quadros seguidos, e o capacete precisa "
-            "estar na cabeça. Só o operador pode estar no quadro: se outra pessoa entrar, "
-            "a verificação recomeça.",
+            "estar na cabeça. Vale só para a pessoa mais próxima da câmera: quem passa ao "
+            "fundo é ignorado, mas outra pessoa ao lado do operador recomeça a verificação.",
             "safetyHowText",
         )
         how_text.setWordWrap(True)

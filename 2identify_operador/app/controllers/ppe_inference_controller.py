@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from functools import partial
 from time import monotonic
@@ -325,7 +326,13 @@ class PpeInferenceController(QObject):
             evidence = subject_detections(value, subject)
             if subject.identified:
                 snapshot = self._stability_engine.observe(evidence.observed_classes)
-                helmet = self._helmet_engine.observe(evidence, pose)
+                # Helmet placement is judged on the released person only, not on passers-by.
+                subject_pose = (
+                    replace(pose, poses=(subject.person,))
+                    if pose is not None and subject.person is not None
+                    else pose
+                )
+                helmet = self._helmet_engine.observe(evidence, subject_pose)
             else:
                 # Evidence from nobody, from several people or from an unreliable skeleton
                 # is discarded: the window restarts with the one person being released.
@@ -365,7 +372,9 @@ class PpeInferenceController(QObject):
 
     def _subject_reason(self, subject: VerificationSubject) -> str:
         if subject.issue is SubjectIssue.VARIAS_PESSOAS:
-            return f"{subject.people} pessoas na câmera, a verificação exige apenas o operador"
+            return (
+                f"{subject.people} pessoas na câmera lado a lado, deixe só o operador à frente"
+            )
         if subject.issue is SubjectIssue.NENHUMA_PESSOA:
             return "nenhuma pessoa identificada na câmera"
         if subject.issue is SubjectIssue.PESSOA_INCERTA:
