@@ -10,3 +10,12 @@ Repositório principal dos projetos 2identify.
 Cada projeto mantém suas próprias dependências e instruções. Arquivos locais como
 ambientes virtuais, caches, logs e variáveis de ambiente não são versionados.
 
+## Integrantes 
+
+- Arthur Bergamaço Alves
+- Leonardo Medeiros da Silva
+- Mateus de Souza Santos
+- Renan Melo Rosemberg
+- Breno Barbosa Pereira
+- Pietro Rodriguez Medeiros
+
